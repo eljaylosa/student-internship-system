@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import logoImg from "../../assets/logo/internlink_logo_transparent.png"; // Adjust the path as necessary
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,9 +13,21 @@ const Navbar = () => {
         <Link
           to="/"
           onClick={closeMenu}
-          className="font-bold text-2xl text-gray-900 hover:text-blue-600 font-mono tracking-tight transition duration-200"
+          // Added 'flex items-center gap-2' to align the text and logo image perfectly side-by-side
+          className="flex items-center gap-2 font-bold text-2xl text-gray-900 hover:text-blue-600 font-mono tracking-tight transition duration-200"
         >
-          Intern<span className="text-blue-600">Link</span>
+          {/* Text Layout */}
+          <span>
+            Intern<span className="text-blue-600">Link</span>
+          </span>
+
+          {/* Logo Graphic Container */}
+          {/* The 'h-8 w-auto' rules scale the logo to match your font height seamlessly */}
+          <img
+            src={logoImg}
+            alt="InternLink Logo"
+            className="h-8 w-auto object-contain"
+          />
         </Link>
 
         {/* --- DESKTOP NAVIGATION LINKS --- */}
