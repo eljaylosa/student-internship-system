@@ -4,7 +4,7 @@ import eljay from "../../assets/team/eljay.jpg";
 import noProfileImg from "../../assets/team/no-profile.jpg"; // Placeholder image for missing profiles
 
 const About = () => {
-  // Listahan ng inyong grupo base sa pinasa ninyong document info
+  // Listahan ng  grupo base sa pinasa nateng document info
   const teamMembers = [
     {
       name: "Losa, Eljay G.",
@@ -28,7 +28,7 @@ const About = () => {
     },
   ];
 
-  // Ang 3 pangunahing user sectors na tinutulungan ng system ninyo
+  // Ang 3 pangunahing user sectors na tinutulungan ng system naten
   const stakeholders = [
     {
       title: "BPSU Students",
@@ -117,7 +117,6 @@ const About = () => {
         {/* --- DEVELOPMENT GROUP CREDENTIALS & SUBMISSION --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
           {/* Research Group List (Group 8) */}
-          {/* Research Group List Card with modern image grid hover reveal animations */}
           <div className="group relative overflow-hidden bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-left flex flex-col justify-between transition-all duration-300">
             {/* --- STANDARD TEXT CARD VIEW LAYER --- */}
             <div>
@@ -151,7 +150,7 @@ const About = () => {
             </div>
 
             {/* --- 2. THE HOVER HIDDEN PICTURE GRID OVERLAY (EXPANDED TO FULL SCREEN) --- */}
-            <div className="fixed inset-0 bg-gray-950/95 flex items-center justify-center p-6 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 ease-out z-50 backdrop-blur-md">
+            <div className="fixed inset-0 bg-gray-950/95 flex items-center justify-center p-6 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-100 ease-out z-50 backdrop-blur-md">
               <div className="max-w-4xl w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 transform scale-95 group-hover:scale-100 transition-all duration-300 delay-75">
                 {/* Overlay Header Layout */}
                 <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
