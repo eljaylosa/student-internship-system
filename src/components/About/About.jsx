@@ -1,12 +1,31 @@
 import React from "react";
+import eljay from "../../assets/team/eljay.jpg";
+
+import noProfileImg from "../../assets/team/no-profile.jpg"; // Placeholder image for missing profiles
 
 const About = () => {
   // Listahan ng inyong grupo base sa pinasa ninyong document info
   const teamMembers = [
-    { name: "Losa, Eljay G.", role: "Researcher / Developer" },
-    { name: "Luna, Jeush Andrei R.", role: "Researcher / Developer" },
-    { name: "Mapaquit, Jonas Miguel D.", role: "Researcher / Developer" },
-    { name: "Pagauisan, Issa Jane A.", role: "Researcher / Developer" },
+    {
+      name: "Losa, Eljay G.",
+      role: "Researcher / Developer",
+      image: eljay,
+    },
+    {
+      name: "Luna, Jeush Andrei R.",
+      role: "Researcher / Developer",
+      image: noProfileImg,
+    },
+    {
+      name: "Mapaquit, Jonas Miguel D.",
+      role: "Researcher / Developer",
+      image: noProfileImg,
+    },
+    {
+      name: "Pagauisan, Issa Jane A.",
+      role: "Researcher / Developer",
+      image: noProfileImg,
+    },
   ];
 
   // Ang 3 pangunahing user sectors na tinutulungan ng system ninyo
@@ -98,7 +117,9 @@ const About = () => {
         {/* --- DEVELOPMENT GROUP CREDENTIALS & SUBMISSION --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
           {/* Research Group List (Group 8) */}
-          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-left flex flex-col justify-between">
+          {/* Research Group List Card with modern image grid hover reveal animations */}
+          <div className="group relative overflow-hidden bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-left flex flex-col justify-between transition-all duration-300">
+            {/* --- STANDARD TEXT CARD VIEW LAYER --- */}
             <div>
               <div className="flex justify-between items-center mb-4 border-b pb-2 border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800">
@@ -127,6 +148,61 @@ const About = () => {
             <div className="mt-6 pt-4 border-t border-gray-50 text-[11px] text-gray-400">
               Section:{" "}
               <span className="text-gray-600 font-bold">BSIT-NW3F</span>
+            </div>
+
+            {/* --- 2. THE HOVER HIDDEN PICTURE GRID OVERLAY (EXPANDED TO FULL SCREEN) --- */}
+            <div className="fixed inset-0 bg-gray-950/95 flex items-center justify-center p-6 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 ease-out z-50 backdrop-blur-md">
+              <div className="max-w-4xl w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 transform scale-95 group-hover:scale-100 transition-all duration-300 delay-75">
+                {/* Overlay Header Layout */}
+                <div className="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white uppercase tracking-wider font-mono">
+                      Project Researchers & Developers
+                    </h3>
+                    <p className="text-xs text-gray-500 font-mono mt-1">
+                      Group 8 Core Architecture Authors
+                    </p>
+                  </div>
+                  <span className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full font-bold font-mono">
+                    BSIT-NW3F
+                  </span>
+                </div>
+
+                {/* EXPANDED PICTURE GRID: Changed to large showcase frames */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  {teamMembers.map((member, i) => (
+                    <div
+                      key={i}
+                      className="bg-gray-800/30 p-4 rounded-2xl border border-gray-800/80 flex flex-col items-center text-center group/member"
+                    >
+                      {/* Drastically Scaled Up Profile Image Frame (w-32 h-32 or w-40 h-40) */}
+                      <div className="w-32 h-32 md:w-40 md:h-40 rounded-xl overflow-hidden bg-gray-800 border border-gray-700 mb-4 shadow-md transition-transform duration-300 group-hover/member:scale-105">
+                        <img
+                          src={member.image}
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.src = "https://unsplash.com";
+                          }}
+                        />
+                      </div>
+                      {/* Expanded Metadata Text */}
+                      <div className="w-full">
+                        <p className="text-sm font-bold text-white truncate font-mono">
+                          {member.name.split(",")[0]}
+                        </p>
+                        <p className="text-xs text-blue-400 font-mono mt-1">
+                          {member.name.split(",")[1] || "Researcher"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[10px] text-center text-gray-600 font-mono tracking-wider mt-8 border-t border-gray-800/60 pt-4">
+                  InternLink Engine • Software Engineering 1 • BPSU Capstone
+                </p>
+              </div>
             </div>
           </div>
 
