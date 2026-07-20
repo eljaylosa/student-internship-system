@@ -38,6 +38,9 @@ const Contact = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-gray-100">
           {/* Column 1: Contact Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            <h3 className="text-red-400">
+              *This form is currrently in development
+            </h3>
             <div>
               <label
                 htmlFor="name"

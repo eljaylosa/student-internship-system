@@ -26,6 +26,9 @@ const SignUp = () => {
       <div className="max-w-md w-full mx-auto bg-white p-8 md:p-10 rounded-2xl shadow-sm border border-gray-100 text-left">
         {/* Header Block */}
         <div className="mb-8 text-center">
+          <h3 className="text-red-400">
+            *The portal is currently in development
+          </h3>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
             Create Account
           </h2>
