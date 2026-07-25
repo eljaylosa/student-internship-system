@@ -147,6 +147,14 @@ const About = () => {
             <div className="mt-6 pt-4 border-t border-gray-50 text-[11px] text-gray-400">
               Section:{" "}
               <span className="text-gray-600 font-bold">BSIT-NW3F</span>
+              <br />
+              {/* margin top and bold the text */}
+              <div className="text-center">
+                {/* Your span component */}
+                <h5 className="mt-4 inline-block px-2 py-1 font-bold ">
+                  Hover here to see more
+                </h5>
+              </div>
             </div>
 
             {/* --- 2. THE HOVER HIDDEN PICTURE GRID OVERLAY (EXPANDED TO FULL SCREEN) --- */}
