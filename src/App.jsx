@@ -11,6 +11,8 @@ import Footer from "./components/Footer/Footer.jsx";
 // auth
 import SignUp from "./components/Auth/Signup.jsx";
 import Login from "./components/Auth/Login.jsx";
+import TermsAndConditions from "./components/Auth/Terms & Privacy Policy/Terms-&-Condition.jsx";
+import PrivacyPolicy from "./components/Auth/Terms & Privacy Policy/Privacy-Policy.jsx";
 
 import ScrollToTop from "./assets/ScrollToTop.jsx";
 function App() {
@@ -24,8 +26,13 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/services" element={<Services />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/signup" element={<SignUp />} />\
+          <Route path="/signup" element={<SignUp />} />
           <Route path="/login" element={<Login />} />
+
+          <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+
+          
         </Routes>
         <Footer />
       </Router>
