@@ -311,9 +311,9 @@ const StudentPortalLayout = () => {
 
           <div className="flex-1 overflow-y-auto px-3 py-4">
             <h3 className="mb-4 p-2 bg-red-500">
-              Note: All data on this page are all dummy data's*
+              Note: All data on this page are all dummy data*
               <br /> 
-              No real data's are used in this project.
+              No real data are used in this project.
               No Database is implemented yet
             </h3>
             <nav className="space-y-1">
