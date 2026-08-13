@@ -18,7 +18,7 @@ import Contact from "./pages/public/Contact.jsx";
 import Footer from "./components/layout/Footer.jsx";
 
 // AUTH
-import SignUp from "./pages/public/SignUp.jsx";
+import SignUp from "./pages/public/Signup.jsx";
 import Login from "./pages/public/Login.jsx";
 import TermsAndConditions from "./pages/public/Terms-&-Condition.jsx";
 import PrivacyPolicy from "./pages/public/Privacy-Policy.jsx";
