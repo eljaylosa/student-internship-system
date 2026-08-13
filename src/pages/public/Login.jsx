@@ -67,7 +67,7 @@ const Login = () => {
       currentForm.password === account.password
     ) {
       if (activeRole === "student") {
-        navigate("../student/dashboard");
+        navigate("/student/dashboard");
       }
 
       if (activeRole === "faculty") {
