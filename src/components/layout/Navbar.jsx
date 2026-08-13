@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import logoImg from "../../assets/logo/internlink_logo_transparent.png"; // Adjust the path as necessary
+import logoImg from "../../assets/logos/internlink_logo_transparent.png"; // Adjust the path as necessary
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

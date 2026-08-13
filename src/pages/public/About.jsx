@@ -1,7 +1,7 @@
 import React from "react";
-import eljay from "../../assets/team/eljay.jpg";
+import eljay from "../../assets/images/eljay.jpg";
 
-import noProfileImg from "../../assets/team/no-profile.jpg"; // Placeholder image for missing profiles
+import noProfileImg from "../../assets/images/no-profile.jpg"; // Placeholder image for missing profiles
 
 const About = () => {
   // Listahan ng  grupo base sa pinasa nateng document info

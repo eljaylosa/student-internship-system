@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const Login = () => {
   // Active role tab
@@ -34,15 +35,53 @@ const Login = () => {
     }));
   };
 
+  // use nagivate
+  const navigate = useNavigate();
+
+  const demoAccounts = {
+    student: {
+      emailOrId: "student@gmail.com",
+      password: "password",
+    },
+
+    faculty: {
+      emailOrId: "faculty@gmail.com",
+      password: "password",
+    },
+
+    company: {
+      emailOrId: "company@gmail.com",
+      password: "password",
+    },
+  };
+
   // Handle login submission
   const handleSubmit = (e) => {
     e.preventDefault();
 
     const currentForm = forms[activeRole];
+    const account = demoAccounts[activeRole];
 
-    console.log(`Authenticating ${activeRole} session payload:`, currentForm);
+    if (
+      currentForm.emailOrId === account.emailOrId &&
+      currentForm.password === account.password
+    ) {
+      if (activeRole === "student") {
+        navigate("/student/dashboard");
+      }
 
-    alert(`Logged in successfully to the ${activeRole} dashboard environment!`);
+      if (activeRole === "faculty") {
+        navigate("/faculty/dashboard");
+      }
+
+      if (activeRole === "company") {
+        navigate("/company/dashboard");
+      }
+
+      return;
+    }
+
+    alert("Invalid Account ID or Password.");
   };
 
   // Portal configuration
