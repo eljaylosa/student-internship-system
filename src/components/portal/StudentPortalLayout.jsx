@@ -45,6 +45,12 @@ const StudentPortalLayout = () => {
   const [isResizing, setIsResizing] = useState(false);
 
   // =========================================================
+  // MOBILE SIDEBAR
+  // =========================================================
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // =========================================================
   // PROFILE DROPDOWN
   // =========================================================
 
@@ -75,6 +81,42 @@ const StudentPortalLayout = () => {
 
     localStorage.setItem("studentPortalDarkMode", darkMode);
   }, [darkMode]);
+
+  // =========================================================
+  // MOBILE SIDEBAR BEHAVIOR
+  // =========================================================
+
+  useEffect(() => {
+    // Close mobile sidebar whenever the route changes
+    setIsMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Prevent background scrolling while mobile sidebar is open
+    if (isMobileSidebarOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileSidebarOpen]);
 
   // =========================================================
   // CLOSE DROPDOWNS WHEN CLICKING OUTSIDE
@@ -202,6 +244,7 @@ const StudentPortalLayout = () => {
 
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
+    setIsMobileSidebarOpen(false);
   };
 
   const toggleSubmenu = (menuName) => {
@@ -310,12 +353,23 @@ const StudentPortalLayout = () => {
           {/* NAVIGATION */}
 
           <div className="flex-1 overflow-y-auto px-3 py-4">
-            <h3 className="mb-4 p-2 bg-red-500">
-              Note: All data on this page are all dummy data*
-              <br /> 
-              No real data are used in this project.
-              No Database is implemented yet
-            </h3>
+            <div
+              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
+                darkMode
+                  ? "bg-red-950/40 border-red-900 text-red-300"
+                  : "bg-red-50 border-red-200 text-red-700"
+              }`}
+            >
+              <p className="font-bold mb-1">⚠️ Demo Project</p>
+
+              <p>
+                All data on this page are dummy data. No real data are used in
+                this project.
+              </p>
+
+              <p className="mt-1">No database is implemented yet.</p>
+            </div>
+
             <nav className="space-y-1">
               {sidebarItems.map((item) => {
                 const hasChildren = item.children?.length > 0;
@@ -486,6 +540,243 @@ const StudentPortalLayout = () => {
         </aside>
 
         {/* =====================================================
+    MOBILE SIDEBAR OVERLAY
+===================================================== */}
+
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* =====================================================
+    MOBILE SIDEBAR
+===================================================== */}
+
+        <aside
+          className={`fixed top-0 left-0 z-50 h-full w-[280px] max-w-[85vw] flex flex-col border-r transition-transform duration-300 lg:hidden ${
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
+          {/* MOBILE SIDEBAR HEADER */}
+
+          <div
+            className={`h-20 px-5 flex items-center justify-between border-b ${
+              darkMode ? "border-slate-700" : "border-slate-100"
+            }`}
+          >
+            <div className="flex items-center">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
+                  darkMode
+                    ? "bg-white text-slate-900"
+                    : "bg-slate-900 text-white"
+                }`}
+              >
+                S
+              </div>
+
+              <div className="ml-3">
+                <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
+
+                <p className="text-xs text-slate-400">Student Environment</p>
+              </div>
+            </div>
+
+            {/* CLOSE BUTTON */}
+
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              aria-label="Close navigation menu"
+              className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition ${
+                darkMode
+                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* MOBILE NAVIGATION */}
+
+          <div className="flex-1 overflow-y-auto px-3 py-4">
+            {/* DUMMY DATA NOTICE */}
+
+            <div
+              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
+                darkMode
+                  ? "bg-red-950/40 border-red-900 text-red-300"
+                  : "bg-red-50 border-red-200 text-red-700"
+              }`}
+            >
+              <p className="font-bold mb-1">⚠️ Demo Project</p>
+
+              <p>
+                All data on this page are dummy data. No real data are used in
+                this project.
+              </p>
+
+              <p className="mt-1">No database is implemented yet.</p>
+            </div>
+
+            <nav className="space-y-1">
+              {sidebarItems.map((item) => {
+                const hasChildren = item.children?.length > 0;
+                const isExpanded = expandedMenus[item.name];
+
+                const active =
+                  isPathActive(item.path) || isChildActive(item.children);
+
+                return (
+                  <div key={item.name}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (hasChildren) {
+                          toggleSubmenu(item.name);
+                        } else if (item.path) {
+                          navigateTo(item.path);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                        active
+                          ? darkMode
+                            ? "bg-white text-slate-900 shadow-sm"
+                            : "bg-slate-900 text-white shadow-sm"
+                          : darkMode
+                          ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
+                            active
+                              ? darkMode
+                                ? "bg-slate-900/10"
+                                : "bg-white/10"
+                              : darkMode
+                              ? "bg-slate-800"
+                              : "bg-slate-100"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        <span className="truncate">{item.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {item.badge && (
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              active ? "bg-current" : "bg-blue-500"
+                            }`}
+                          />
+                        )}
+
+                        {hasChildren && (
+                          <span
+                            className={`text-xs transition-transform duration-200 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          >
+                            ▼
+                          </span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* MOBILE SUBMENU */}
+
+                    {hasChildren && isExpanded && (
+                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
+                        <div
+                          className={`absolute left-1 top-0 bottom-0 w-px ${
+                            darkMode ? "bg-slate-700" : "bg-slate-200"
+                          }`}
+                        />
+
+                        {item.children.map((child) => {
+                          const childActive = isPathActive(child.path);
+
+                          return (
+                            <button
+                              key={child.name}
+                              type="button"
+                              onClick={() => navigateTo(child.path)}
+                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all duration-200 ${
+                                childActive
+                                  ? darkMode
+                                    ? "bg-white text-slate-900"
+                                    : "bg-slate-900 text-white"
+                                  : darkMode
+                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                              }`}
+                            >
+                              <span
+                                className={`absolute -left-3 top-1/2 w-3 h-px ${
+                                  darkMode ? "bg-slate-700" : "bg-slate-200"
+                                }`}
+                              />
+
+                              <span
+                                className={`w-6 h-6 flex items-center justify-center rounded-md ${
+                                  childActive
+                                    ? darkMode
+                                      ? "bg-slate-900/10"
+                                      : "bg-white/10"
+                                    : darkMode
+                                    ? "bg-slate-800"
+                                    : "bg-slate-50"
+                                }`}
+                              >
+                                {child.icon}
+                              </span>
+
+                              <span className="truncate">{child.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* MOBILE LOGOUT */}
+
+          <div
+            className={`p-4 border-t ${
+              darkMode ? "border-slate-700" : "border-slate-100"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${
+                darkMode
+                  ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
+                  : "text-slate-500 hover:bg-red-50 hover:text-red-600"
+              }`}
+            >
+              <span>🚪</span>
+              <span>Logout</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* =====================================================
             MAIN AREA
         ===================================================== */}
 
@@ -495,29 +786,49 @@ const StudentPortalLayout = () => {
           =================================================== */}
 
           <header
-            className={`h-20 border-b flex items-center justify-between px-6 lg:px-8 relative transition-colors duration-300 ${
+            className={`h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 relative transition-colors duration-300 ${
               darkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-white border-slate-200 text-slate-900"
             }`}
           >
-            {/* PAGE TITLE */}
-
-            <div>
-              <p
-                className={`text-sm ${
-                  darkMode ? "text-slate-400" : "text-slate-400"
+            <div className="flex items-center min-w-0">
+              {/*  MOBILE MENU BUTTON */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileSidebarOpen(true);
+                  setIsProfileOpen(false);
+                  setIsNotificationOpen(false);
+                }}
+                aria-label="Open navigation menu"
+                className={`lg:hidden w-10 h-10 mr-3 rounded-xl flex items-center justify-center text-xl flex-shrink-0 transition ${
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
-                Student Portal
-              </p>
+                ☰
+              </button>
 
-              <h2 className="font-bold text-lg">{getPageTitle()}</h2>
+              {/* PAGE TITLE */}
+
+              <div className="min-w-0">
+                <p
+                  className={`text-sm ${
+                    darkMode ? "text-slate-400" : "text-slate-400"
+                  }`}
+                >
+                  Student Portal
+                </p>
+
+                <h2 className="font-bold text-base sm:text-lg truncate">
+                  {getPageTitle()}
+                </h2>
+              </div>
             </div>
 
             {/* RIGHT SIDE */}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
               {/* =================================================
                   NOTIFICATION BELL
               ================================================= */}
@@ -546,7 +857,7 @@ const StudentPortalLayout = () => {
 
                 {isNotificationOpen && (
                   <div
-                    className={`absolute right-0 top-12 w-80 border rounded-xl shadow-xl z-50 overflow-hidden ${
+                    className={`absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-80 border rounded-xl shadow-xl z-50 overflow-hidden ${
                       darkMode
                         ? "bg-slate-800 border-slate-700"
                         : "bg-white border-slate-200"
@@ -585,7 +896,7 @@ const StudentPortalLayout = () => {
                           type="button"
                           onClick={() => {
                             setIsNotificationOpen(false);
-                            navigate("/student/notifications");
+                            navigateTo("/student/notifications");
                           }}
                           className={`w-full text-left px-4 py-3 border-b transition ${
                             darkMode
@@ -642,7 +953,7 @@ const StudentPortalLayout = () => {
                       type="button"
                       onClick={() => {
                         setIsNotificationOpen(false);
-                        navigate("/student/notifications");
+                        navigateTo("/student/notifications");
                       }}
                       className={`w-full py-3 text-xs font-bold transition ${
                         darkMode
@@ -714,7 +1025,7 @@ const StudentPortalLayout = () => {
 
                 {isProfileOpen && (
                   <div
-                    className={`absolute right-0 top-14 w-60 rounded-xl border shadow-xl z-50 overflow-hidden ${
+                    className={`absolute right-0 top-14 w-60 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
                       darkMode
                         ? "bg-slate-800 border-slate-700"
                         : "bg-white border-slate-200"
@@ -778,7 +1089,7 @@ const StudentPortalLayout = () => {
                           darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
                           <span>{darkMode ? "☀️" : "🌙"}</span>
 
                           <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
