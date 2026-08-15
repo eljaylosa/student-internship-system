@@ -1,9 +1,28 @@
 import React, { useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
 const Info = () => {
+  const { darkMode } = useOutletContext();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [selectedInfo, setSelectedInfo] = useState(null);
+
+  // =========================================
+  // THEME CLASSES
+  // =========================================
+
+  const cardClass = darkMode
+    ? "bg-slate-900 border-slate-700"
+    : "bg-white border-slate-200";
+
+  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+
+  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
+
+  const inputClass = darkMode
+    ? "bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:border-slate-500 focus:ring-slate-700"
+    : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400 focus:border-slate-800 focus:ring-slate-100";
 
   // =========================================
   // INTERNSHIP INFORMATION
@@ -86,9 +105,11 @@ const Info = () => {
 
   const filteredInformation = useMemo(() => {
     return informationItems.filter((item) => {
+      const query = searchQuery.toLowerCase().trim();
+
       const matchesSearch =
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase());
+        item.title.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query);
 
       const matchesCategory = category === "All" || item.category === category;
 
@@ -108,6 +129,10 @@ const Info = () => {
     setSelectedInfo(null);
   };
 
+  // =========================================
+  // RENDER
+  // =========================================
+
   return (
     <div className="p-5 md:p-6 lg:p-8 max-w-[1400px] mx-auto">
       {/* =========================================
@@ -115,15 +140,19 @@ const Info = () => {
       ========================================= */}
 
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest font-bold text-slate-400 mb-1">
+        <p
+          className={`text-xs uppercase tracking-widest font-bold mb-1 ${
+            darkMode ? "text-slate-500" : "text-slate-400"
+          }`}
+        >
           Student Portal
         </p>
 
-        <h1 className="text-2xl font-black text-slate-900">
+        <h1 className={`text-2xl font-black ${headingClass}`}>
           Internship Information
         </h1>
 
-        <p className="text-sm text-slate-500 mt-1">
+        <p className={`text-sm mt-1 ${mutedClass}`}>
           Browse important information and resources about your internship.
         </p>
       </div>
@@ -141,10 +170,14 @@ const Info = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search..."
-            className="w-full h-11 px-4 pr-10 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 outline-none transition focus:border-slate-800 focus:ring-2 focus:ring-slate-100"
+            className={`w-full h-11 px-4 pr-10 rounded-xl border text-sm outline-none transition focus:ring-2 ${inputClass}`}
           />
 
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+          <span
+            className={`absolute right-4 top-1/2 -translate-y-1/2 text-sm ${
+              darkMode ? "text-slate-500" : "text-slate-400"
+            }`}
+          >
             ⌕
           </span>
         </div>
@@ -154,10 +187,18 @@ const Info = () => {
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="h-11 md:w-48 px-4 bg-white border border-slate-300 rounded-xl text-sm text-slate-700 outline-none transition focus:border-slate-800 focus:ring-2 focus:ring-slate-100"
+          className={`h-11 md:w-48 px-4 rounded-xl border text-sm outline-none transition focus:ring-2 ${inputClass}`}
         >
           {categories.map((item) => (
-            <option key={item} value={item}>
+            <option
+              key={item}
+              value={item}
+              className={
+                darkMode
+                  ? "bg-slate-800 text-slate-100"
+                  : "bg-white text-slate-900"
+              }
+            >
               {item === "All" ? "Category" : item}
             </option>
           ))}
@@ -171,7 +212,11 @@ const Info = () => {
             setSearchQuery("");
             setCategory("All");
           }}
-          className="h-11 px-5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+          className={`h-11 px-5 rounded-xl border text-xs font-bold transition ${
+            darkMode
+              ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+              : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
         >
           Clear Filter
         </button>
@@ -182,7 +227,7 @@ const Info = () => {
       ========================================= */}
 
       <div className="flex items-center justify-between mb-4">
-        <p className="text-xs font-semibold text-slate-400">
+        <p className={`text-xs font-semibold ${mutedClass}`}>
           {filteredInformation.length}{" "}
           {filteredInformation.length === 1
             ? "information item"
@@ -190,7 +235,7 @@ const Info = () => {
         </p>
 
         {category !== "All" && (
-          <span className="text-xs font-semibold text-slate-500">
+          <span className={`text-xs font-semibold ${mutedClass}`}>
             Category: {category}
           </span>
         )}
@@ -205,18 +250,38 @@ const Info = () => {
           {filteredInformation.map((item) => (
             <article
               key={item.id}
-              className="bg-white border border-slate-300 rounded-xl overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-md"
+              className={`${cardClass} rounded-xl overflow-hidden border transition-all duration-200 ${
+                darkMode
+                  ? "hover:border-slate-500 hover:shadow-lg"
+                  : "hover:border-slate-500 hover:shadow-md"
+              }`}
             >
               {/* =====================================
                   IMAGE / THUMBNAIL
               ===================================== */}
 
-              <div className="h-40 bg-slate-100 border-b border-slate-200 flex items-center justify-center">
+              <div
+                className={`h-40 border-b flex items-center justify-center ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-100 border-slate-200"
+                }`}
+              >
                 <div className="w-full h-full flex items-center justify-center relative">
-                  {/* Placeholder graphic */}
-
-                  <div className="w-[78%] h-[72%] border border-slate-300 bg-slate-200 rounded-lg flex items-center justify-center">
-                    <span className="text-4xl text-slate-400">▧</span>
+                  <div
+                    className={`w-[78%] h-[72%] rounded-lg border flex items-center justify-center ${
+                      darkMode
+                        ? "border-slate-600 bg-slate-700"
+                        : "border-slate-300 bg-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`text-4xl ${
+                        darkMode ? "text-slate-500" : "text-slate-400"
+                      }`}
+                    >
+                      ▧
+                    </span>
                   </div>
                 </div>
               </div>
@@ -229,20 +294,28 @@ const Info = () => {
                 {/* CATEGORY */}
 
                 <div className="mb-2">
-                  <span className="inline-flex px-2.5 py-1 rounded-md bg-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  <span
+                    className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide ${
+                      darkMode
+                        ? "bg-slate-800 text-slate-400"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
                     {item.category}
                   </span>
                 </div>
 
                 {/* TITLE */}
 
-                <h2 className="text-sm font-bold text-slate-900 mb-2">
+                <h2 className={`text-sm font-bold mb-2 ${headingClass}`}>
                   {item.title}
                 </h2>
 
                 {/* DESCRIPTION */}
 
-                <p className="text-xs leading-relaxed text-slate-500 line-clamp-2 min-h-[36px]">
+                <p
+                  className={`text-xs leading-relaxed line-clamp-2 min-h-[36px] ${mutedClass}`}
+                >
                   {item.description}
                 </p>
 
@@ -251,7 +324,11 @@ const Info = () => {
                 <button
                   type="button"
                   onClick={() => handleViewDetails(item)}
-                  className="w-full mt-4 h-9 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition"
+                  className={`w-full mt-4 h-9 rounded-lg text-white text-xs font-bold transition ${
+                    darkMode
+                      ? "bg-slate-700 hover:bg-slate-600"
+                      : "bg-slate-800 hover:bg-slate-700"
+                  }`}
                 >
                   View Details
                 </button>
@@ -264,14 +341,20 @@ const Info = () => {
            NO RESULTS
         ========================================= */
 
-        <div className="border border-slate-200 rounded-xl bg-white py-16 text-center">
-          <div className="text-3xl text-slate-300 mb-3">⌕</div>
+        <div className={`border rounded-xl py-16 text-center ${cardClass}`}>
+          <div
+            className={`text-3xl mb-3 ${
+              darkMode ? "text-slate-600" : "text-slate-300"
+            }`}
+          >
+            ⌕
+          </div>
 
-          <h2 className="text-sm font-bold text-slate-800">
+          <h2 className={`text-sm font-bold ${headingClass}`}>
             No information found
           </h2>
 
-          <p className="text-xs text-slate-400 mt-1">
+          <p className={`text-xs mt-1 ${mutedClass}`}>
             Try changing your search or category filter.
           </p>
 
@@ -281,7 +364,11 @@ const Info = () => {
               setSearchQuery("");
               setCategory("All");
             }}
-            className="mt-4 px-5 py-2.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition"
+            className={`mt-4 px-5 py-2.5 rounded-lg text-white text-xs font-bold transition ${
+              darkMode
+                ? "bg-slate-700 hover:bg-slate-600"
+                : "bg-slate-800 hover:bg-slate-700"
+            }`}
           >
             Reset Filters
           </button>
@@ -294,22 +381,34 @@ const Info = () => {
 
       {selectedInfo && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-5"
+          className={`fixed inset-0 z-50 backdrop-blur-sm flex items-center justify-center p-5 ${
+            darkMode ? "bg-black/60" : "bg-slate-900/40"
+          }`}
           onClick={closeDetails}
         >
           <div
-            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            className={`w-full max-w-2xl rounded-2xl shadow-2xl border overflow-hidden ${cardClass}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* MODAL HEADER */}
 
-            <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div
+              className={`px-6 py-5 border-b flex items-start justify-between gap-4 ${
+                darkMode ? "border-slate-700" : "border-slate-100"
+              }`}
+            >
               <div>
-                <span className="inline-flex px-2.5 py-1 rounded-md bg-slate-100 text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-2">
+                <span
+                  className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide mb-2 ${
+                    darkMode
+                      ? "bg-slate-800 text-slate-400"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
                   {selectedInfo.category}
                 </span>
 
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 className={`text-lg font-bold ${headingClass}`}>
                   {selectedInfo.title}
                 </h2>
               </div>
@@ -317,7 +416,11 @@ const Info = () => {
               <button
                 type="button"
                 onClick={closeDetails}
-                className="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition flex items-center justify-center"
+                className={`w-9 h-9 rounded-lg transition flex items-center justify-center ${
+                  darkMode
+                    ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                }`}
                 aria-label="Close"
               >
                 ×
@@ -329,24 +432,58 @@ const Info = () => {
             <div className="p-6">
               {/* IMAGE */}
 
-              <div className="h-44 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center mb-5">
-                <span className="text-5xl text-slate-300">▧</span>
+              <div
+                className={`h-44 rounded-xl flex items-center justify-center mb-5 border ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-100 border-slate-200"
+                }`}
+              >
+                <span
+                  className={`text-5xl ${
+                    darkMode ? "text-slate-600" : "text-slate-300"
+                  }`}
+                >
+                  ▧
+                </span>
               </div>
 
-              <p className="text-sm font-semibold text-slate-800 mb-2">
+              <p
+                className={`text-sm font-semibold mb-2 ${
+                  darkMode ? "text-slate-200" : "text-slate-800"
+                }`}
+              >
                 Overview
               </p>
 
-              <p className="text-sm text-slate-500 leading-relaxed">
+              <p
+                className={`text-sm leading-relaxed ${
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
                 {selectedInfo.content}
               </p>
 
-              <div className="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <p className="text-xs font-bold text-slate-700 mb-1">
+              <div
+                className={`mt-5 p-4 rounded-xl border ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
+                <p
+                  className={`text-xs font-bold mb-1 ${
+                    darkMode ? "text-slate-200" : "text-slate-700"
+                  }`}
+                >
                   Information
                 </p>
 
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p
+                  className={`text-xs leading-relaxed ${
+                    darkMode ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
                   Please review this information carefully and make sure you
                   understand the applicable internship procedures and
                   requirements.
@@ -356,11 +493,19 @@ const Info = () => {
 
             {/* MODAL FOOTER */}
 
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+            <div
+              className={`px-6 py-4 border-t flex justify-end ${
+                darkMode ? "border-slate-700" : "border-slate-100"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closeDetails}
-                className="px-5 py-2.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition"
+                className={`px-5 py-2.5 rounded-lg text-white text-xs font-bold transition ${
+                  darkMode
+                    ? "bg-slate-700 hover:bg-slate-600"
+                    : "bg-slate-800 hover:bg-slate-700"
+                }`}
               >
                 Close
               </button>

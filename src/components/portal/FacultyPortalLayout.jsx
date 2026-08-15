@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
+
 // =========================================================
 // NOTIFICATIONS DATA
 // =========================================================
@@ -8,22 +9,22 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 const notifications = [
   {
     id: 1,
-    title: "Application Approved",
-    message: "Your internship application has been approved.",
+    title: "New Application",
+    message: "A student has submitted a new internship application for review.",
     time: "2 hrs ago",
     unread: true,
   },
   {
     id: 2,
-    title: "Document Reviewed",
-    message: "Your submitted document has been reviewed.",
+    title: "Document Submitted",
+    message: "A student has submitted documents for your review.",
     time: "1 day ago",
     unread: true,
   },
   {
     id: 3,
-    title: "New Message",
-    message: "You have received a new message.",
+    title: "Evaluation Reminder",
+    message: "You have pending student evaluations to complete.",
     time: "2 days ago",
     unread: false,
   },
@@ -33,7 +34,7 @@ const notifications = [
 // COMPONENT
 // =========================================================
 
-const StudentPortalLayout = () => {
+const FacultyPortalLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -66,11 +67,14 @@ const StudentPortalLayout = () => {
 
   // =========================================================
   // DARK MODE
+  // LIGHT MODE IS THE DEFAULT
   // =========================================================
 
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("studentPortalDarkMode") === "true";
-  });
+  const [darkMode, setDarkMode] = useState(false);
+
+  // =========================================================
+  // APPLY DARK MODE
+  // =========================================================
 
   useEffect(() => {
     if (darkMode) {
@@ -78,8 +82,6 @@ const StudentPortalLayout = () => {
     } else {
       document.documentElement.classList.remove("dark");
     }
-
-    localStorage.setItem("studentPortalDarkMode", darkMode);
   }, [darkMode]);
 
   // =========================================================
@@ -87,14 +89,19 @@ const StudentPortalLayout = () => {
   // =========================================================
 
   useEffect(() => {
-    // Close mobile sidebar whenever the route changes
     setIsMobileSidebarOpen(false);
   }, [location.pathname]);
+
+  // =========================================================
+  // ESCAPE KEY
+  // =========================================================
 
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         setIsMobileSidebarOpen(false);
+        setIsProfileOpen(false);
+        setIsNotificationOpen(false);
       }
     };
 
@@ -105,8 +112,11 @@ const StudentPortalLayout = () => {
     };
   }, []);
 
+  // =========================================================
+  // PREVENT BACKGROUND SCROLLING ON MOBILE
+  // =========================================================
+
   useEffect(() => {
-    // Prevent background scrolling while mobile sidebar is open
     if (isMobileSidebarOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -154,53 +164,57 @@ const StudentPortalLayout = () => {
     {
       name: "Dashboard",
       icon: "▦",
-      path: "/student/dashboard",
+      path: "/faculty/dashboard",
     },
     {
       name: "My Profile",
       icon: "👤",
-      path: "/student/profile",
+      path: "/faculty/profile",
     },
     {
-      name: "Application",
+      name: "Student List",
+      icon: "👥",
+      path: "/faculty/students",
+    },
+    {
+      name: "Review Apps",
       icon: "📋",
-      path: "/student/application",
+      path: "/faculty/applications",
+      badge: true,
     },
     {
       name: "Documents",
       icon: "📁",
-      path: "/student/documents",
+      path: "/faculty/documents",
+    },
+    {
+      name: "Evaluations",
+      icon: "✓",
+      path: "/faculty/evaluations",
+    },
+    {
+      name: "Reports",
+      icon: "▤",
+      path: "/faculty/reports",
     },
     {
       name: "Notifications",
       icon: "🔔",
-      path: "/student/notifications",
-    },
-    {
-      name: "Info",
-      icon: "ⓘ",
-      path: "/student/info",
+      path: "/faculty/notifications",
+      badge: true,
     },
     {
       name: "Messages",
       icon: "💬",
-      path: "/student/messages",
+      path: "/faculty/messages",
+      badge: true,
     },
     {
       name: "Settings",
       icon: "⚙",
-      path: "/student/settings",
+      path: "/faculty/settings",
     },
   ];
-
-  // =========================================================
-  // EXPANDABLE MENUS
-  // =========================================================
-
-  const [expandedMenus, setExpandedMenus] = useState({
-    "Internship Application": false,
-    "Document Submission": false,
-  });
 
   // =========================================================
   // SIDEBAR RESIZE
@@ -247,19 +261,12 @@ const StudentPortalLayout = () => {
     setIsMobileSidebarOpen(false);
   };
 
-  const toggleSubmenu = (menuName) => {
-    setExpandedMenus((prev) => ({
-      ...prev,
-      [menuName]: !prev[menuName],
-    }));
-  };
+  // =========================================================
+  // ACTIVE PATH
+  // =========================================================
 
   const isPathActive = (path) => {
     return location.pathname === path;
-  };
-
-  const isChildActive = (children) => {
-    return children?.some((child) => location.pathname === child.path);
   };
 
   // =========================================================
@@ -267,23 +274,15 @@ const StudentPortalLayout = () => {
   // =========================================================
 
   const getPageTitle = () => {
-    const currentItem = sidebarItems.find((item) => {
-      if (item.path === location.pathname) {
-        return true;
-      }
-
-      return item.children?.some((child) => child.path === location.pathname);
-    });
-
-    if (!currentItem) {
-      return "Student Portal";
-    }
-
-    const child = currentItem.children?.find(
-      (child) => child.path === location.pathname
+    const currentItem = sidebarItems.find(
+      (item) => item.path === location.pathname
     );
 
-    return child ? child.name : currentItem.name;
+    if (!currentItem) {
+      return "Faculty Portal";
+    }
+
+    return currentItem.name;
   };
 
   // =========================================================
@@ -298,11 +297,93 @@ const StudentPortalLayout = () => {
   };
 
   // =========================================================
-  // DARK MODE
+  // DARK MODE TOGGLE
   // =========================================================
 
   const toggleDarkMode = () => {
     setDarkMode((prev) => !prev);
+  };
+
+  // =========================================================
+  // SIDEBAR NAVIGATION
+  // =========================================================
+
+  const renderNavigation = () => {
+    return (
+      <nav className="space-y-1">
+        {sidebarItems.map((item) => {
+          const active = isPathActive(item.path);
+
+          return (
+            <button
+              key={item.name}
+              type="button"
+              onClick={() => navigateTo(item.path)}
+              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                active
+                  ? darkMode
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "bg-slate-900 text-white shadow-sm"
+                  : darkMode
+                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
+                    active
+                      ? darkMode
+                        ? "bg-slate-900/10"
+                        : "bg-white/10"
+                      : darkMode
+                      ? "bg-slate-800"
+                      : "bg-slate-100"
+                  }`}
+                >
+                  {item.icon}
+                </span>
+
+                <span className="truncate">{item.name}</span>
+              </div>
+
+              {item.badge && (
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    active ? "bg-current" : "bg-red-500"
+                  }`}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+    );
+  };
+
+  // =========================================================
+  // DEMO NOTICE
+  // =========================================================
+
+  const renderDemoNotice = () => {
+    return (
+      <div
+        className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
+          darkMode
+            ? "bg-red-950/40 border-red-900 text-red-300"
+            : "bg-red-50 border-red-200 text-red-700"
+        }`}
+      >
+        <p className="font-bold mb-1">⚠️ Demo Project</p>
+
+        <p>
+          All data on this page are dummy data. No real data are used in this
+          project.
+        </p>
+
+        <p className="mt-1">No database is implemented yet.</p>
+      </div>
+    );
   };
 
   // =========================================================
@@ -317,7 +398,7 @@ const StudentPortalLayout = () => {
     >
       <div className="flex min-h-screen">
         {/* =====================================================
-            SIDEBAR
+            DESKTOP SIDEBAR
         ===================================================== */}
 
         <aside
@@ -331,7 +412,7 @@ const StudentPortalLayout = () => {
           {/* LOGO */}
 
           <div
-            className={`h-20 px-6 flex items-center border-b transition-colors ${
+            className={`h-20 px-6 flex items-center border-b ${
               darkMode ? "border-slate-700" : "border-slate-100"
             }`}
           >
@@ -340,162 +421,22 @@ const StudentPortalLayout = () => {
                 darkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
               }`}
             >
-              S
+              F
             </div>
 
             <div className="ml-3">
               <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
 
-              <p className="text-xs text-slate-400">Student Environment</p>
+              <p className="text-xs text-slate-400">Faculty Environment</p>
             </div>
           </div>
 
           {/* NAVIGATION */}
 
           <div className="flex-1 overflow-y-auto px-3 py-4">
-            <div
-              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
-                darkMode
-                  ? "bg-red-950/40 border-red-900 text-red-300"
-                  : "bg-red-50 border-red-200 text-red-700"
-              }`}
-            >
-              <p className="font-bold mb-1">⚠️ Demo Project</p>
+            {renderDemoNotice()}
 
-              <p>
-                All data on this page are dummy data. No real data are used in
-                this project.
-              </p>
-
-              <p className="mt-1">No database is implemented yet.</p>
-            </div>
-
-            <nav className="space-y-1">
-              {sidebarItems.map((item) => {
-                const hasChildren = item.children?.length > 0;
-                const isExpanded = expandedMenus[item.name];
-
-                const active =
-                  isPathActive(item.path) || isChildActive(item.children);
-
-                return (
-                  <div key={item.name}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (hasChildren) {
-                          toggleSubmenu(item.name);
-                        } else if (item.path) {
-                          navigateTo(item.path);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        active
-                          ? darkMode
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "bg-slate-900 text-white shadow-sm"
-                          : darkMode
-                          ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
-                            active
-                              ? darkMode
-                                ? "bg-slate-900/10"
-                                : "bg-white/10"
-                              : darkMode
-                              ? "bg-slate-800"
-                              : "bg-slate-100"
-                          }`}
-                        >
-                          {item.icon}
-                        </span>
-
-                        <span className="truncate">{item.name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              active ? "bg-current" : "bg-blue-500"
-                            }`}
-                          />
-                        )}
-
-                        {hasChildren && (
-                          <span
-                            className={`text-xs transition-transform duration-200 ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
-                          >
-                            ▼
-                          </span>
-                        )}
-                      </div>
-                    </button>
-
-                    {/* SUBMENU */}
-
-                    {hasChildren && isExpanded && (
-                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
-                        <div
-                          className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode ? "bg-slate-700" : "bg-slate-200"
-                          }`}
-                        />
-
-                        {item.children.map((child) => {
-                          const childActive = isPathActive(child.path);
-
-                          return (
-                            <button
-                              key={child.name}
-                              type="button"
-                              onClick={() => navigateTo(child.path)}
-                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all duration-200 ${
-                                childActive
-                                  ? darkMode
-                                    ? "bg-white text-slate-900"
-                                    : "bg-slate-900 text-white"
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                              }`}
-                            >
-                              <span
-                                className={`absolute -left-3 top-1/2 w-3 h-px ${
-                                  darkMode ? "bg-slate-700" : "bg-slate-200"
-                                }`}
-                              />
-
-                              <span
-                                className={`w-6 h-6 flex items-center justify-center rounded-md ${
-                                  childActive
-                                    ? darkMode
-                                      ? "bg-slate-900/10"
-                                      : "bg-white/10"
-                                    : darkMode
-                                    ? "bg-slate-800"
-                                    : "bg-slate-50"
-                                }`}
-                              >
-                                {child.icon}
-                              </span>
-
-                              <span className="truncate">{child.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
+            {renderNavigation()}
           </div>
 
           {/* LOGOUT */}
@@ -540,8 +481,8 @@ const StudentPortalLayout = () => {
         </aside>
 
         {/* =====================================================
-    MOBILE SIDEBAR OVERLAY
-===================================================== */}
+            MOBILE SIDEBAR OVERLAY
+        ===================================================== */}
 
         {isMobileSidebarOpen && (
           <div
@@ -551,8 +492,8 @@ const StudentPortalLayout = () => {
         )}
 
         {/* =====================================================
-    MOBILE SIDEBAR
-===================================================== */}
+            MOBILE SIDEBAR
+        ===================================================== */}
 
         <aside
           className={`fixed top-0 left-0 z-50 h-full w-[280px] max-w-[85vw] flex flex-col border-r transition-transform duration-300 lg:hidden ${
@@ -563,7 +504,7 @@ const StudentPortalLayout = () => {
               : "bg-white border-slate-200"
           }`}
         >
-          {/* MOBILE SIDEBAR HEADER */}
+          {/* MOBILE HEADER */}
 
           <div
             className={`h-20 px-5 flex items-center justify-between border-b ${
@@ -578,17 +519,15 @@ const StudentPortalLayout = () => {
                     : "bg-slate-900 text-white"
                 }`}
               >
-                S
+                F
               </div>
 
               <div className="ml-3">
                 <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
 
-                <p className="text-xs text-slate-400">Student Environment</p>
+                <p className="text-xs text-slate-400">Faculty Environment</p>
               </div>
             </div>
-
-            {/* CLOSE BUTTON */}
 
             <button
               type="button"
@@ -607,151 +546,9 @@ const StudentPortalLayout = () => {
           {/* MOBILE NAVIGATION */}
 
           <div className="flex-1 overflow-y-auto px-3 py-4">
-            {/* DUMMY DATA NOTICE */}
+            {renderDemoNotice()}
 
-            <div
-              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
-                darkMode
-                  ? "bg-red-950/40 border-red-900 text-red-300"
-                  : "bg-red-50 border-red-200 text-red-700"
-              }`}
-            >
-              <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-              <p>
-                All data on this page are dummy data. No real data are used in
-                this project.
-              </p>
-
-              <p className="mt-1">No database is implemented yet.</p>
-            </div>
-
-            <nav className="space-y-1">
-              {sidebarItems.map((item) => {
-                const hasChildren = item.children?.length > 0;
-                const isExpanded = expandedMenus[item.name];
-
-                const active =
-                  isPathActive(item.path) || isChildActive(item.children);
-
-                return (
-                  <div key={item.name}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (hasChildren) {
-                          toggleSubmenu(item.name);
-                        } else if (item.path) {
-                          navigateTo(item.path);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        active
-                          ? darkMode
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "bg-slate-900 text-white shadow-sm"
-                          : darkMode
-                          ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
-                            active
-                              ? darkMode
-                                ? "bg-slate-900/10"
-                                : "bg-white/10"
-                              : darkMode
-                              ? "bg-slate-800"
-                              : "bg-slate-100"
-                          }`}
-                        >
-                          {item.icon}
-                        </span>
-
-                        <span className="truncate">{item.name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              active ? "bg-current" : "bg-blue-500"
-                            }`}
-                          />
-                        )}
-
-                        {hasChildren && (
-                          <span
-                            className={`text-xs transition-transform duration-200 ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
-                          >
-                            ▼
-                          </span>
-                        )}
-                      </div>
-                    </button>
-
-                    {/* MOBILE SUBMENU */}
-
-                    {hasChildren && isExpanded && (
-                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
-                        <div
-                          className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode ? "bg-slate-700" : "bg-slate-200"
-                          }`}
-                        />
-
-                        {item.children.map((child) => {
-                          const childActive = isPathActive(child.path);
-
-                          return (
-                            <button
-                              key={child.name}
-                              type="button"
-                              onClick={() => navigateTo(child.path)}
-                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all duration-200 ${
-                                childActive
-                                  ? darkMode
-                                    ? "bg-white text-slate-900"
-                                    : "bg-slate-900 text-white"
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                              }`}
-                            >
-                              <span
-                                className={`absolute -left-3 top-1/2 w-3 h-px ${
-                                  darkMode ? "bg-slate-700" : "bg-slate-200"
-                                }`}
-                              />
-
-                              <span
-                                className={`w-6 h-6 flex items-center justify-center rounded-md ${
-                                  childActive
-                                    ? darkMode
-                                      ? "bg-slate-900/10"
-                                      : "bg-white/10"
-                                    : darkMode
-                                    ? "bg-slate-800"
-                                    : "bg-slate-50"
-                                }`}
-                              >
-                                {child.icon}
-                              </span>
-
-                              <span className="truncate">{child.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
+            {renderNavigation()}
           </div>
 
           {/* MOBILE LOGOUT */}
@@ -792,8 +589,11 @@ const StudentPortalLayout = () => {
                 : "bg-white border-slate-200 text-slate-900"
             }`}
           >
+            {/* LEFT */}
+
             <div className="flex items-center min-w-0">
-              {/*  MOBILE MENU BUTTON */}
+              {/* MOBILE MENU */}
+
               <button
                 type="button"
                 onClick={() => {
@@ -812,13 +612,7 @@ const StudentPortalLayout = () => {
               {/* PAGE TITLE */}
 
               <div className="min-w-0">
-                <p
-                  className={`text-sm ${
-                    darkMode ? "text-slate-400" : "text-slate-400"
-                  }`}
-                >
-                  Student Portal
-                </p>
+                <p className="text-sm text-slate-400">Faculty Portal</p>
 
                 <h2 className="font-bold text-base sm:text-lg truncate">
                   {getPageTitle()}
@@ -826,11 +620,11 @@ const StudentPortalLayout = () => {
               </div>
             </div>
 
-            {/* RIGHT SIDE */}
+            {/* RIGHT */}
 
             <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
               {/* =================================================
-                  NOTIFICATION BELL
+                  NOTIFICATIONS
               ================================================= */}
 
               <div className="relative" ref={notificationRef}>
@@ -838,22 +632,20 @@ const StudentPortalLayout = () => {
                   type="button"
                   onClick={() => {
                     setIsNotificationOpen((prev) => !prev);
+
                     setIsProfileOpen(false);
                   }}
                   className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition ${
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
+                  aria-label="Notifications"
                 >
                   <span className="text-lg">🔔</span>
-
-                  {/* RED NOTIFICATION DOT */}
 
                   <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                 </button>
 
-                {/* =================================================
-                    NOTIFICATION CARD
-                ================================================= */}
+                {/* NOTIFICATION CARD */}
 
                 {isNotificationOpen && (
                   <div
@@ -887,7 +679,7 @@ const StudentPortalLayout = () => {
                       </span>
                     </div>
 
-                    {/* NOTIFICATION LIST */}
+                    {/* LIST */}
 
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.map((notification) => (
@@ -896,7 +688,8 @@ const StudentPortalLayout = () => {
                           type="button"
                           onClick={() => {
                             setIsNotificationOpen(false);
-                            navigateTo("/student/notifications");
+
+                            navigateTo("/faculty/notifications");
                           }}
                           className={`w-full text-left px-4 py-3 border-b transition ${
                             darkMode
@@ -905,8 +698,6 @@ const StudentPortalLayout = () => {
                           }`}
                         >
                           <div className="flex gap-3">
-                            {/* UNREAD DOT */}
-
                             <div className="pt-1.5">
                               <span
                                 className={`block w-2 h-2 rounded-full ${
@@ -953,7 +744,8 @@ const StudentPortalLayout = () => {
                       type="button"
                       onClick={() => {
                         setIsNotificationOpen(false);
-                        navigateTo("/student/notifications");
+
+                        navigateTo("/faculty/notifications");
                       }}
                       className={`w-full py-3 text-xs font-bold transition ${
                         darkMode
@@ -968,7 +760,7 @@ const StudentPortalLayout = () => {
               </div>
 
               {/* =================================================
-                  PROFILE DROPDOWN
+                  PROFILE
               ================================================= */}
 
               <div className="relative" ref={profileMenuRef}>
@@ -976,6 +768,7 @@ const StudentPortalLayout = () => {
                   type="button"
                   onClick={() => {
                     setIsProfileOpen((prev) => !prev);
+
                     setIsNotificationOpen(false);
                   }}
                   className={`flex items-center gap-3 px-2 py-1.5 rounded-xl transition ${
@@ -991,21 +784,15 @@ const StudentPortalLayout = () => {
                         : "bg-slate-900 text-white"
                     }`}
                   >
-                    JD
+                    PS
                   </div>
 
                   {/* USER INFO */}
 
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">John Doe</p>
+                    <p className="text-sm font-semibold">Prof. Smith</p>
 
-                    <p
-                      className={`text-xs ${
-                        darkMode ? "text-slate-400" : "text-slate-400"
-                      }`}
-                    >
-                      BS Information Technology
-                    </p>
+                    <p className="text-xs text-slate-400">Faculty Adviser</p>
                   </div>
 
                   {/* ARROW */}
@@ -1019,9 +806,7 @@ const StudentPortalLayout = () => {
                   </span>
                 </button>
 
-                {/* =================================================
-                    PROFILE MENU
-                ================================================= */}
+                {/* PROFILE MENU */}
 
                 {isProfileOpen && (
                   <div
@@ -1038,14 +823,14 @@ const StudentPortalLayout = () => {
                         darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
-                      <p className="text-sm font-bold">John Doe</p>
+                      <p className="text-sm font-bold">Prof. Smith</p>
 
                       <p
                         className={`text-xs mt-1 ${
                           darkMode ? "text-slate-400" : "text-slate-500"
                         }`}
                       >
-                        Student Account
+                        Faculty Account
                       </p>
                     </div>
 
@@ -1053,7 +838,7 @@ const StudentPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigateTo("/student/profile")}
+                      onClick={() => navigateTo("/faculty/profile")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
@@ -1066,7 +851,7 @@ const StudentPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigateTo("/student/settings")}
+                      onClick={() => navigateTo("/faculty/settings")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
@@ -1089,7 +874,7 @@ const StudentPortalLayout = () => {
                           darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                         }`}
                       >
-                        <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-3">
                           <span>{darkMode ? "☀️" : "🌙"}</span>
 
                           <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
@@ -1154,4 +939,4 @@ const StudentPortalLayout = () => {
   );
 };
 
-export default StudentPortalLayout;
+export default FacultyPortalLayout;

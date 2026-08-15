@@ -11,32 +11,32 @@ const Messages = () => {
   const contacts = [
     {
       id: 1,
-      name: "Prof. Smith",
-      role: "Faculty Adviser",
-      unread: 3,
+      name: "John Doe",
+      role: "Student",
+      unread: 2,
     },
     {
       id: 2,
-      name: "Mr. Johnson (ABC)",
-      role: "Company Supervisor",
-      unread: 0,
-    },
-    {
-      id: 3,
       name: "Prof. Davis",
       role: "Faculty Adviser",
       unread: 0,
     },
     {
-      id: 4,
-      name: "Ms. Wilson (XYZ)",
+      id: 3,
+      name: "ABC Corp",
       role: "Company Supervisor",
+      unread: 1,
+    },
+    {
+      id: 4,
+      name: "Sarah Lee",
+      role: "Student",
       unread: 0,
     },
     {
       id: 5,
-      name: "Prof. Brown",
-      role: "Faculty Adviser",
+      name: "XYZ Ltd",
+      role: "Company Supervisor",
       unread: 0,
     },
   ];
@@ -50,26 +50,26 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Hello John, how is your internship application going?",
-        time: "9:40 AM",
+        text: "Good morning, Professor. I wanted to ask about my internship evaluation.",
+        time: "9:20 AM",
       },
       {
         id: 2,
         sender: "sent",
-        text: "Hello Prof. Smith. I'm currently completing my requirements.",
-        time: "9:42 AM",
+        text: "Good morning, John. Sure, what would you like to know?",
+        time: "9:24 AM",
       },
       {
         id: 3,
         sender: "received",
-        text: "Good. Make sure all your documents are submitted before the deadline.",
-        time: "9:45 AM",
+        text: "I wanted to know if I need to submit any additional documents.",
+        time: "9:26 AM",
       },
       {
         id: 4,
         sender: "sent",
-        text: "Yes, professor. I'll make sure everything is submitted.",
-        time: "9:47 AM",
+        text: "I'll check your records and let you know if anything is missing.",
+        time: "9:30 AM",
       },
     ],
 
@@ -77,8 +77,14 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Good day, John. We have received your application.",
-        time: "10:15 AM",
+        text: "Have you already reviewed the latest student submissions?",
+        time: "Yesterday",
+      },
+      {
+        id: 2,
+        sender: "sent",
+        text: "Yes. I'm currently checking the remaining applications.",
+        time: "Yesterday",
       },
     ],
 
@@ -86,8 +92,8 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Please remember to check your internship requirements.",
-        time: "Yesterday",
+        text: "Good day. We would like to provide an update regarding John's internship.",
+        time: "10:15 AM",
       },
     ],
 
@@ -95,7 +101,7 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Your application is currently being reviewed.",
+        text: "Professor, I have already uploaded my evaluation documents.",
         time: "Monday",
       },
     ],
@@ -104,7 +110,7 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Please contact me if you have any questions.",
+        text: "We have received the internship documents for your assigned student.",
         time: "Friday",
       },
     ],
@@ -148,10 +154,65 @@ const Messages = () => {
     : "bg-slate-50 border-slate-300 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-700";
 
   // =========================================================
+  // CONTACT CLASSES
+  // =========================================================
+
+  const getContactClass = (active) => {
+    if (active) {
+      return darkMode
+        ? "bg-slate-700 border-slate-600 text-white shadow-sm"
+        : "bg-slate-800 border-slate-800 text-white shadow-sm";
+    }
+
+    return darkMode
+      ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-600"
+      : "bg-white border-slate-200 text-slate-900 hover:bg-slate-100 hover:border-slate-400";
+  };
+
+  // =========================================================
+  // AVATAR CLASSES
+  // =========================================================
+
+  const getAvatarClass = (active) => {
+    if (active) {
+      return darkMode
+        ? "bg-slate-600 text-slate-100"
+        : "bg-white/15 text-white";
+    }
+
+    return darkMode
+      ? "bg-slate-700 text-slate-300"
+      : "bg-slate-200 text-slate-600";
+  };
+
+  // =========================================================
+  // FILTERED CONTACTS
+  // =========================================================
+
+  const filteredContacts = contacts.filter((contact) =>
+    `${contact.name} ${contact.role}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
+  );
+
+  // =========================================================
   // CURRENT MESSAGES
   // =========================================================
 
   const currentMessages = messages[selectedContact.id] || [];
+
+  // =========================================================
+  // GET INITIALS
+  // =========================================================
+
+  const getInitials = (name) => {
+    return name
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  };
 
   // =========================================================
   // SCROLL TO LATEST MESSAGE
@@ -207,61 +268,6 @@ const Messages = () => {
   };
 
   // =========================================================
-  // SEARCH CONTACTS
-  // =========================================================
-
-  const filteredContacts = contacts.filter((contact) =>
-    `${contact.name} ${contact.role}`
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
-
-  // =========================================================
-  // AVATAR INITIALS
-  // =========================================================
-
-  const getInitials = (name) => {
-    return name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-  };
-
-  // =========================================================
-  // CONTACT BUTTON CLASSES
-  // =========================================================
-
-  const getContactClass = (active) => {
-    if (active) {
-      return darkMode
-        ? "bg-slate-700 border-slate-600 text-white shadow-sm"
-        : "bg-slate-800 border-slate-800 text-white shadow-sm";
-    }
-
-    return darkMode
-      ? "bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-600"
-      : "bg-white border-slate-200 text-slate-900 hover:bg-slate-100 hover:border-slate-400";
-  };
-
-  // =========================================================
-  // CONTACT AVATAR CLASSES
-  // =========================================================
-
-  const getAvatarClass = (active) => {
-    if (active) {
-      return darkMode
-        ? "bg-slate-600 text-slate-100"
-        : "bg-white/15 text-white";
-    }
-
-    return darkMode
-      ? "bg-slate-700 text-slate-300"
-      : "bg-slate-200 text-slate-600";
-  };
-
-  // =========================================================
   // RETURN
   // =========================================================
 
@@ -278,7 +284,7 @@ const Messages = () => {
               darkMode ? "text-slate-500" : "text-slate-400"
             }`}
           >
-            Student Portal
+            Faculty Portal
           </p>
 
           <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
@@ -286,7 +292,7 @@ const Messages = () => {
           </h1>
 
           <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
-            Communicate with your faculty adviser and company supervisor.
+            Communicate with students, faculty, and company supervisors.
           </p>
         </div>
 
@@ -339,9 +345,7 @@ const Messages = () => {
                 `}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className={`text-sm font-bold ${headingClass}`}>
-                    Contacts
-                  </h2>
+                  <h2 className={`text-sm font-bold ${headingClass}`}>Inbox</h2>
 
                   <span className={`text-xs ${mutedClass}`}>
                     {contacts.length}
@@ -530,7 +534,7 @@ const Messages = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className={`text-sm font-bold ${headingClass}`}>
-                      Contacts
+                      Inbox
                     </h2>
 
                     <p className={`text-[10px] mt-0.5 ${mutedClass}`}>
@@ -754,6 +758,8 @@ const Messages = () => {
                 `}
               >
                 <div className="flex items-center gap-3 min-w-0">
+                  {/* AVATAR */}
+
                   <div
                     className={`
                       w-10
@@ -775,9 +781,16 @@ const Messages = () => {
                     {getInitials(selectedContact.name)}
                   </div>
 
+                  {/* NAME */}
+
                   <div className="min-w-0">
                     <h2
-                      className={`text-sm font-bold truncate ${headingClass}`}
+                      className={`
+                        text-sm
+                        font-bold
+                        truncate
+                        ${headingClass}
+                      `}
                     >
                       {selectedContact.name}
                     </h2>
@@ -787,6 +800,8 @@ const Messages = () => {
                     </p>
                   </div>
                 </div>
+
+                {/* MORE OPTIONS */}
 
                 <button
                   type="button"
@@ -842,9 +857,9 @@ const Messages = () => {
                             className={`
                               max-w-[88%]
                               sm:max-w-[75%]
+                              ${isSent ? "items-end" : "items-start"}
                               flex
                               flex-col
-                              ${isSent ? "items-end" : "items-start"}
                             `}
                           >
                             {/* MESSAGE BUBBLE */}
@@ -943,23 +958,21 @@ const Messages = () => {
                   <button
                     type="submit"
                     disabled={!messageInput.trim()}
-                    className={`
+                    className="
                       h-11
                       px-4
                       sm:px-5
                       flex-shrink-0
                       rounded-lg
+                      bg-slate-800
+                      text-white
                       text-xs
                       font-bold
-                      transition
+                      hover:bg-slate-700
                       disabled:opacity-40
                       disabled:cursor-not-allowed
-                      ${
-                        darkMode
-                          ? "bg-white text-slate-900 hover:bg-slate-200"
-                          : "bg-slate-800 text-white hover:bg-slate-700"
-                      }
-                    `}
+                      transition
+                    "
                   >
                     Send
                   </button>

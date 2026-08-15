@@ -1,6 +1,9 @@
 import React, { useRef, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
 const Documents = () => {
+  const { darkMode } = useOutletContext();
+
   const [activeTab, setActiveTab] = useState("upload");
 
   const [documents, setDocuments] = useState({
@@ -19,9 +22,9 @@ const Documents = () => {
     insuranceForm: useRef(null),
   };
 
-  // -----------------------------
+  // =========================================
   // DOCUMENT CONFIGURATION
-  // -----------------------------
+  // =========================================
 
   const documentList = [
     {
@@ -46,9 +49,29 @@ const Documents = () => {
     },
   ];
 
-  // -----------------------------
+  // =========================================
+  // COMMON CLASSES
+  // =========================================
+
+  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+
+  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
+
+  const cardClass = darkMode
+    ? "bg-slate-900 border-slate-700"
+    : "bg-white border-slate-200";
+
+  const innerBoxClass = darkMode
+    ? "bg-slate-800 border-slate-700"
+    : "bg-slate-50 border-slate-200";
+
+  const inputBoxClass = darkMode
+    ? "bg-slate-900 border-slate-700 text-slate-400"
+    : "bg-white border-slate-200 text-slate-500";
+
+  // =========================================
   // FILE SELECTION
-  // -----------------------------
+  // =========================================
 
   const handleFileChange = (key, e) => {
     const file = e.target.files?.[0];
@@ -68,7 +91,6 @@ const Documents = () => {
       return;
     }
 
-    // 10MB limit
     if (file.size > 10 * 1024 * 1024) {
       alert("File size must not exceed 10MB.");
       return;
@@ -80,9 +102,9 @@ const Documents = () => {
     }));
   };
 
-  // -----------------------------
+  // =========================================
   // UPLOAD DOCUMENT
-  // -----------------------------
+  // =========================================
 
   const handleUpload = (key) => {
     const file = documents[key];
@@ -104,9 +126,9 @@ const Documents = () => {
     alert(`${getDocumentTitle(key)} uploaded successfully.`);
   };
 
-  // -----------------------------
+  // =========================================
   // DOCUMENT TITLE
-  // -----------------------------
+  // =========================================
 
   const getDocumentTitle = (key) => {
     const document = documentList.find((item) => item.key === key);
@@ -114,9 +136,9 @@ const Documents = () => {
     return document?.title || "Document";
   };
 
-  // -----------------------------
+  // =========================================
   // DOWNLOAD
-  // -----------------------------
+  // =========================================
 
   const handleDownload = (key) => {
     const uploaded = uploadedDocuments[key];
@@ -141,9 +163,9 @@ const Documents = () => {
     URL.revokeObjectURL(url);
   };
 
-  // -----------------------------
+  // =========================================
   // STATUS
-  // -----------------------------
+  // =========================================
 
   const getDocumentStatus = (key) => {
     if (!uploadedDocuments[key]) {
@@ -160,15 +182,19 @@ const Documents = () => {
       ========================================= */}
 
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest font-bold text-slate-400 mb-1">
+        <p
+          className={`text-xs uppercase tracking-widest font-bold mb-1 ${
+            darkMode ? "text-slate-500" : "text-slate-400"
+          }`}
+        >
           Student Portal
         </p>
 
-        <h1 className="text-2xl font-black text-slate-900">
+        <h1 className={`text-2xl font-black ${headingClass}`}>
           Document Submission
         </h1>
 
-        <p className="text-sm text-slate-500 mt-1">
+        <p className={`text-sm mt-1 ${mutedClass}`}>
           Upload, submit, and manage your internship documents.
         </p>
       </div>
@@ -177,7 +203,13 @@ const Documents = () => {
           DOCUMENT TABS
       ========================================= */}
 
-      <div className="inline-flex p-1 bg-slate-100 border border-slate-200 rounded-xl mb-5">
+      <div
+        className={`inline-flex p-1 rounded-xl mb-5 border ${
+          darkMode
+            ? "bg-slate-800 border-slate-700"
+            : "bg-slate-100 border-slate-200"
+        }`}
+      >
         {/* UPLOAD */}
 
         <button
@@ -185,7 +217,11 @@ const Documents = () => {
           onClick={() => setActiveTab("upload")}
           className={`px-6 md:px-8 py-2.5 rounded-lg text-xs font-semibold transition ${
             activeTab === "upload"
-              ? "bg-white text-slate-900 shadow-sm"
+              ? darkMode
+                ? "bg-slate-700 text-white shadow-sm"
+                : "bg-white text-slate-900 shadow-sm"
+              : darkMode
+              ? "text-slate-400 hover:text-white"
               : "text-slate-500 hover:text-slate-900"
           }`}
         >
@@ -199,7 +235,11 @@ const Documents = () => {
           onClick={() => setActiveTab("submitted")}
           className={`px-6 md:px-8 py-2.5 rounded-lg text-xs font-semibold transition ${
             activeTab === "submitted"
-              ? "bg-white text-slate-900 shadow-sm"
+              ? darkMode
+                ? "bg-slate-700 text-white shadow-sm"
+                : "bg-white text-slate-900 shadow-sm"
+              : darkMode
+              ? "text-slate-400 hover:text-white"
               : "text-slate-500 hover:text-slate-900"
           }`}
         >
@@ -213,7 +253,11 @@ const Documents = () => {
           onClick={() => setActiveTab("download")}
           className={`px-6 md:px-8 py-2.5 rounded-lg text-xs font-semibold transition ${
             activeTab === "download"
-              ? "bg-white text-slate-900 shadow-sm"
+              ? darkMode
+                ? "bg-slate-700 text-white shadow-sm"
+                : "bg-white text-slate-900 shadow-sm"
+              : darkMode
+              ? "text-slate-400 hover:text-white"
               : "text-slate-500 hover:text-slate-900"
           }`}
         >
@@ -225,7 +269,9 @@ const Documents = () => {
           MAIN DOCUMENT PANEL
       ========================================= */}
 
-      <section className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 max-w-[1000px] shadow-sm">
+      <section
+        className={`${cardClass} border rounded-2xl p-5 md:p-6 max-w-[1000px] shadow-sm`}
+      >
         {/* =========================================
             UPLOAD TAB
         ========================================= */}
@@ -233,11 +279,11 @@ const Documents = () => {
         {activeTab === "upload" && (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className={`text-lg font-bold ${headingClass}`}>
                 Upload Requirements
               </h2>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className={`text-xs mt-1 ${mutedClass}`}>
                 Upload the required documents for your internship application.
               </p>
             </div>
@@ -250,24 +296,34 @@ const Documents = () => {
                 return (
                   <div
                     key={document.key}
-                    className="border border-slate-200 rounded-xl bg-slate-50 p-4"
+                    className={`${innerBoxClass} border rounded-xl p-4`}
                   >
                     {/* DOCUMENT HEADER */}
 
                     <div className="mb-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <h3 className="text-sm font-bold text-slate-800">
+                          <h3
+                            className={`text-sm font-bold ${
+                              darkMode ? "text-slate-100" : "text-slate-800"
+                            }`}
+                          >
                             {document.title}
                           </h3>
 
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className={`text-xs mt-1 ${mutedClass}`}>
                             {document.description}
                           </p>
                         </div>
 
                         {uploaded && (
-                          <span className="inline-flex flex-shrink-0 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 text-[10px] font-bold">
+                          <span
+                            className={`inline-flex flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
+                              darkMode
+                                ? "bg-amber-950/40 border-amber-900/50 text-amber-400"
+                                : "bg-amber-50 border-amber-100 text-amber-700"
+                            }`}
+                          >
                             {uploaded.status}
                           </span>
                         )}
@@ -285,21 +341,33 @@ const Documents = () => {
                         className="hidden"
                       />
 
+                      {/* CHOOSE FILE */}
+
                       <button
                         type="button"
                         onClick={() =>
                           fileInputRefs[document.key].current?.click()
                         }
-                        className="px-4 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+                        className={`px-4 py-2.5 rounded-lg text-xs font-semibold transition ${
+                          darkMode
+                            ? "bg-white text-slate-900 hover:bg-slate-200"
+                            : "bg-slate-900 text-white hover:bg-slate-800"
+                        }`}
                       >
                         Choose File
                       </button>
 
+                      {/* FILE NAME */}
+
                       <div className="flex-1 min-w-0">
-                        <div className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-500 truncate">
+                        <div
+                          className={`w-full px-4 py-2.5 rounded-lg border text-xs truncate ${inputBoxClass}`}
+                        >
                           {file ? file.name : "No file chosen"}
                         </div>
                       </div>
+
+                      {/* UPLOAD */}
 
                       <button
                         type="button"
@@ -307,7 +375,11 @@ const Documents = () => {
                         disabled={!file}
                         className={`px-6 py-2.5 rounded-lg text-xs font-semibold transition ${
                           file
-                            ? "bg-slate-900 text-white hover:bg-slate-800"
+                            ? darkMode
+                              ? "bg-white text-slate-900 hover:bg-slate-200"
+                              : "bg-slate-900 text-white hover:bg-slate-800"
+                            : darkMode
+                            ? "bg-slate-700 text-slate-500 cursor-not-allowed"
                             : "bg-slate-200 text-slate-400 cursor-not-allowed"
                         }`}
                       >
@@ -319,11 +391,11 @@ const Documents = () => {
 
                     {file && (
                       <div className="flex items-center justify-between mt-3">
-                        <p className="text-[10px] text-slate-400">
+                        <p className={`text-[10px] ${mutedClass}`}>
                           {(file.size / 1024 / 1024).toFixed(2)} MB
                         </p>
 
-                        <p className="text-[10px] text-slate-400">
+                        <p className={`text-[10px] ${mutedClass}`}>
                           PDF, DOC, DOCX, JPG or PNG
                         </p>
                       </div>
@@ -335,9 +407,19 @@ const Documents = () => {
 
             {/* UPLOAD NOTE */}
 
-            <div className="mt-5 p-4 rounded-xl border border-slate-200 bg-white">
-              <p className="text-xs text-slate-500 leading-relaxed">
-                <span className="font-bold text-slate-700">
+            <div
+              className={`mt-5 p-4 rounded-xl border ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700"
+                  : "bg-white border-slate-200"
+              }`}
+            >
+              <p className={`text-xs leading-relaxed ${mutedClass}`}>
+                <span
+                  className={`font-bold ${
+                    darkMode ? "text-slate-200" : "text-slate-700"
+                  }`}
+                >
                   Upload Guidelines:
                 </span>{" "}
                 Make sure all files are clear and readable. Each file must not
@@ -354,11 +436,11 @@ const Documents = () => {
         {activeTab === "submitted" && (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className={`text-lg font-bold ${headingClass}`}>
                 Submitted Documents
               </h2>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className={`text-xs mt-1 ${mutedClass}`}>
                 View the documents you have submitted for your internship.
               </p>
             </div>
@@ -370,19 +452,31 @@ const Documents = () => {
                 return (
                   <div
                     key={document.key}
-                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50"
+                    className={`flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border ${innerBoxClass}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+                      {/* FILE ICON */}
+
+                      <div
+                        className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${
+                          darkMode
+                            ? "bg-slate-900 border-slate-700"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
                         📄
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800">
+                        <p
+                          className={`text-sm font-semibold ${
+                            darkMode ? "text-slate-100" : "text-slate-800"
+                          }`}
+                        >
                           {document.title}
                         </p>
 
-                        <p className="text-xs text-slate-400 mt-1 truncate">
+                        <p className={`text-xs mt-1 truncate ${mutedClass}`}>
                           {uploaded
                             ? uploaded.file.name
                             : "No document submitted"}
@@ -391,10 +485,14 @@ const Documents = () => {
                     </div>
 
                     <span
-                      className={`inline-flex w-fit px-3 py-1.5 rounded-lg text-[10px] font-bold ${
+                      className={`inline-flex w-fit px-3 py-1.5 rounded-lg text-[10px] font-bold border ${
                         uploaded
-                          ? "bg-amber-50 border border-amber-100 text-amber-700"
-                          : "bg-slate-100 border border-slate-200 text-slate-400"
+                          ? darkMode
+                            ? "bg-amber-950/40 border-amber-900/50 text-amber-400"
+                            : "bg-amber-50 border-amber-100 text-amber-700"
+                          : darkMode
+                          ? "bg-slate-700 border-slate-600 text-slate-500"
+                          : "bg-slate-100 border-slate-200 text-slate-400"
                       }`}
                     >
                       {getDocumentStatus(document.key)}
@@ -413,11 +511,11 @@ const Documents = () => {
         {activeTab === "download" && (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className={`text-lg font-bold ${headingClass}`}>
                 Download Documents
               </h2>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className={`text-xs mt-1 ${mutedClass}`}>
                 Download copies of your submitted internship documents.
               </p>
             </div>
@@ -429,19 +527,31 @@ const Documents = () => {
                 return (
                   <div
                     key={document.key}
-                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50"
+                    className={`flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border ${innerBoxClass}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+                      {/* FILE ICON */}
+
+                      <div
+                        className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${
+                          darkMode
+                            ? "bg-slate-900 border-slate-700"
+                            : "bg-white border-slate-200"
+                        }`}
+                      >
                         📄
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800">
+                        <p
+                          className={`text-sm font-semibold ${
+                            darkMode ? "text-slate-100" : "text-slate-800"
+                          }`}
+                        >
                           {document.title}
                         </p>
 
-                        <p className="text-xs text-slate-400 mt-1 truncate">
+                        <p className={`text-xs mt-1 truncate ${mutedClass}`}>
                           {uploaded
                             ? uploaded.file.name
                             : "No document available"}
@@ -449,13 +559,19 @@ const Documents = () => {
                       </div>
                     </div>
 
+                    {/* DOWNLOAD BUTTON */}
+
                     <button
                       type="button"
                       disabled={!uploaded}
                       onClick={() => handleDownload(document.key)}
                       className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition ${
                         uploaded
-                          ? "bg-slate-900 text-white hover:bg-slate-800"
+                          ? darkMode
+                            ? "bg-white text-slate-900 hover:bg-slate-200"
+                            : "bg-slate-900 text-white hover:bg-slate-800"
+                          : darkMode
+                          ? "bg-slate-700 text-slate-500 cursor-not-allowed"
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
                       }`}
                     >

@@ -1,72 +1,41 @@
 import React from "react";
+import { useOutletContext } from "react-router-dom";
 
 const Dashboard = () => {
-  // -----------------------------------------
+  const { darkMode } = useOutletContext();
+
+  // =========================================================
   // DASHBOARD DATA
-  // -----------------------------------------
+  // =========================================================
 
   const analyticsCards = [
     {
-      title: "Active Internships",
-      count: 23,
-      bg: "bg-blue-50",
-      icon: "💼",
-    },
-    {
-      title: "Applications Sent",
-      count: 5,
-      bg: "bg-emerald-50",
-      icon: "📝",
-    },
-    {
-      title: "Under Review",
-      count: 2,
-      bg: "bg-amber-50",
-      icon: "⏳",
-    },
-    {
-      title: "Offer Received",
+      title: "Active Internship",
       count: 1,
-      bg: "bg-purple-50",
-      icon: "🎉",
-    },
-  ];
-
-  const recentApplications = [
-    {
-      company: "DataWorks",
-      position: "Data Analyst Intern",
-      status: "Under Review",
-      statusColor: "bg-amber-100 text-amber-800",
-      date: "May 09, 2026",
+      icon: "💼",
+      lightBg: "bg-blue-50",
+      darkBg: "bg-blue-950/40",
     },
     {
-      company: "TechSolutions Inc.",
-      position: "Web Developer Intern",
-      status: "Shortlisted",
-      statusColor: "bg-blue-100 text-blue-800",
-      date: "May 08, 2026",
+      title: "Applications",
+      count: 5,
+      icon: "📋",
+      lightBg: "bg-emerald-50",
+      darkBg: "bg-emerald-950/40",
     },
     {
-      company: "Creative Minds",
-      position: "UI/UX Design Intern",
-      status: "Applied",
-      statusColor: "bg-gray-100 text-gray-800",
-      date: "May 07, 2026",
+      title: "Documents",
+      count: 8,
+      icon: "📁",
+      lightBg: "bg-purple-50",
+      darkBg: "bg-purple-950/40",
     },
     {
-      company: "WriteWay Agency",
-      position: "Content Writing Intern",
-      status: "Rejected",
-      statusColor: "bg-red-100 text-red-800",
-      date: "May 06, 2026",
-    },
-    {
-      company: "Brandify Co.",
-      position: "Marketing Intern",
-      status: "Offer Received",
-      statusColor: "bg-emerald-100 text-emerald-800",
-      date: "May 05, 2026",
+      title: "Notifications",
+      count: 3,
+      icon: "🔔",
+      lightBg: "bg-amber-50",
+      darkBg: "bg-amber-950/40",
     },
   ];
 
@@ -74,93 +43,135 @@ const Dashboard = () => {
     {
       month: "MAY",
       day: "15",
-      title: "ABC Corp Internship",
-      desc: "Application Deadline",
-      tag: "2 days left",
-      tagColor: "bg-red-50 text-red-600 border-red-100",
+      title: "Internship Report",
+      description: "Submit your internship report",
+      tag: "Due soon",
+      tagClass: darkMode
+        ? "bg-red-950/40 text-red-400 border-red-900"
+        : "bg-red-50 text-red-600 border-red-100",
     },
     {
       month: "MAY",
       day: "20",
-      title: "DataWorks Internship",
-      desc: "Assessment Deadline",
-      tag: "7 days left",
-      tagColor: "bg-amber-50 text-amber-600 border-amber-100",
+      title: "Weekly Time Record",
+      description: "Submit your latest time record",
+      tag: "5 days left",
+      tagClass: darkMode
+        ? "bg-amber-950/40 text-amber-400 border-amber-900"
+        : "bg-amber-50 text-amber-600 border-amber-100",
     },
     {
-      month: "MAY",
-      day: "28",
-      title: "Creative Minds Internship",
-      desc: "Application Deadline",
-      tag: "15 days left",
-      tagColor: "bg-emerald-50 text-emerald-600 border-emerald-100",
+      month: "JUN",
+      day: "01",
+      title: "Final Evaluation",
+      description: "Final internship evaluation",
+      tag: "17 days left",
+      tagClass: darkMode
+        ? "bg-emerald-950/40 text-emerald-400 border-emerald-900"
+        : "bg-emerald-50 text-emerald-600 border-emerald-100",
     },
   ];
 
-  const announcements = [
+  const recentActivities = [
     {
-      type: "Event",
-      date: "May 10, 2026",
-      title: "Summer Internship Fair 2026",
-      description:
-        "Join us via web portal stream on May 18 for our annual internship event.",
-      icon: "📅",
-      color: "bg-blue-50 text-blue-600",
+      title: "Application Approved",
+      description: "Your internship application has been approved.",
+      time: "2 hours ago",
+      icon: "✓",
+      iconClass: darkMode
+        ? "bg-emerald-950/40 text-emerald-400"
+        : "bg-emerald-50 text-emerald-600",
     },
     {
-      type: "Training",
-      date: "May 08, 2026",
-      title: "Resume Design Workshop",
-      description:
-        "Improve your technical portfolios and resumes with live advice from advisers.",
-      icon: "🎓",
-      color: "bg-purple-50 text-purple-600",
+      title: "Document Reviewed",
+      description: "Your submitted document has been reviewed.",
+      time: "5 hours ago",
+      icon: "📄",
+      iconClass: darkMode
+        ? "bg-blue-950/40 text-blue-400"
+        : "bg-blue-50 text-blue-600",
+    },
+    {
+      title: "New Message",
+      description: "You received a message from your faculty.",
+      time: "Yesterday",
+      icon: "💬",
+      iconClass: darkMode
+        ? "bg-purple-950/40 text-purple-400"
+        : "bg-purple-50 text-purple-600",
+    },
+    {
+      title: "Application Submitted",
+      description: "Your internship application was submitted.",
+      time: "Yesterday",
+      icon: "📝",
+      iconClass: darkMode
+        ? "bg-amber-950/40 text-amber-400"
+        : "bg-amber-50 text-amber-600",
     },
   ];
+
+  // =========================================================
+  // COMMON CLASSES
+  // =========================================================
+
+  const cardClass = darkMode
+    ? "bg-slate-900 border-slate-700"
+    : "bg-white border-slate-200";
+
+  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+
+  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <div className="p-5 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
-      {/* =========================================
-          WELCOME HEADER
-      ========================================= */}
+      {/* =====================================================
+          WELCOME
+      ===================================================== */}
 
       <section className="mb-8">
-        <p className="text-sm font-medium text-blue-600 mb-2">
+        <p className="text-sm font-medium text-blue-500 mb-2">
           Student Dashboard
         </p>
 
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className={`text-3xl font-bold tracking-tight ${headingClass}`}>
           Welcome back, John! 👋
         </h1>
 
-        <p className="mt-2 text-slate-500">
-          Here's what is happening with your internship programs today.
+        <p className={`mt-2 ${mutedClass}`}>
+          Here's an overview of your internship progress and activities.
         </p>
       </section>
 
-      {/* =========================================
-          ANALYTICS CARDS
-      ========================================= */}
+      {/* =====================================================
+          ANALYTICS
+      ===================================================== */}
 
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
         {analyticsCards.map((card) => (
           <div
             key={card.title}
-            className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow"
+            className={`${cardClass} rounded-2xl border p-5 transition-shadow hover:shadow-md`}
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-500">
+                <p className={`text-sm font-medium ${mutedClass}`}>
                   {card.title}
                 </p>
 
-                <p className="text-3xl font-bold mt-2 text-slate-900">
+                <p className={`text-3xl font-bold mt-2 ${headingClass}`}>
                   {card.count}
                 </p>
               </div>
 
               <div
-                className={`w-12 h-12 rounded-xl ${card.bg} flex items-center justify-center text-lg`}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg ${
+                  darkMode ? card.darkBg : card.lightBg
+                }`}
               >
                 {card.icon}
               </div>
@@ -169,28 +180,28 @@ const Dashboard = () => {
         ))}
       </section>
 
-      {/* =========================================
-          APPLICATION STATUS + DEADLINES
-      ========================================= */}
+      {/* =====================================================
+          INTERNSHIP PROGRESS + DEADLINES
+      ===================================================== */}
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        {/* APPLICATION STATUS */}
+        {/* INTERNSHIP PROGRESS */}
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className={`${cardClass} rounded-2xl border p-6`}>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="font-bold text-lg text-slate-900">
-                Application Status
+              <h2 className={`font-bold text-lg ${headingClass}`}>
+                Internship Progress
               </h2>
 
-              <p className="text-sm text-slate-400 mt-1">
-                Overview of your applications
+              <p className={`text-sm mt-1 ${mutedClass}`}>
+                Your current internship progress
               </p>
             </div>
 
             <button
               type="button"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+              className="text-sm font-semibold text-blue-500 hover:text-blue-400"
             >
               View Details
             </button>
@@ -204,76 +215,100 @@ const Dashboard = () => {
                 className="w-full h-full rounded-full"
                 style={{
                   background:
-                    "conic-gradient(#3b82f6 0deg 116deg, #f59e0b 116deg 197deg, #8b5cf6 197deg 255deg, #10b981 255deg 278deg, #e2e8f0 278deg 360deg)",
+                    "conic-gradient(#10b981 0deg 245deg, #3b82f6 245deg 310deg, #f59e0b 310deg 345deg, #64748b 345deg 360deg)",
                 }}
               />
 
-              <div className="absolute inset-5 bg-white rounded-full flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-slate-900">31</span>
+              <div
+                className={`absolute inset-5 rounded-full flex flex-col items-center justify-center ${
+                  darkMode ? "bg-slate-900" : "bg-white"
+                }`}
+              >
+                <span className={`text-3xl font-bold ${headingClass}`}>
+                  68%
+                </span>
 
-                <span className="text-xs text-slate-400">Total</span>
+                <span className={`text-xs ${mutedClass}`}>Complete</span>
               </div>
             </div>
 
-            {/* LEGEND */}
+            {/* PROGRESS DETAILS */}
 
-            <div className="space-y-4 flex-1 w-full">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-sm text-slate-600">Applied</span>
+            <div className="flex-1 w-full space-y-5">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className={`text-sm ${mutedClass}`}>
+                    Overall Progress
+                  </span>
+
+                  <span className={`text-sm font-bold ${headingClass}`}>
+                    68%
+                  </span>
                 </div>
 
-                <span className="font-bold text-slate-900">10</span>
+                <div
+                  className={`h-2 rounded-full ${
+                    darkMode ? "bg-slate-700" : "bg-slate-100"
+                  }`}
+                >
+                  <div className="h-2 w-[68%] rounded-full bg-blue-500" />
+                </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-sm text-slate-600">Review</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div
+                  className={`p-3 rounded-xl ${
+                    darkMode ? "bg-emerald-950/30" : "bg-emerald-50"
+                  }`}
+                >
+                  <p
+                    className={`text-xs ${
+                      darkMode ? "text-emerald-400" : "text-emerald-600"
+                    }`}
+                  >
+                    Completed
+                  </p>
+
+                  <p className={`text-xl font-bold mt-1 ${headingClass}`}>8</p>
                 </div>
 
-                <span className="font-bold text-slate-900">7</span>
-              </div>
+                <div
+                  className={`p-3 rounded-xl ${
+                    darkMode ? "bg-blue-950/30" : "bg-blue-50"
+                  }`}
+                >
+                  <p
+                    className={`text-xs ${
+                      darkMode ? "text-blue-400" : "text-blue-600"
+                    }`}
+                  >
+                    Remaining
+                  </p>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-purple-500" />
-                  <span className="text-sm text-slate-600">Interview</span>
+                  <p className={`text-xl font-bold mt-1 ${headingClass}`}>4</p>
                 </div>
-
-                <span className="font-bold text-slate-900">5</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                  <span className="text-sm text-slate-600">Offers</span>
-                </div>
-
-                <span className="font-bold text-slate-900">2</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* UPCOMING DEADLINES */}
+        {/* DEADLINES */}
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className={`${cardClass} rounded-2xl border p-6`}>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="font-bold text-lg text-slate-900">
+              <h2 className={`font-bold text-lg ${headingClass}`}>
                 Upcoming Deadlines
               </h2>
 
-              <p className="text-sm text-slate-400 mt-1">
+              <p className={`text-sm mt-1 ${mutedClass}`}>
                 Important internship dates
               </p>
             </div>
 
             <button
               type="button"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+              className="text-sm font-semibold text-blue-500 hover:text-blue-400"
             >
               View All
             </button>
@@ -283,28 +318,50 @@ const Dashboard = () => {
             {deadlines.map((deadline) => (
               <div
                 key={deadline.title}
-                className="flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition"
+                className={`flex items-center gap-4 p-3 rounded-xl transition ${
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-50"
+                }`}
               >
-                <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 flex flex-col items-center justify-center flex-shrink-0">
-                  <span className="text-[9px] font-bold text-slate-400">
+                {/* DATE */}
+
+                <div
+                  className={`w-14 h-14 rounded-xl border flex flex-col items-center justify-center flex-shrink-0 ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  <span
+                    className={`text-[9px] font-bold ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
                     {deadline.month}
                   </span>
 
-                  <span className="text-xl font-bold text-slate-900">
+                  <span className={`text-xl font-bold ${headingClass}`}>
                     {deadline.day}
                   </span>
                 </div>
 
+                {/* CONTENT */}
+
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate text-slate-900">
+                  <p
+                    className={`font-semibold text-sm truncate ${headingClass}`}
+                  >
                     {deadline.title}
                   </p>
 
-                  <p className="text-xs text-slate-400 mt-1">{deadline.desc}</p>
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
+                    {deadline.description}
+                  </p>
                 </div>
 
+                {/* TAG */}
+
                 <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap ${deadline.tagColor}`}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap ${deadline.tagClass}`}
                 >
                   {deadline.tag}
                 </span>
@@ -314,171 +371,205 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* =========================================
-          RECENT APPLICATIONS + ANNOUNCEMENTS
-      ========================================= */}
+      {/* =====================================================
+          RECENT ACTIVITY + INTERNSHIP INFO
+      ===================================================== */}
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* RECENT APPLICATIONS */}
+        {/* RECENT ACTIVITY */}
 
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div
+          className={`xl:col-span-2 ${cardClass} rounded-2xl border overflow-hidden`}
+        >
           <div className="p-6 flex items-center justify-between">
             <div>
-              <h2 className="font-bold text-lg text-slate-900">
-                Recent Applications
+              <h2 className={`font-bold text-lg ${headingClass}`}>
+                Recent Activity
               </h2>
 
-              <p className="text-sm text-slate-400 mt-1">
-                Your latest internship applications
+              <p className={`text-sm mt-1 ${mutedClass}`}>
+                Your latest internship activities
               </p>
             </div>
 
             <button
               type="button"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
-            >
-              View All Applications
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-y border-slate-100 bg-slate-50/50">
-                  <th className="text-left px-6 py-3 text-xs font-bold text-slate-400 uppercase">
-                    Company
-                  </th>
-
-                  <th className="text-left px-6 py-3 text-xs font-bold text-slate-400 uppercase">
-                    Position
-                  </th>
-
-                  <th className="text-left px-6 py-3 text-xs font-bold text-slate-400 uppercase">
-                    Status
-                  </th>
-
-                  <th className="text-left px-6 py-3 text-xs font-bold text-slate-400 uppercase">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {recentApplications.map((application) => (
-                  <tr
-                    key={`${application.company}-${application.position}`}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition"
-                  >
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-sm text-slate-900">
-                        {application.company}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600">
-                        {application.position}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${application.statusColor}`}
-                      >
-                        {application.status}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-400">
-                        {application.date}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* ANNOUNCEMENTS */}
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="font-bold text-lg text-slate-900">
-                Latest Announcements
-              </h2>
-
-              <p className="text-sm text-slate-400 mt-1">
-                Updates from your department
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+              className="text-sm font-semibold text-blue-500 hover:text-blue-400"
             >
               View All
             </button>
           </div>
 
-          <div className="space-y-5">
-            {announcements.map((announcement) => (
+          <div
+            className={`divide-y ${
+              darkMode ? "divide-slate-700" : "divide-slate-100"
+            }`}
+          >
+            {recentActivities.map((activity) => (
               <div
-                key={announcement.title}
-                className="border-b border-slate-100 last:border-0 pb-5 last:pb-0"
+                key={`${activity.title}-${activity.time}`}
+                className={`px-6 py-4 flex items-center gap-3 transition ${
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-50"
+                }`}
               >
-                <div className="flex gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${announcement.color}`}
-                  >
-                    {announcement.icon}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] font-bold uppercase text-slate-400">
-                        {announcement.type}
-                      </span>
-
-                      <span className="text-[10px] text-slate-300">•</span>
-
-                      <span className="text-[10px] text-slate-400">
-                        {announcement.date}
-                      </span>
-                    </div>
-
-                    <h3 className="font-semibold text-sm text-slate-900">
-                      {announcement.title}
-                    </h3>
-
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      {announcement.description}
-                    </p>
-                  </div>
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${activity.iconClass}`}
+                >
+                  {activity.icon}
                 </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {activity.title}
+                  </p>
+
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
+                    {activity.description}
+                  </p>
+                </div>
+
+                <span
+                  className={`text-[10px] whitespace-nowrap ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  {activity.time}
+                </span>
               </div>
             ))}
           </div>
         </div>
+
+        {/* INTERNSHIP INFORMATION */}
+
+        <div className={`${cardClass} rounded-2xl border p-6`}>
+          <div className="mb-6">
+            <h2 className={`font-bold text-lg ${headingClass}`}>
+              Internship Information
+            </h2>
+
+            <p className={`text-sm mt-1 ${mutedClass}`}>
+              Your current internship
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* COMPANY */}
+
+            <div
+              className={`p-4 rounded-xl border ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700"
+                  : "bg-slate-50 border-slate-100"
+              }`}
+            >
+              <p className={`text-xs ${mutedClass}`}>Company</p>
+
+              <p className={`font-semibold text-sm mt-1 ${headingClass}`}>
+                Tech Solutions Inc.
+              </p>
+            </div>
+
+            {/* POSITION */}
+
+            <div
+              className={`p-4 rounded-xl border ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700"
+                  : "bg-slate-50 border-slate-100"
+              }`}
+            >
+              <p className={`text-xs ${mutedClass}`}>Position</p>
+
+              <p className={`font-semibold text-sm mt-1 ${headingClass}`}>
+                IT Intern
+              </p>
+            </div>
+
+            {/* STATUS */}
+
+            <div
+              className={`p-4 rounded-xl border ${
+                darkMode
+                  ? "bg-emerald-950/30 border-emerald-900"
+                  : "bg-emerald-50 border-emerald-100"
+              }`}
+            >
+              <p
+                className={`text-xs ${
+                  darkMode ? "text-emerald-400" : "text-emerald-600"
+                }`}
+              >
+                Status
+              </p>
+
+              <div className="flex items-center gap-2 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+
+                <p
+                  className={`font-semibold text-sm ${
+                    darkMode ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  Active
+                </p>
+              </div>
+            </div>
+
+            {/* FACULTY */}
+
+            <div
+              className={`p-4 rounded-xl border ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700"
+                  : "bg-slate-50 border-slate-100"
+              }`}
+            >
+              <p className={`text-xs ${mutedClass}`}>Faculty Adviser</p>
+
+              <p className={`font-semibold text-sm mt-1 ${headingClass}`}>
+                Prof. Maria Santos
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* =========================================
+      {/* =====================================================
           TIP
-      ========================================= */}
+      ===================================================== */}
 
-      <div className="mt-6 bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+      <div
+        className={`mt-6 rounded-2xl p-4 flex items-center gap-3 border ${
+          darkMode
+            ? "bg-blue-950/30 border-blue-900"
+            : "bg-blue-50 border-blue-100"
+        }`}
+      >
+        <div
+          className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            darkMode ? "bg-slate-800" : "bg-white"
+          }`}
+        >
           💡
         </div>
 
         <div>
-          <p className="text-sm font-bold text-blue-900">Tip</p>
+          <p
+            className={`text-sm font-bold ${
+              darkMode ? "text-blue-300" : "text-blue-900"
+            }`}
+          >
+            Student Tip
+          </p>
 
-          <p className="text-sm text-blue-700">
-            Keep your profile and documents updated to increase your chances of
-            getting matched with relevant internship opportunities.
+          <p
+            className={`text-sm ${
+              darkMode ? "text-blue-400" : "text-blue-700"
+            }`}
+          >
+            Keep your documents updated and check your upcoming deadlines
+            regularly to stay on track with your internship.
           </p>
         </div>
       </div>

@@ -40,17 +40,20 @@ const Login = () => {
 
   const demoAccounts = {
     student: {
-      emailOrId: "student@gmail.com",
+      email: "student@gmail.com",
+      id: "STU-001",
       password: "password",
     },
 
     faculty: {
-      emailOrId: "faculty@gmail.com",
+      email: "faculty@gmail.com",
+      id: "EMP-001",
       password: "password",
     },
 
     company: {
-      emailOrId: "company@gmail.com",
+      email: "company@gmail.com",
+      id: "COMP-001",
       password: "password",
     },
   };
@@ -63,7 +66,8 @@ const Login = () => {
     const account = demoAccounts[activeRole];
 
     if (
-      currentForm.emailOrId === account.emailOrId &&
+      currentForm.id === account.id &&
+      currentForm.email === account.email ||
       currentForm.password === account.password
     ) {
       if (activeRole === "student") {
