@@ -1,128 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
-// =========================================================
-// INITIAL USER DATA
-// =========================================================
-
-const initialUsers = {
-  students: [
-    {
-      id: "STU-001",
-      name: "Juan Dela Cruz",
-      email: "juan.delacruz@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "STU-002",
-      name: "Maria Santos",
-      email: "maria.santos@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "STU-003",
-      name: "John Reyes",
-      email: "john.reyes@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "STU-004",
-      name: "Angela Garcia",
-      email: "angela.garcia@bpsu.edu.ph",
-      status: "Inactive",
-    },
-    {
-      id: "STU-005",
-      name: "Mark Villanueva",
-      email: "mark.villanueva@bpsu.edu.ph",
-      status: "Inactive",
-    },
-    {
-      id: "STU-006",
-      name: "Sofia Mendoza",
-      email: "sofia.mendoza@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "STU-007",
-      name: "Daniel Flores",
-      email: "daniel.flores@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "STU-008",
-      name: "Carlo Bautista",
-      email: "carlo.bautista@bpsu.edu.ph",
-      status: "Active",
-    },
-  ],
-
-  faculty: [
-    {
-      id: "FAC-001",
-      name: "Dr. Roberto Cruz",
-      email: "roberto.cruz@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "FAC-002",
-      name: "Prof. Ana Reyes",
-      email: "ana.reyes@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "FAC-003",
-      name: "Prof. Michael Santos",
-      email: "michael.santos@bpsu.edu.ph",
-      status: "Inactive",
-    },
-    {
-      id: "FAC-004",
-      name: "Dr. Patricia Garcia",
-      email: "patricia.garcia@bpsu.edu.ph",
-      status: "Active",
-    },
-    {
-      id: "FAC-005",
-      name: "Prof. Kevin Mendoza",
-      email: "kevin.mendoza@bpsu.edu.ph",
-      status: "Active",
-    },
-  ],
-
-  company: [
-    {
-      id: "COM-001",
-      name: "ABC Technologies",
-      email: "hr@abctech.com",
-      status: "Active",
-    },
-    {
-      id: "COM-002",
-      name: "Tech Solutions Inc.",
-      email: "admin@techsolutions.com",
-      status: "Active",
-    },
-    {
-      id: "COM-003",
-      name: "Bataan Digital Corp.",
-      email: "hr@bataandigital.com",
-      status: "Inactive",
-    },
-    {
-      id: "COM-004",
-      name: "Innovate PH",
-      email: "careers@innovateph.com",
-      status: "Active",
-    },
-    {
-      id: "COM-005",
-      name: "NextGen Systems",
-      email: "admin@nextgensystems.com",
-      status: "Active",
-    },
-  ],
-};
+import { useMockStore, STATUS } from "../../data/mockStore";
 
 // =========================================================
 // COMPONENT
@@ -131,13 +9,13 @@ const initialUsers = {
 const UserManagement = () => {
   const { darkMode } = useOutletContext();
 
+  const { state, transact } = useMockStore();
+
   // =========================================================
   // STATE
   // =========================================================
 
   const [activeTab, setActiveTab] = useState("students");
-
-  const [users, setUsers] = useState(initialUsers);
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -150,10 +28,26 @@ const UserManagement = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    status: "Active",
+    status: STATUS.user.ACTIVE,
   });
 
   const usersPerPage = 6;
+
+  // =========================================================
+  // CURRENT USERS
+  // =========================================================
+
+  const roleMap = {
+    students: "student",
+    faculty: "faculty",
+    company: "company",
+  };
+
+  const currentRole = roleMap[activeTab];
+
+  const currentUsers = useMemo(() => {
+    return state.users.filter((user) => user.role === currentRole);
+  }, [state.users, currentRole]);
 
   // =========================================================
   // TABS
@@ -173,12 +67,6 @@ const UserManagement = () => {
       label: "Company",
     },
   ];
-
-  // =========================================================
-  // CURRENT USERS
-  // =========================================================
-
-  const currentUsers = users[activeTab];
 
   // =========================================================
   // PAGINATION
@@ -202,6 +90,22 @@ const UserManagement = () => {
   };
 
   // =========================================================
+  // GET ROLE LABEL
+  // =========================================================
+
+  const getRoleLabel = () => {
+    if (activeTab === "students") {
+      return "Student";
+    }
+
+    if (activeTab === "faculty") {
+      return "Faculty Adviser";
+    }
+
+    return "Company Supervisor";
+  };
+
+  // =========================================================
   // OPEN ADD MODAL
   // =========================================================
 
@@ -213,7 +117,7 @@ const UserManagement = () => {
     setFormData({
       name: "",
       email: "",
-      status: "Active",
+      status: STATUS.user.ACTIVE,
     });
 
     setIsModalOpen(true);
@@ -229,9 +133,9 @@ const UserManagement = () => {
     setSelectedUser(user);
 
     setFormData({
-      name: user.name,
-      email: user.email,
-      status: user.status,
+      name: user.name || "",
+      email: user.email || "",
+      status: user.status || STATUS.user.ACTIVE,
     });
 
     setIsModalOpen(true);
@@ -249,7 +153,7 @@ const UserManagement = () => {
     setFormData({
       name: "",
       email: "",
-      status: "Active",
+      status: STATUS.user.ACTIVE,
     });
   };
 
@@ -273,77 +177,235 @@ const UserManagement = () => {
   const handleSaveUser = (event) => {
     event.preventDefault();
 
-    if (!formData.name.trim() || !formData.email.trim()) {
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+
+    if (!name || !email) {
       return;
     }
 
-    // -------------------------------------------------------
-    // EDIT USER
-    // -------------------------------------------------------
+    // =======================================================
+    // EDIT EXISTING USER
+    // =======================================================
 
     if (modalMode === "edit" && selectedUser) {
-      setUsers((prev) => ({
-        ...prev,
+      transact((draft) => {
+        const user = draft.users.find((item) => item.id === selectedUser.id);
 
-        [activeTab]: prev[activeTab].map((user) =>
-          user.id === selectedUser.id
-            ? {
-                ...user,
-                name: formData.name.trim(),
-                email: formData.email.trim(),
-                status: formData.status,
-              }
-            : user
-        ),
-      }));
+        if (!user) return;
+
+        user.email = email;
+        user.status = formData.status;
+
+        // ---------------------------------------------------
+        // Keep profile information synchronized
+        // ---------------------------------------------------
+
+        if (user.role === "student") {
+          const student = draft.students.find(
+            (item) => item.id === user.profileId
+          );
+
+          if (student) {
+            student.fullName = name;
+            student.email = email;
+          }
+        }
+
+        if (user.role === "faculty") {
+          const faculty = draft.faculty.find(
+            (item) => item.id === user.profileId
+          );
+
+          if (faculty) {
+            faculty.fullName = name;
+            faculty.email = email;
+          }
+        }
+
+        if (user.role === "company") {
+          const supervisor = draft.supervisors.find(
+            (item) => item.id === user.profileId
+          );
+
+          if (supervisor) {
+            supervisor.fullName = name;
+            supervisor.email = email;
+          }
+        }
+
+        // ---------------------------------------------------
+        // Audit
+        // ---------------------------------------------------
+
+        draft.auditEvents.unshift({
+          id: `AUD-${String(draft.auditEvents.length + 1).padStart(3, "0")}`,
+
+          actorUserId: draft.currentUser?.id || "SYSTEM",
+
+          actorRole: draft.currentUser?.role || "system",
+
+          action: "UPDATE",
+
+          module: "User Management",
+
+          targetEntityType: "User",
+
+          targetEntityId: user.id,
+
+          timestamp: new Date().toISOString(),
+
+          details: {
+            name,
+            email,
+            status: formData.status,
+          },
+        });
+      });
+
+      handleCloseModal();
+
+      return;
     }
 
-    // -------------------------------------------------------
-    // ADD USER
-    // -------------------------------------------------------
+    // =======================================================
+    // ADD NEW USER
+    // =======================================================
 
-    else {
-      const prefixes = {
-        students: "STU",
-        faculty: "FAC",
-        company: "COM",
-      };
+    const prefixes = {
+      students: "STU",
+      faculty: "FAC",
+      company: "SUP",
+    };
 
-      const prefix = prefixes[activeTab];
+    const profilePrefix = prefixes[activeTab];
 
-      const newNumber = String(currentUsers.length + 1).padStart(3, "0");
+    transact((draft) => {
+      // -----------------------------------------------------
+      // Generate User ID
+      // -----------------------------------------------------
+
+      const userNumber = draft.users.length + 1;
+
+      const userId = `USR-${String(userNumber).padStart(3, "0")}`;
+
+      // -----------------------------------------------------
+      // Generate Profile ID
+      // -----------------------------------------------------
+
+      const existingProfiles =
+        activeTab === "students"
+          ? draft.students
+          : activeTab === "faculty"
+          ? draft.faculty
+          : draft.supervisors;
+
+      const profileNumber = existingProfiles.length + 1;
+
+      const profileId = `${profilePrefix}-${String(profileNumber).padStart(
+        3,
+        "0"
+      )}`;
+
+      // -----------------------------------------------------
+      // Create user account
+      // -----------------------------------------------------
 
       const newUser = {
-        id: `${prefix}-${newNumber}`,
-        name: formData.name.trim(),
-        email: formData.email.trim(),
+        id: userId,
+        role: currentRole,
+        email,
+        password: "password",
         status: formData.status,
+        profileId,
       };
 
-      setUsers((prev) => ({
-        ...prev,
+      draft.users.push(newUser);
 
-        [activeTab]: [...prev[activeTab], newUser],
-      }));
-    }
+      // -----------------------------------------------------
+      // Create matching profile
+      // -----------------------------------------------------
+
+      if (currentRole === "student") {
+        draft.students.push({
+          id: profileId,
+          userId,
+          fullName: name,
+          email,
+          studentId: profileId,
+          program: "BS Information Technology",
+          yearLevel: "2nd Year",
+          department: "College of Information and Communications Technology",
+          facultyId: "FAC-001",
+          phone: "",
+          address: "",
+          gwa: "",
+        });
+      }
+
+      if (currentRole === "faculty") {
+        draft.faculty.push({
+          id: profileId,
+          userId,
+          fullName: name,
+          email,
+          facultyId: profileId,
+          department: "College of Information and Communications Technology",
+        });
+      }
+
+      if (currentRole === "company") {
+        // -----------------------------------------------
+        // New company supervisor
+        // -----------------------------------------------
+
+        const company = draft.companies[0];
+
+        draft.supervisors.push({
+          id: profileId,
+          userId,
+          companyId: company?.id || null,
+          fullName: name,
+          email,
+          position: "Company Supervisor",
+        });
+
+        if (company && !company.supervisorIds.includes(profileId)) {
+          company.supervisorIds.push(profileId);
+        }
+      }
+
+      // -----------------------------------------------------
+      // Audit
+      // -----------------------------------------------------
+
+      draft.auditEvents.unshift({
+        id: `AUD-${String(draft.auditEvents.length + 1).padStart(3, "0")}`,
+
+        actorUserId: draft.currentUser?.id || "SYSTEM",
+
+        actorRole: draft.currentUser?.role || "system",
+
+        action: "CREATE",
+
+        module: "User Management",
+
+        targetEntityType: "User",
+
+        targetEntityId: userId,
+
+        timestamp: new Date().toISOString(),
+
+        details: {
+          name,
+          email,
+          role: currentRole,
+          profileId,
+        },
+      });
+    });
 
     handleCloseModal();
-  };
-
-  // =========================================================
-  // TABLE LABEL
-  // =========================================================
-
-  const getRoleLabel = () => {
-    if (activeTab === "students") {
-      return "Student";
-    }
-
-    if (activeTab === "faculty") {
-      return "Faculty Adviser";
-    }
-
-    return "Company Supervisor";
   };
 
   // =========================================================
@@ -448,8 +510,6 @@ const UserManagement = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[650px] border-collapse">
-            {/* TABLE HEADER */}
-
             <thead>
               <tr
                 className={
@@ -460,9 +520,7 @@ const UserManagement = () => {
               >
                 <th
                   className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                    darkMode
-                      ? "border-slate-700"
-                      : "border-slate-200"
+                    darkMode ? "border-slate-700" : "border-slate-200"
                   }`}
                 >
                   ID
@@ -470,9 +528,7 @@ const UserManagement = () => {
 
                 <th
                   className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                    darkMode
-                      ? "border-slate-700"
-                      : "border-slate-200"
+                    darkMode ? "border-slate-700" : "border-slate-200"
                   }`}
                 >
                   Name
@@ -480,9 +536,7 @@ const UserManagement = () => {
 
                 <th
                   className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                    darkMode
-                      ? "border-slate-700"
-                      : "border-slate-200"
+                    darkMode ? "border-slate-700" : "border-slate-200"
                   }`}
                 >
                   Email
@@ -490,9 +544,7 @@ const UserManagement = () => {
 
                 <th
                   className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                    darkMode
-                      ? "border-slate-700"
-                      : "border-slate-200"
+                    darkMode ? "border-slate-700" : "border-slate-200"
                   }`}
                 >
                   Status
@@ -500,9 +552,7 @@ const UserManagement = () => {
 
                 <th
                   className={`px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wide border-b ${
-                    darkMode
-                      ? "border-slate-700"
-                      : "border-slate-200"
+                    darkMode ? "border-slate-700" : "border-slate-200"
                   }`}
                 >
                   Actions
@@ -510,83 +560,94 @@ const UserManagement = () => {
               </tr>
             </thead>
 
-            {/* TABLE BODY */}
-
             <tbody>
-              {paginatedUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={`transition ${
-                    darkMode
-                      ? "border-b border-slate-700 hover:bg-slate-800/60"
-                      : "border-b border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  {/* ID */}
+              {paginatedUsers.map((user) => {
+                const profile =
+                  user.role === "student"
+                    ? state.students.find((item) => item.id === user.profileId)
+                    : user.role === "faculty"
+                    ? state.faculty.find((item) => item.id === user.profileId)
+                    : state.supervisors.find(
+                        (item) => item.id === user.profileId
+                      );
 
-                  <td
-                    className={`px-4 py-3 text-xs font-semibold ${
-                      darkMode ? "text-slate-300" : "text-slate-700"
+                const displayName = profile?.fullName || user.email;
+
+                return (
+                  <tr
+                    key={user.id}
+                    className={`transition ${
+                      darkMode
+                        ? "border-b border-slate-700 hover:bg-slate-800/60"
+                        : "border-b border-slate-200 hover:bg-slate-50"
                     }`}
                   >
-                    {user.id}
-                  </td>
+                    {/* ID */}
 
-                  {/* NAME */}
-
-                  <td
-                    className={`px-4 py-3 text-xs font-semibold ${
-                      darkMode ? "text-white" : "text-slate-900"
-                    }`}
-                  >
-                    {user.name}
-                  </td>
-
-                  {/* EMAIL */}
-
-                  <td
-                    className={`px-4 py-3 text-xs ${
-                      darkMode ? "text-slate-400" : "text-slate-600"
-                    }`}
-                  >
-                    {user.email}
-                  </td>
-
-                  {/* STATUS */}
-
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold ${
-                        user.status === "Active"
-                          ? darkMode
-                            ? "bg-green-950 text-green-400 border border-green-800"
-                            : "bg-green-100 text-green-700 border border-green-200"
-                          : darkMode
-                          ? "bg-red-950 text-red-400 border border-red-800"
-                          : "bg-red-100 text-red-700 border border-red-200"
+                    <td
+                      className={`px-4 py-3 text-xs font-semibold ${
+                        darkMode ? "text-slate-300" : "text-slate-700"
                       }`}
                     >
-                      {user.status}
-                    </span>
-                  </td>
+                      {user.profileId}
+                    </td>
 
-                  {/* ACTION */}
+                    {/* NAME */}
 
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleEditUser(user)}
-                      className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition ${
-                        darkMode
-                          ? "bg-slate-700 text-white hover:bg-slate-600"
-                          : "bg-slate-700 text-white hover:bg-slate-800"
+                    <td
+                      className={`px-4 py-3 text-xs font-semibold ${
+                        darkMode ? "text-white" : "text-slate-900"
                       }`}
                     >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      {displayName}
+                    </td>
+
+                    {/* EMAIL */}
+
+                    <td
+                      className={`px-4 py-3 text-xs ${
+                        darkMode ? "text-slate-400" : "text-slate-600"
+                      }`}
+                    >
+                      {user.email}
+                    </td>
+
+                    {/* STATUS */}
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold ${
+                          user.status === STATUS.user.ACTIVE
+                            ? darkMode
+                              ? "bg-green-950 text-green-400 border border-green-800"
+                              : "bg-green-100 text-green-700 border border-green-200"
+                            : darkMode
+                            ? "bg-red-950 text-red-400 border border-red-800"
+                            : "bg-red-100 text-red-700 border border-red-200"
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+
+                    {/* ACTION */}
+
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleEditUser(user)}
+                        className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition ${
+                          darkMode
+                            ? "bg-slate-700 text-white hover:bg-slate-600"
+                            : "bg-slate-700 text-white hover:bg-slate-800"
+                        }`}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {/* EMPTY STATE */}
 
@@ -595,9 +656,7 @@ const UserManagement = () => {
                   <td
                     colSpan="5"
                     className={`px-4 py-12 text-center text-sm ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
+                      darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
                     No {getRoleLabel().toLowerCase()} accounts found.
@@ -614,13 +673,9 @@ const UserManagement = () => {
 
         <div
           className={`px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
-            darkMode
-              ? "bg-slate-900"
-              : "bg-white"
+            darkMode ? "bg-slate-900" : "bg-white"
           }`}
         >
-          {/* RECORD COUNT */}
-
           <p
             className={`text-[10px] sm:text-xs ${
               darkMode ? "text-slate-400" : "text-slate-500"
@@ -630,15 +685,9 @@ const UserManagement = () => {
             {currentUsers.length === 0
               ? 0
               : (currentPage - 1) * usersPerPage + 1}{" "}
-            -{" "}
-            {Math.min(
-              currentPage * usersPerPage,
-              currentUsers.length
-            )}{" "}
-            of {currentUsers.length} users
+            - {Math.min(currentPage * usersPerPage, currentUsers.length)} of{" "}
+            {currentUsers.length} users
           </p>
-
-          {/* PAGE BUTTONS */}
 
           <div className="flex items-center justify-center sm:justify-end gap-1">
             {/* PREVIOUS */}
@@ -646,9 +695,7 @@ const UserManagement = () => {
             <button
               type="button"
               disabled={currentPage === 1}
-              onClick={() =>
-                setCurrentPage((prev) => Math.max(prev - 1, 1))
-              }
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               className={`w-8 h-8 rounded-md text-xs font-bold transition ${
                 currentPage === 1
                   ? darkMode
@@ -665,7 +712,9 @@ const UserManagement = () => {
             {/* PAGE NUMBERS */}
 
             {Array.from(
-              { length: Math.max(totalPages, 1) },
+              {
+                length: Math.max(totalPages, 1),
+              },
               (_, index) => index + 1
             ).map((page) => (
               <button
@@ -692,9 +741,7 @@ const UserManagement = () => {
               type="button"
               disabled={currentPage === totalPages || totalPages === 0}
               onClick={() =>
-                setCurrentPage((prev) =>
-                  Math.min(prev + 1, totalPages)
-                )
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
               }
               className={`w-8 h-8 rounded-md text-xs font-bold transition ${
                 currentPage === totalPages || totalPages === 0
@@ -736,29 +783,21 @@ const UserManagement = () => {
 
             <div
               className={`px-5 py-4 border-b flex items-center justify-between ${
-                darkMode
-                  ? "border-slate-700"
-                  : "border-slate-200"
+                darkMode ? "border-slate-700" : "border-slate-200"
               }`}
             >
               <div>
                 <h2
                   className={`text-sm sm:text-base font-bold ${
-                    darkMode
-                      ? "text-white"
-                      : "text-slate-900"
+                    darkMode ? "text-white" : "text-slate-900"
                   }`}
                 >
-                  {modalMode === "add"
-                    ? "Add User"
-                    : "Edit User"}
+                  {modalMode === "add" ? "Add User" : "Edit User"}
                 </h2>
 
                 <p
                   className={`text-[10px] mt-1 ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
                   {modalMode === "add"
@@ -789,9 +828,7 @@ const UserManagement = () => {
                 <div>
                   <label
                     className={`block text-xs font-semibold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-300"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-300" : "text-slate-700"
                     }`}
                   >
                     User Type
@@ -814,9 +851,7 @@ const UserManagement = () => {
                   <label
                     htmlFor="user-name"
                     className={`block text-xs font-semibold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-300"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-300" : "text-slate-700"
                     }`}
                   >
                     Name
@@ -844,9 +879,7 @@ const UserManagement = () => {
                   <label
                     htmlFor="user-email"
                     className={`block text-xs font-semibold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-300"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-300" : "text-slate-700"
                     }`}
                   >
                     Email
@@ -874,9 +907,7 @@ const UserManagement = () => {
                   <label
                     htmlFor="user-status"
                     className={`block text-xs font-semibold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-300"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-300" : "text-slate-700"
                     }`}
                   >
                     Status
@@ -894,7 +925,10 @@ const UserManagement = () => {
                     }`}
                   >
                     <option value="Active">Active</option>
+
                     <option value="Inactive">Inactive</option>
+
+                    <option value="Pending">Pending</option>
                   </select>
                 </div>
               </div>
@@ -903,9 +937,7 @@ const UserManagement = () => {
 
               <div
                 className={`px-5 py-4 border-t flex justify-end gap-2 ${
-                  darkMode
-                    ? "border-slate-700"
-                    : "border-slate-200"
+                  darkMode ? "border-slate-700" : "border-slate-200"
                 }`}
               >
                 <button
@@ -928,9 +960,7 @@ const UserManagement = () => {
                       : "bg-slate-800 text-white hover:bg-slate-700"
                   }`}
                 >
-                  {modalMode === "add"
-                    ? "Add User"
-                    : "Save Changes"}
+                  {modalMode === "add" ? "Add User" : "Save Changes"}
                 </button>
               </div>
             </form>
@@ -942,4 +972,3 @@ const UserManagement = () => {
 };
 
 export default UserManagement;
-

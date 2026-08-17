@@ -1,538 +1,470 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
-// =========================================================
-// DEMO INTERNSHIP DATA
-// =========================================================
-
-const internshipData = [
-  {
-    id: 1,
-    student: "Juan Dela Cruz",
-    company: "Tech Solutions Inc.",
-    position: "Web Developer",
-    duration: "480 Hours",
-    status: "Active",
-  },
-  {
-    id: 2,
-    student: "Maria Santos",
-    company: "ABC Corporation",
-    position: "UI/UX Designer",
-    duration: "480 Hours",
-    status: "Completed",
-  },
-  {
-    id: 3,
-    student: "Pedro Reyes",
-    company: "Digital Works PH",
-    position: "Software Developer",
-    duration: "480 Hours",
-    status: "Active",
-  },
-  {
-    id: 4,
-    student: "Angela Garcia",
-    company: "Innovate Labs",
-    position: "Database Assistant",
-    duration: "480 Hours",
-    status: "Pending",
-  },
-  {
-    id: 5,
-    student: "Carlos Mendoza",
-    company: "NextGen Solutions",
-    position: "IT Support Intern",
-    duration: "480 Hours",
-    status: "Active",
-  },
-  {
-    id: 6,
-    student: "Sofia Ramos",
-    company: "Creative Digital PH",
-    position: "Frontend Developer",
-    duration: "480 Hours",
-    status: "Completed",
-  },
-];
-
-// =========================================================
-// COMPONENT
-// =========================================================
-
-const InternshipRecords = () => {
+export default function InternshipRecords() {
   const { darkMode } = useOutletContext();
+  const { state, setAssignmentStatus } = useMockStore();
 
   // =========================================================
-  // STATE
+  // STYLES
   // =========================================================
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All");
+  const card = darkMode
+    ? "bg-slate-900 border-slate-700"
+    : "bg-white border-slate-200";
+
+  const heading = darkMode ? "text-white" : "text-slate-900";
+
+  const muted = darkMode ? "text-slate-400" : "text-slate-500";
+
+  const border = darkMode ? "border-slate-700" : "border-slate-200";
 
   // =========================================================
-  // FILTERED RECORDS
+  // RESOLVE ASSIGNMENT DATA
   // =========================================================
 
-  const filteredRecords = useMemo(() => {
-    return internshipData.filter((record) => {
-      const search = searchTerm.toLowerCase().trim();
+  const records = useMemo(() => {
+    return (state.assignments || []).map((assignment) => {
+      const student =
+        state.students?.find(
+          (item) =>
+            item.id === assignment.studentId ||
+            item.id === assignment.student?.id
+        ) || assignment.student;
 
-      const matchesSearch =
-        record.student.toLowerCase().includes(search) ||
-        record.company.toLowerCase().includes(search) ||
-        record.position.toLowerCase().includes(search);
+      const company =
+        state.companies?.find(
+          (item) =>
+            item.id === assignment.companyId ||
+            item.id === assignment.company?.id
+        ) || assignment.company;
 
-      const matchesStatus =
-        filterStatus === "All" || record.status === filterStatus;
+      const opportunity =
+        state.opportunities?.find(
+          (item) =>
+            item.id === assignment.opportunityId ||
+            item.id === assignment.opportunity?.id
+        ) || assignment.opportunity;
 
-      return matchesSearch && matchesStatus;
+      const faculty =
+        state.faculty?.find(
+          (item) =>
+            item.id === assignment.facultyId ||
+            item.id === assignment.adviserId ||
+            item.id === assignment.faculty?.id ||
+            item.id === assignment.adviser?.id
+        ) ||
+        assignment.faculty ||
+        assignment.adviser;
+
+      return {
+        ...assignment,
+        student,
+        company,
+        opportunity,
+        faculty,
+      };
     });
-  }, [searchTerm, filterStatus]);
+  }, [
+    state.assignments,
+    state.students,
+    state.companies,
+    state.opportunities,
+    state.faculty,
+  ]);
 
   // =========================================================
-  // STATUS STYLE
+  // HELPERS
   // =========================================================
 
-  const getStatusClass = (status) => {
-    if (status === "Active") {
-      return darkMode
-        ? "bg-green-900/50 text-green-300 border-green-700"
-        : "bg-green-100 text-green-700 border-green-300";
-    }
+  const getStudentName = (record) => {
+    return (
+      record.student?.fullName ||
+      record.student?.name ||
+      record.studentName ||
+      record.fullName ||
+      "Unknown Student"
+    );
+  };
 
-    if (status === "Completed") {
-      return darkMode
-        ? "bg-blue-900/50 text-blue-300 border-blue-700"
-        : "bg-blue-100 text-blue-700 border-blue-300";
-    }
+  const getCompanyName = (record) => {
+    return (
+      record.company?.name ||
+      record.company?.companyName ||
+      record.companyName ||
+      "Unknown Company"
+    );
+  };
 
-    if (status === "Pending") {
-      return darkMode
-        ? "bg-orange-900/50 text-orange-300 border-orange-700"
-        : "bg-orange-100 text-orange-700 border-orange-300";
-    }
+  const getOpportunityTitle = (record) => {
+    return (
+      record.opportunity?.title ||
+      record.opportunity?.position ||
+      record.opportunityTitle ||
+      record.position ||
+      "Internship Assignment"
+    );
+  };
 
-    return darkMode
-      ? "bg-slate-800 text-slate-300 border-slate-700"
-      : "bg-slate-100 text-slate-600 border-slate-300";
+  const getFacultyName = (record) => {
+    return (
+      record.faculty?.fullName ||
+      record.faculty?.name ||
+      record.adviser?.fullName ||
+      record.adviser?.name ||
+      record.facultyName ||
+      record.adviserName ||
+      "Not Assigned"
+    );
+  };
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "Active":
+        return darkMode
+          ? "bg-emerald-900/40 text-emerald-300 border-emerald-700"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+      case "Completed":
+        return darkMode
+          ? "bg-blue-900/40 text-blue-300 border-blue-700"
+          : "bg-blue-50 text-blue-700 border-blue-200";
+
+      case "Suspended":
+        return darkMode
+          ? "bg-amber-900/40 text-amber-300 border-amber-700"
+          : "bg-amber-50 text-amber-700 border-amber-200";
+
+      case "Terminated":
+        return darkMode
+          ? "bg-red-900/40 text-red-300 border-red-700"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      default:
+        return darkMode
+          ? "bg-slate-800 text-slate-300 border-slate-600"
+          : "bg-slate-100 text-slate-600 border-slate-200";
+    }
   };
 
   // =========================================================
-  // EXPORT CSV
+  // COUNTS
   // =========================================================
 
-  const handleExport = () => {
-    const headers = ["Student", "Company", "Position", "Duration", "Status"];
+  const totalRecords = records.length;
 
-    const rows = filteredRecords.map((record) => [
-      record.student,
-      record.company,
-      record.position,
-      record.duration,
-      record.status,
-    ]);
+  const activeRecords = records.filter(
+    (record) => record.status === "Active"
+  ).length;
 
-    const csvContent = [headers, ...rows]
-      .map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
-      )
-      .join("\n");
+  const pendingRecords = records.filter(
+    (record) => record.status === "Pending"
+  ).length;
 
-    const blob = new Blob([csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "internship-records.csv";
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
-  };
+  const completedRecords = records.filter(
+    (record) => record.status === "Completed"
+  ).length;
 
   // =========================================================
-  // RESET FILTERS
-  // =========================================================
-
-  const handleResetFilter = () => {
-    setSearchTerm("");
-    setFilterStatus("All");
-  };
-
-  // =========================================================
-  // RETURN
+  // RENDER
   // =========================================================
 
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] px-4 py-5 sm:px-6 lg:px-8 transition-colors duration-300 ${
-        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+      className={`p-4 sm:p-5 md:p-6 lg:p-8 max-w-[1400px] mx-auto ${
+        darkMode ? "text-slate-100" : "text-slate-900"
       }`}
     >
-      <div className="max-w-7xl mx-auto">
-        {/* ===================================================
-            DEMO NOTICE
-        =================================================== */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
-        <div
-          className={`mb-4 p-3 rounded-lg text-[10px] leading-relaxed border ${
-            darkMode
-              ? "bg-red-950/40 border-red-900 text-red-300"
-              : "bg-red-50 border-red-200 text-red-700"
+      <div className="mb-6">
+        <p
+          className={`text-[10px] uppercase tracking-widest font-bold ${
+            darkMode ? "text-slate-500" : "text-slate-400"
           }`}
         >
-          <p className="font-bold mb-1">⚠️ Demo Project</p>
+          Administrator Portal
+        </p>
 
-          <p>All internship records displayed on this page are dummy data.</p>
+        <h1 className={`text-2xl sm:text-3xl font-black mt-1 ${heading}`}>
+          Internship Records
+        </h1>
 
-          <p className="mt-1">No database is implemented yet.</p>
-        </div>
+        <p className={`text-sm mt-1 ${muted}`}>
+          Management view over the shared internship assignment records.
+        </p>
+      </div>
 
-        {/* ===================================================
-            PAGE HEADER
-        =================================================== */}
+      {/* =====================================================
+          SUMMARY
+      ===================================================== */}
 
-        <div className="mb-5">
-          <h1 className="text-xl sm:text-2xl font-bold">Internship Records</h1>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className={`border rounded-xl p-4 ${card}`}>
+          <p className={`text-[10px] uppercase font-bold ${muted}`}>
+            Total Records
+          </p>
 
-          <p
-            className={`text-xs sm:text-sm mt-1 ${
-              darkMode ? "text-slate-400" : "text-slate-500"
-            }`}
-          >
-            View and manage internship records across the system.
+          <p className={`text-2xl font-black mt-1 ${heading}`}>
+            {totalRecords}
           </p>
         </div>
 
-        {/* ===================================================
-            SEARCH / FILTER BAR
-        =================================================== */}
+        <div className={`border rounded-xl p-4 ${card}`}>
+          <p className={`text-[10px] uppercase font-bold ${muted}`}>Active</p>
 
-        <div
-          className={`border rounded-lg p-3 sm:p-4 mb-4 ${
-            darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-300"
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* SEARCH */}
-
-            <div className="flex-1">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search..."
-                className={`w-full h-9 px-3 text-xs rounded-md border outline-none transition ${
-                  darkMode
-                    ? "bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
-                    : "bg-slate-100 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-slate-500"
-                }`}
-              />
-            </div>
-
-            {/* FILTER */}
-
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className={`h-9 px-3 text-xs rounded-md border outline-none ${
-                darkMode
-                  ? "bg-slate-800 border-slate-600 text-white"
-                  : "bg-white border-slate-300 text-slate-700"
-              }`}
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Completed">Completed</option>
-              <option value="Pending">Pending</option>
-            </select>
-
-            {/* FILTER BUTTON */}
-
-            <button
-              type="button"
-              onClick={() => {
-                // Filtering is already applied automatically.
-                // This button is kept to match the wireframe.
-              }}
-              className={`h-9 px-5 rounded-md text-xs font-semibold transition ${
-                darkMode
-                  ? "bg-white text-slate-900 hover:bg-slate-200"
-                  : "bg-slate-700 text-white hover:bg-slate-800"
-              }`}
-            >
-              Filter
-            </button>
-
-            {/* EXPORT */}
-
-            <button
-              type="button"
-              onClick={handleExport}
-              className={`h-9 px-5 rounded-md text-xs font-semibold transition ${
-                darkMode
-                  ? "bg-slate-700 text-white hover:bg-slate-600"
-                  : "bg-slate-600 text-white hover:bg-slate-700"
-              }`}
-            >
-              Export
-            </button>
-
-            {/* RESET */}
-
-            {(searchTerm || filterStatus !== "All") && (
-              <button
-                type="button"
-                onClick={handleResetFilter}
-                className={`h-9 px-4 rounded-md text-xs font-semibold border transition ${
-                  darkMode
-                    ? "border-slate-600 text-slate-300 hover:bg-slate-800"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ===================================================
-            RECORD COUNT
-        =================================================== */}
-
-        <div className="flex items-center justify-between mb-2">
-          <p
-            className={`text-xs ${
-              darkMode ? "text-slate-400" : "text-slate-500"
-            }`}
-          >
-            Showing {filteredRecords.length} of {internshipData.length} records
+          <p className="text-2xl font-black text-emerald-500 mt-1">
+            {activeRecords}
           </p>
         </div>
 
-        {/* ===================================================
-            TABLE
-        =================================================== */}
+        <div className={`border rounded-xl p-4 ${card}`}>
+          <p className={`text-[10px] uppercase font-bold ${muted}`}>Pending</p>
 
-        <div
-          className={`border rounded-lg overflow-hidden ${
-            darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-300"
-          }`}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] border-collapse text-xs">
-              {/* TABLE HEADER */}
+          <p className="text-2xl font-black text-amber-500 mt-1">
+            {pendingRecords}
+          </p>
+        </div>
 
-              <thead>
-                <tr className={darkMode ? "bg-slate-800" : "bg-slate-50"}>
-                  <th
-                    className={`border-b border-r px-3 py-3 text-left font-bold ${
-                      darkMode
-                        ? "border-slate-700 text-slate-200"
-                        : "border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    Student
-                    <div
-                      className={`text-[9px] font-normal mt-0.5 ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      C1
-                    </div>
-                  </th>
+        <div className={`border rounded-xl p-4 ${card}`}>
+          <p className={`text-[10px] uppercase font-bold ${muted}`}>
+            Completed
+          </p>
 
-                  <th
-                    className={`border-b border-r px-3 py-3 text-left font-bold ${
-                      darkMode
-                        ? "border-slate-700 text-slate-200"
-                        : "border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    Company
-                    <div
-                      className={`text-[9px] font-normal mt-0.5 ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      C2
-                    </div>
-                  </th>
-
-                  <th
-                    className={`border-b border-r px-3 py-3 text-left font-bold ${
-                      darkMode
-                        ? "border-slate-700 text-slate-200"
-                        : "border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    Position
-                    <div
-                      className={`text-[9px] font-normal mt-0.5 ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      C3
-                    </div>
-                  </th>
-
-                  <th
-                    className={`border-b border-r px-3 py-3 text-left font-bold ${
-                      darkMode
-                        ? "border-slate-700 text-slate-200"
-                        : "border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    Duration
-                    <div
-                      className={`text-[9px] font-normal mt-0.5 ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      C4
-                    </div>
-                  </th>
-
-                  <th
-                    className={`border-b px-3 py-3 text-left font-bold ${
-                      darkMode
-                        ? "border-slate-700 text-slate-200"
-                        : "border-slate-300 text-slate-700"
-                    }`}
-                  >
-                    Status
-                    <div
-                      className={`text-[9px] font-normal mt-0.5 ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      C5
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-
-              {/* TABLE BODY */}
-
-              <tbody>
-                {filteredRecords.length > 0 ? (
-                  filteredRecords.map((record) => (
-                    <tr
-                      key={record.id}
-                      className={`transition ${
-                        darkMode ? "hover:bg-slate-800" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      {/* STUDENT */}
-
-                      <td
-                        className={`border-b border-r px-3 py-4 ${
-                          darkMode ? "border-slate-700" : "border-slate-300"
-                        }`}
-                      >
-                        <div
-                          className={`font-medium ${
-                            darkMode ? "text-slate-200" : "text-slate-800"
-                          }`}
-                        >
-                          {record.student}
-                        </div>
-                      </td>
-
-                      {/* COMPANY */}
-
-                      <td
-                        className={`border-b border-r px-3 py-4 ${
-                          darkMode ? "border-slate-700" : "border-slate-300"
-                        }`}
-                      >
-                        <div
-                          className={`font-medium ${
-                            darkMode ? "text-slate-200" : "text-slate-800"
-                          }`}
-                        >
-                          {record.company}
-                        </div>
-                      </td>
-
-                      {/* POSITION */}
-
-                      <td
-                        className={`border-b border-r px-3 py-4 ${
-                          darkMode ? "border-slate-700" : "border-slate-300"
-                        }`}
-                      >
-                        <div
-                          className={
-                            darkMode ? "text-slate-300" : "text-slate-700"
-                          }
-                        >
-                          {record.position}
-                        </div>
-                      </td>
-
-                      {/* DURATION */}
-
-                      <td
-                        className={`border-b border-r px-3 py-4 ${
-                          darkMode ? "border-slate-700" : "border-slate-300"
-                        }`}
-                      >
-                        <div
-                          className={
-                            darkMode ? "text-slate-300" : "text-slate-700"
-                          }
-                        >
-                          {record.duration}
-                        </div>
-                      </td>
-
-                      {/* STATUS */}
-
-                      <td
-                        className={`border-b px-3 py-4 ${
-                          darkMode ? "border-slate-700" : "border-slate-300"
-                        }`}
-                      >
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-semibold border ${getStatusClass(
-                            record.status
-                          )}`}
-                        >
-                          {record.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan="5"
-                      className={`px-4 py-10 text-center ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      No internship records found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <p className="text-2xl font-black text-blue-500 mt-1">
+            {completedRecords}
+          </p>
         </div>
       </div>
+
+      {/* =====================================================
+          RECORDS
+      ===================================================== */}
+
+      <section className={`border rounded-2xl overflow-hidden ${card}`}>
+        {/* HEADER */}
+
+        <div
+          className={`px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${border}`}
+        >
+          <div>
+            <h2 className={`text-sm font-bold ${heading}`}>
+              Internship Assignments
+            </h2>
+
+            <p className={`text-[10px] mt-1 ${muted}`}>
+              Assignments created and managed through the Faculty Portal.
+            </p>
+          </div>
+
+          <span
+            className={`text-[10px] font-semibold px-2.5 py-1 rounded-full ${
+              darkMode
+                ? "bg-blue-900/40 text-blue-300"
+                : "bg-blue-50 text-blue-600"
+            }`}
+          >
+            {totalRecords} record{totalRecords !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* RECORD LIST */}
+
+        {records.length > 0 ? (
+          <div className={`divide-y ${border}`}>
+            {records.map((assignment) => {
+              const studentName = getStudentName(assignment);
+              const companyName = getCompanyName(assignment);
+              const opportunityTitle = getOpportunityTitle(assignment);
+              const facultyName = getFacultyName(assignment);
+
+              return (
+                <div
+                  key={assignment.id}
+                  className={`p-5 transition ${
+                    darkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+                    {/* LEFT */}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p
+                          className={`font-bold text-sm sm:text-base ${heading}`}
+                        >
+                          {assignment.id}
+                        </p>
+
+                        <span
+                          className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${getStatusStyle(
+                            assignment.status
+                          )}`}
+                        >
+                          {assignment.status || "Pending"}
+                        </span>
+                      </div>
+
+                      {/* STUDENT */}
+
+                      <div className="mt-4">
+                        <p
+                          className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                        >
+                          Student
+                        </p>
+
+                        <p className={`text-sm font-semibold mt-1 ${heading}`}>
+                          {studentName}
+                        </p>
+                      </div>
+
+                      {/* ASSIGNMENT */}
+
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Internship
+                          </p>
+
+                          <p className={`text-xs font-medium mt-1 ${heading}`}>
+                            {opportunityTitle}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Company
+                          </p>
+
+                          <p className={`text-xs font-medium mt-1 ${heading}`}>
+                            {companyName}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Faculty Adviser
+                          </p>
+
+                          <p className={`text-xs font-medium mt-1 ${heading}`}>
+                            {facultyName}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* DATES */}
+
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Start Date
+                          </p>
+
+                          <p className={`text-xs font-medium mt-1 ${heading}`}>
+                            {assignment.startDate || "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p
+                            className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            End Date
+                          </p>
+
+                          <p className={`text-xs font-medium mt-1 ${heading}`}>
+                            {assignment.endDate || "—"}
+                          </p>
+                        </div>
+
+                        {assignment.createdAt && (
+                          <div>
+                            <p
+                              className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                            >
+                              Created
+                            </p>
+
+                            <p
+                              className={`text-xs font-medium mt-1 ${heading}`}
+                            >
+                              {assignment.createdAt}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT */}
+
+                    <div className="w-full xl:w-auto">
+                      <label
+                        className={`block text-[10px] uppercase font-bold mb-1.5 ${muted}`}
+                      >
+                        Assignment Status
+                      </label>
+
+                      <select
+                        value={assignment.status || "Pending"}
+                        onChange={(event) =>
+                          setAssignmentStatus(assignment.id, event.target.value)
+                        }
+                        className={`w-full xl:w-40 border rounded-lg px-3 py-2 text-xs outline-none cursor-pointer ${
+                          darkMode
+                            ? "bg-slate-800 border-slate-700 text-white focus:border-blue-500"
+                            : "bg-white border-slate-300 text-slate-700 focus:border-blue-500"
+                        }`}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Active">Active</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Suspended">Suspended</option>
+                        <option value="Terminated">Terminated</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* EMPTY STATE */
+
+          <div className="p-10 text-center">
+            <div className="text-3xl mb-3">📋</div>
+
+            <p className={`text-sm font-semibold ${heading}`}>
+              No internship assignments yet
+            </p>
+
+            <p className={`text-xs mt-1 ${muted}`}>
+              Approve an internship application in the Faculty Portal to create
+              an assignment.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* =====================================================
+          FOOTER
+      ===================================================== */}
+
+      <p className={`text-[10px] mt-3 ${muted}`}>
+        Showing {records.length} shared internship assignment
+        {records.length !== 1 ? "s" : ""}.
+      </p>
     </div>
   );
-};
-
-export default InternshipRecords;
+}

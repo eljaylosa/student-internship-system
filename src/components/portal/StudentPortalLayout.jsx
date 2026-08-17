@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
 // =========================================================
 // NOTIFICATIONS DATA
@@ -36,6 +37,7 @@ const notifications = [
 const StudentPortalLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useMockStore();
 
   // =========================================================
   // SIDEBAR
@@ -182,6 +184,11 @@ const StudentPortalLayout = () => {
       path: "/student/info",
     },
     {
+      name: "Evaluations",
+      icon: "📋",
+      path: "/student/evaluation"
+    },
+    {
       name: "Messages",
       icon: "💬",
       path: "/student/messages",
@@ -291,6 +298,7 @@ const StudentPortalLayout = () => {
   // =========================================================
 
   const handleLogout = () => {
+    logout();
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
 

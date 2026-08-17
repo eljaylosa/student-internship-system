@@ -101,7 +101,7 @@ const Dashboard = () => {
   };
 
   const handlePostPosition = () => {
-    navigate("/company/positions");
+    navigate("/company/jobs");
   };
 
   // =========================================================

@@ -1,83 +1,35 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
-// =========================================================
-// DEMO DOCUMENT DATA
-// =========================================================
-
-const documentTemplates = [
-  {
-    id: 1,
-    name: "Internship Application Form",
-    description: "Official internship application form.",
-    fileName: "internship-application-form.txt",
-  },
-  {
-    id: 2,
-    name: "Internship Agreement",
-    description: "Internship agreement template.",
-    fileName: "internship-agreement.txt",
-  },
-  {
-    id: 3,
-    name: "Evaluation Form",
-    description: "Student internship evaluation form.",
-    fileName: "evaluation-form.txt",
-  },
-  {
-    id: 4,
-    name: "Student Endorsement",
-    description: "Student endorsement document.",
-    fileName: "student-endorsement.txt",
-  },
-  {
-    id: 5,
-    name: "Company Evaluation",
-    description: "Company evaluation template.",
-    fileName: "company-evaluation.txt",
-  },
-  {
-    id: 6,
-    name: "Completion Certificate",
-    description: "Internship completion certificate.",
-    fileName: "completion-certificate.txt",
-  },
-];
-
-// =========================================================
-// COMPONENT
-// =========================================================
+import { useMockStore } from "../../data/mockStore.jsx";
 
 const DocumentManagement = () => {
   const { darkMode } = useOutletContext();
 
-  // =========================================================
-  // STATE
-  // =========================================================
+  const { state, addDocumentTemplate, deleteDocumentTemplate } = useMockStore();
 
   const [searchTerm, setSearchTerm] = useState("");
 
-  // =========================================================
-  // FILTER DOCUMENTS
-  // =========================================================
+  /* =========================================================
+     FILTER TEMPLATES
+  ========================================================= */
 
   const filteredDocuments = useMemo(() => {
     const search = searchTerm.toLowerCase().trim();
 
     if (!search) {
-      return documentTemplates;
+      return state.documentTemplates;
     }
 
-    return documentTemplates.filter(
+    return state.documentTemplates.filter(
       (document) =>
         document.name.toLowerCase().includes(search) ||
         document.description.toLowerCase().includes(search)
     );
-  }, [searchTerm]);
+  }, [state.documentTemplates, searchTerm]);
 
-  // =========================================================
-  // DOWNLOAD TEMPLATE
-  // =========================================================
+  /* =========================================================
+     DOWNLOAD TEMPLATE
+  ========================================================= */
 
   const handleDownload = (document) => {
     const content = `
@@ -89,10 +41,11 @@ ${document.name}
 Description:
 ${document.description}
 
-This is a demo document generated for the
+This document is provided by the
 Student Internship Management System.
 
-No real document data is included.
+Template File:
+${document.fileName}
 `;
 
     const blob = new Blob([content], {
@@ -104,9 +57,10 @@ No real document data is included.
     const link = window.document.createElement("a");
 
     link.href = url;
-    link.download = document.fileName;
+    link.download = document.fileName || `${document.name}.txt`;
 
     window.document.body.appendChild(link);
+
     link.click();
 
     window.document.body.removeChild(link);
@@ -114,9 +68,9 @@ No real document data is included.
     URL.revokeObjectURL(url);
   };
 
-  // =========================================================
-  // UPLOAD TEMPLATE
-  // =========================================================
+  /* =========================================================
+     UPLOAD TEMPLATE
+  ========================================================= */
 
   const handleUploadTemplate = () => {
     const input = window.document.createElement("input");
@@ -129,90 +83,86 @@ No real document data is included.
 
       if (!file) return;
 
-      alert(
-        `Demo upload successful!\n\nSelected file: ${file.name}\n\nDatabase/storage is not implemented yet.`
-      );
+      const templateName = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[-_]/g, " ");
+
+      addDocumentTemplate({
+        name: templateName,
+        description: "Uploaded document template.",
+        fileName: file.name,
+      });
+
+      alert(`Document template added successfully!\n\nFile: ${file.name}`);
     };
 
     input.click();
   };
 
-  // =========================================================
-  // RETURN
-  // =========================================================
+  /* =========================================================
+     DELETE TEMPLATE
+  ========================================================= */
+
+  const handleDeleteTemplate = (document) => {
+    const confirmed = window.confirm(
+      `Delete "${document.name}" from the document templates?`
+    );
+
+    if (!confirmed) return;
+
+    deleteDocumentTemplate(document.id);
+  };
+
+  /* =========================================================
+     RETURN
+  ========================================================= */
 
   return (
     <div
       className={`min-h-[calc(100vh-5rem)] px-4 py-5 sm:px-6 lg:px-8 transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
       <div className="max-w-6xl mx-auto">
-
         {/* ===================================================
-            DEMO NOTICE
+            HEADER
         =================================================== */}
 
-        <div
-          className={`mb-4 p-3 rounded-lg text-[10px] leading-relaxed border ${
-            darkMode
-              ? "bg-red-950/40 border-red-900 text-red-300"
-              : "bg-red-50 border-red-200 text-red-700"
-          }`}
-        >
-          <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-          <p>
-            All documents displayed on this page are demo templates.
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+            Administrator Portal
           </p>
 
-          <p className="mt-1">
-            No database or permanent file storage is implemented yet.
-          </p>
-        </div>
-
-        {/* ===================================================
-            PAGE HEADER
-        =================================================== */}
-
-        <div className="mb-5">
-          <h1 className="text-xl sm:text-2xl font-bold">
-            Document Management
-          </h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Document Management</h1>
 
           <p
             className={`text-xs sm:text-sm mt-1 ${
               darkMode ? "text-slate-400" : "text-slate-500"
             }`}
           >
-            Manage and download official internship document templates.
+            Manage official internship document templates.
           </p>
         </div>
 
         {/* ===================================================
-            SEARCH BAR
+            SEARCH
         =================================================== */}
 
         <div
-          className={`border rounded-lg p-3 mb-5 ${
+          className={`border rounded-lg p-3 mb-6 ${
             darkMode
               ? "bg-slate-900 border-slate-700"
               : "bg-white border-slate-300"
           }`}
         >
           <div className="flex flex-col sm:flex-row gap-2">
-
-            {/* SEARCH */}
-
             <div className="flex-1">
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search..."
-                className={`w-full h-9 px-3 text-xs rounded-md border outline-none transition ${
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search document templates..."
+                className={`w-full h-9 px-3 text-xs rounded-md border outline-none ${
                   darkMode
                     ? "bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-blue-500"
                     : "bg-slate-100 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-slate-500"
@@ -220,19 +170,36 @@ No real document data is included.
               />
             </div>
 
-            {/* SEARCH BUTTON */}
-
             <button
               type="button"
+              onClick={() => setSearchTerm("")}
               className={`h-9 px-6 rounded-md text-xs font-semibold transition ${
                 darkMode
                   ? "bg-white text-slate-900 hover:bg-slate-200"
                   : "bg-slate-700 text-white hover:bg-slate-800"
               }`}
             >
-              Search
+              Clear
             </button>
+          </div>
+        </div>
 
+        {/* ===================================================
+            TEMPLATE COUNT
+        =================================================== */}
+
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-bold">Document Templates</h2>
+
+            <p
+              className={`text-xs mt-1 ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              {filteredDocuments.length} template
+              {filteredDocuments.length !== 1 ? "s" : ""} available
+            </p>
           </div>
         </div>
 
@@ -241,218 +208,178 @@ No real document data is included.
         =================================================== */}
 
         {filteredDocuments.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDocuments.map((document) => (
               <div
                 key={document.id}
-                className={`border rounded-lg overflow-hidden transition ${
+                className={`border rounded-xl overflow-hidden transition ${
                   darkMode
                     ? "bg-slate-900 border-slate-700"
-                    : "bg-white border-slate-400"
+                    : "bg-white border-slate-300"
                 }`}
               >
-
-                {/* =================================================
-                    DOCUMENT PREVIEW
-                ================================================= */}
+                {/* DOCUMENT PREVIEW */}
 
                 <div
-                  className={`mx-3 mt-3 h-32 sm:h-36 border flex items-center justify-center ${
+                  className={`mx-3 mt-3 h-32 border rounded-lg flex items-center justify-center ${
                     darkMode
                       ? "bg-slate-800 border-slate-600"
-                      : "bg-slate-200 border-slate-400"
+                      : "bg-slate-100 border-slate-300"
                   }`}
                 >
-                  <div className="w-[75%] h-[70%] relative">
+                  <div
+                    className={`w-[70%] h-[75%] border shadow-sm relative ${
+                      darkMode
+                        ? "bg-slate-700 border-slate-500"
+                        : "bg-white border-slate-300"
+                    }`}
+                  >
+                    <div className="absolute top-4 left-4 right-4 space-y-2">
+                      <div
+                        className={`h-1.5 w-1/2 ${
+                          darkMode ? "bg-slate-500" : "bg-slate-400"
+                        }`}
+                      />
 
-                    {/* PAPER */}
+                      <div
+                        className={`h-1 w-full ${
+                          darkMode ? "bg-slate-500" : "bg-slate-300"
+                        }`}
+                      />
 
-                    <div
-                      className={`absolute inset-0 border ${
-                        darkMode
-                          ? "bg-slate-700 border-slate-500"
-                          : "bg-slate-100 border-slate-400"
-                      }`}
-                    >
+                      <div
+                        className={`h-1 w-5/6 ${
+                          darkMode ? "bg-slate-500" : "bg-slate-300"
+                        }`}
+                      />
 
-                      {/* FAKE DOCUMENT LINES */}
+                      <div
+                        className={`h-1 w-full ${
+                          darkMode ? "bg-slate-500" : "bg-slate-300"
+                        }`}
+                      />
 
-                      <div className="absolute top-4 left-4 right-4">
-                        <div
-                          className={`h-1.5 w-1/2 mb-3 ${
-                            darkMode
-                              ? "bg-slate-500"
-                              : "bg-slate-400"
-                          }`}
-                        />
-
-                        <div
-                          className={`h-1 w-full mb-2 ${
-                            darkMode
-                              ? "bg-slate-500"
-                              : "bg-slate-300"
-                          }`}
-                        />
-
-                        <div
-                          className={`h-1 w-5/6 mb-2 ${
-                            darkMode
-                              ? "bg-slate-500"
-                              : "bg-slate-300"
-                          }`}
-                        />
-
-                        <div
-                          className={`h-1 w-full mb-2 ${
-                            darkMode
-                              ? "bg-slate-500"
-                              : "bg-slate-300"
-                          }`}
-                        />
-
-                        <div
-                          className={`h-1 w-2/3 ${
-                            darkMode
-                              ? "bg-slate-500"
-                              : "bg-slate-300"
-                          }`}
-                        />
-                      </div>
-
+                      <div
+                        className={`h-1 w-2/3 ${
+                          darkMode ? "bg-slate-500" : "bg-slate-300"
+                        }`}
+                      />
                     </div>
-
                   </div>
                 </div>
 
-                {/* =================================================
-                    TEMPLATE NAME
-                ================================================= */}
+                {/* INFORMATION */}
 
-                <div className="px-4 pt-3 text-center">
+                <div className="px-4 pt-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className={`text-sm font-bold truncate ${
+                        darkMode ? "text-slate-100" : "text-slate-800"
+                      }`}
+                      title={document.name}
+                    >
+                      {document.name}
+                    </h3>
 
-                  <h2
-                    className={`text-xs sm:text-sm font-bold truncate ${
-                      darkMode
-                        ? "text-slate-100"
-                        : "text-slate-800"
-                    }`}
-                    title={document.name}
-                  >
-                    Template {document.id}
-                  </h2>
-
-                  <p
-                    className={`text-[9px] mt-1 truncate ${
-                      darkMode
-                        ? "text-slate-500"
-                        : "text-slate-400"
-                    }`}
-                    title={document.name}
-                  >
-                    {document.name}
-                  </p>
-
-                </div>
-
-                {/* =================================================
-                    DESCRIPTION LINE
-                ================================================= */}
-
-                <div className="px-4 pt-3">
-
-                  <div
-                    className={`h-1.5 rounded-sm ${
-                      darkMode
-                        ? "bg-slate-700"
-                        : "bg-slate-300"
-                    }`}
-                  />
+                    <span
+                      className={`shrink-0 text-[9px] px-2 py-1 rounded-full font-semibold ${
+                        darkMode
+                          ? "bg-slate-800 text-slate-400"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {document.id}
+                    </span>
+                  </div>
 
                   <p
-                    className={`text-[9px] text-center mt-2 truncate ${
-                      darkMode
-                        ? "text-slate-500"
-                        : "text-slate-400"
+                    className={`text-[10px] mt-2 leading-relaxed ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
                     {document.description}
                   </p>
 
+                  <p
+                    className={`text-[9px] mt-2 truncate ${
+                      darkMode ? "text-slate-600" : "text-slate-400"
+                    }`}
+                  >
+                    File: {document.fileName}
+                  </p>
                 </div>
 
-                {/* =================================================
-                    DOWNLOAD
-                ================================================= */}
+                {/* ACTIONS */}
 
-                <div className="px-4 py-3">
-
+                <div className="px-4 py-4 flex gap-2">
                   <button
                     type="button"
                     onClick={() => handleDownload(document)}
-                    className={`w-full h-8 rounded-md text-[10px] font-semibold transition ${
+                    className={`flex-1 h-8 rounded-md text-[10px] font-semibold transition ${
                       darkMode
                         ? "bg-slate-700 text-white hover:bg-slate-600"
-                        : "bg-slate-600 text-white hover:bg-slate-700"
+                        : "bg-slate-700 text-white hover:bg-slate-800"
                     }`}
                   >
                     Download
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTemplate(document)}
+                    className={`h-8 px-3 rounded-md text-[10px] font-semibold transition ${
+                      darkMode
+                        ? "border border-red-900 text-red-400 hover:bg-red-950"
+                        : "border border-red-200 text-red-600 hover:bg-red-50"
+                    }`}
+                  >
+                    Delete
+                  </button>
                 </div>
-
               </div>
             ))}
-
           </div>
         ) : (
-          /* ===================================================
-             NO RESULTS
-          =================================================== */
-
           <div
-            className={`border rounded-lg py-12 text-center ${
+            className={`border rounded-xl py-12 text-center ${
               darkMode
-                ? "bg-slate-900 border-slate-700 text-slate-500"
-                : "bg-white border-slate-300 text-slate-400"
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-300"
             }`}
           >
-            <p className="text-sm font-semibold">
-              No templates found.
-            </p>
+            <p className="text-sm font-semibold">No templates found.</p>
 
-            <p className="text-xs mt-1">
+            <p
+              className={`text-xs mt-1 ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
               Try searching for a different document.
             </p>
           </div>
         )}
 
         {/* ===================================================
-            UPLOAD TEMPLATE
+            ADD TEMPLATE
         =================================================== */}
 
         <div
-          className={`mt-6 border rounded-lg p-4 ${
+          className={`mt-6 border rounded-xl p-4 ${
             darkMode
               ? "bg-slate-900 border-slate-700"
               : "bg-white border-slate-300"
           }`}
         >
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-center sm:text-left">
-              <h3 className="text-sm font-bold">
-                Add Document Template
-              </h3>
+              <h3 className="text-sm font-bold">Add Document Template</h3>
 
               <p
                 className={`text-xs mt-1 ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Upload a new PDF or Word document template.
+                Upload a PDF or Word document to add it to the template library.
               </p>
             </div>
 
@@ -467,14 +394,11 @@ No real document data is included.
             >
               Upload Template
             </button>
-
           </div>
         </div>
-
       </div>
     </div>
   );
 };
 
 export default DocumentManagement;
-

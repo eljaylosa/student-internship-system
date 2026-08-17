@@ -5,6 +5,7 @@ import {
   Route,
   Routes,
   useLocation,
+  Navigate,
 } from "react-router-dom";
 
 import ScrollToTop from "./assets/ScrollToTop.jsx";
@@ -41,6 +42,7 @@ import StudentNotification from "./pages/student/Notification.jsx";
 import StudentInfo from "./pages/student/Info.jsx";
 import StudentMessages from "./pages/student/Messages.jsx";
 import StudentSettings from "./pages/student/Settings.jsx";
+import StudentEvaluation from "./pages/student/Evaluation.jsx"
 
 // =========================================================
 // FACULTY PORTAL
@@ -96,10 +98,19 @@ import StudentPortalLayout from "./components/portal/StudentPortalLayout.jsx";
 import FacultyPortalLayout from "./components/portal/FacultyPortalLayout.jsx";
 import CompanyPortalLayout from "./components/portal/CompanyPortalLayout.jsx";
 import AdminPortalLayout from "./components/portal/AdminPortalLayout.jsx";
+import { MockStoreProvider, useMockStore } from "./data/mockStore.jsx";
 
 // =========================================================
 // APP CONTENT
 // =========================================================
+
+function RoleGuard({ role, children }) {
+  const { state } = useMockStore();
+  const pathname = useLocation().pathname;
+  if (!state.currentUser) return <Navigate to={role === "admin" ? "/admin/login" : "/login"} replace state={{ from: pathname }} />;
+  if (state.currentUser.role !== role && state.currentUser.role !== "admin") return <Navigate to={"/" + state.currentUser.role + "/dashboard"} replace />;
+  return children;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -142,20 +153,37 @@ function AppContent() {
         {/* =====================================================
             STUDENT PORTAL
         ===================================================== */}
-        <Route path="/student" element={<StudentPortalLayout />}>
+        <Route
+          path="/student"
+          element={
+            <RoleGuard role="student">
+              <StudentPortalLayout />
+            </RoleGuard>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="application" element={<StudentApplication />} />
           <Route path="documents" element={<StudentDocuments />} />
           <Route path="notifications" element={<StudentNotification />} />
           <Route path="info" element={<StudentInfo />} />
+          <Route path="evaluation" element={<StudentEvaluation />} />
           <Route path="messages" element={<StudentMessages />} />
           <Route path="settings" element={<StudentSettings />} />
         </Route>
         {/* =====================================================
             FACULTY PORTAL
         ===================================================== */}
-        <Route path="/faculty" element={<FacultyPortalLayout />}>
+        <Route
+          path="/faculty"
+          element={
+            <RoleGuard role="faculty">
+              <FacultyPortalLayout />
+            </RoleGuard>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<FacultyDashboard />} />
           <Route path="profile" element={<FacultyProfile />} />
           <Route path="students" element={<FacultyStudentLists />} />
@@ -170,7 +198,15 @@ function AppContent() {
         {/* =====================================================
             COMPANY PORTAL
         ===================================================== */}
-        <Route path="/company" element={<CompanyPortalLayout />}>
+        <Route
+          path="/company"
+          element={
+            <RoleGuard role="company">
+              <CompanyPortalLayout />
+            </RoleGuard>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<CompanyDashboard />} />
           <Route path="profile" element={<CompanyProfile />} />
           <Route path="jobs" element={<CompanyManageJobs />} />
@@ -187,10 +223,18 @@ function AppContent() {
         ===================================================== */}
 
         {/* ADMIN LOGIN */}
-        <Route path="/admin" element={<AdminLogin />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
 
         {/* ADMIN ENVIRONMENT */}
-        <Route path="/admin" element={<AdminPortalLayout />}>
+        <Route
+          path="/admin"
+          element={
+            <RoleGuard role="admin">
+              <AdminPortalLayout />
+            </RoleGuard>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="profile" element={<AdminProfile />} />
           <Route path="users" element={<AdminUserManagement />} />
@@ -217,9 +261,11 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <MockStoreProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </MockStoreProvider>
   );
 }
 

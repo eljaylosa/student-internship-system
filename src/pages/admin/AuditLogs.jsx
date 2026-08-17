@@ -1,266 +1,252 @@
-
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
-// =========================================================
-// DEMO AUDIT LOG DATA
-// =========================================================
-
-const initialAuditLogs = [
-  {
-    id: 1,
-    timestamp: "2026-08-17 09:42:18",
-    user: "System Administrator",
-    action: "LOGIN",
-    module: "Authentication",
-    details: "Administrator logged into the system.",
-  },
-  {
-    id: 2,
-    timestamp: "2026-08-17 09:35:04",
-    user: "System Administrator",
-    action: "APPROVE",
-    module: "User Management",
-    details: "Approved a new student account.",
-  },
-  {
-    id: 3,
-    timestamp: "2026-08-17 09:21:37",
-    user: "System Administrator",
-    action: "VERIFY",
-    module: "Company Management",
-    details: "Verified company registration details.",
-  },
-  {
-    id: 4,
-    timestamp: "2026-08-17 08:54:12",
-    user: "Faculty Adviser",
-    action: "UPDATE",
-    module: "Evaluation Management",
-    details: "Updated internship evaluation criteria.",
-  },
-  {
-    id: 5,
-    timestamp: "2026-08-17 08:32:49",
-    user: "System Administrator",
-    action: "CREATE",
-    module: "System Notifications",
-    details: "Created a new system notification.",
-  },
-  {
-    id: 6,
-    timestamp: "2026-08-16 16:47:25",
-    user: "Company Supervisor",
-    action: "SUBMIT",
-    module: "Evaluation Management",
-    details: "Submitted an intern performance evaluation.",
-  },
-  {
-    id: 7,
-    timestamp: "2026-08-16 15:29:51",
-    user: "System Administrator",
-    action: "DOWNLOAD",
-    module: "Document Management",
-    details: "Downloaded internship document template.",
-  },
-  {
-    id: 8,
-    timestamp: "2026-08-16 14:18:33",
-    user: "System Administrator",
-    action: "UPDATE",
-    module: "System Settings",
-    details: "Updated system configuration settings.",
-  },
-  {
-    id: 9,
-    timestamp: "2026-08-16 13:06:17",
-    user: "Faculty Adviser",
-    action: "VIEW",
-    module: "Internship Records",
-    details: "Viewed internship placement records.",
-  },
-  {
-    id: 10,
-    timestamp: "2026-08-16 11:42:08",
-    user: "System Administrator",
-    action: "EXPORT",
-    module: "Reports",
-    details: "Exported system activity report.",
-  },
-  {
-    id: 11,
-    timestamp: "2026-08-15 17:26:41",
-    user: "System Administrator",
-    action: "DELETE",
-    module: "User Management",
-    details: "Removed an inactive user account.",
-  },
-  {
-    id: 12,
-    timestamp: "2026-08-15 15:11:26",
-    user: "Student",
-    action: "UPLOAD",
-    module: "Document Management",
-    details: "Uploaded internship requirement document.",
-  },
-];
-
-// =========================================================
-// COMPONENT
-// =========================================================
-
-const AuditLogs = () => {
+export default function AuditLogs() {
   const { darkMode } = useOutletContext();
+  const { state } = useMockStore();
 
   // =========================================================
-  // STATE
+  // FILTER STATE
   // =========================================================
 
-  const [auditLogs] = useState(initialAuditLogs);
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState("ALL");
+  const [moduleFilter, setModuleFilter] = useState("ALL");
 
-  const [searchTerm, setSearchTerm] = useState("");
+  // =========================================================
+  // HELPERS
+  // =========================================================
 
-  const [dateFrom, setDateFrom] = useState("");
+  const getActorName = (event) => {
+    const user = state.users.find((item) => item.id === event.actorUserId);
 
-  const [dateTo, setDateTo] = useState("");
+    if (!user) {
+      return event.actorUserId || "System";
+    }
 
-  const [actionFilter, setActionFilter] = useState("All Actions");
+    const profile =
+      state.students.find((item) => item.id === user.profileId) ||
+      state.faculty.find((item) => item.id === user.profileId) ||
+      state.supervisors.find((item) => item.id === user.profileId);
 
-  const [moduleFilter, setModuleFilter] = useState("All Modules");
+    return profile?.fullName || user.email || user.id;
+  };
 
-  const [showFilters, setShowFilters] = useState(false);
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case "student":
+        return "Student";
 
-  const [currentPage, setCurrentPage] = useState(1);
+      case "faculty":
+        return "Faculty Adviser";
 
-  const rowsPerPage = 8;
+      case "company":
+        return "Company Supervisor";
+
+      case "admin":
+        return "Administrator";
+
+      case "system":
+        return "System";
+
+      default:
+        return role || "Unknown";
+    }
+  };
+
+  const getActionClass = (action) => {
+    switch (action) {
+      case "LOGIN":
+        return darkMode
+          ? "bg-blue-950 text-blue-300 border-blue-800"
+          : "bg-blue-50 text-blue-700 border-blue-200";
+
+      case "LOGOUT":
+        return darkMode
+          ? "bg-slate-800 text-slate-300 border-slate-700"
+          : "bg-slate-100 text-slate-600 border-slate-200";
+
+      case "CREATE":
+        return darkMode
+          ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+      case "UPDATE":
+        return darkMode
+          ? "bg-amber-950 text-amber-300 border-amber-800"
+          : "bg-amber-50 text-amber-700 border-amber-200";
+
+      case "DELETE":
+        return darkMode
+          ? "bg-red-950 text-red-300 border-red-800"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      case "APPROVE":
+        return darkMode
+          ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+      case "REJECT":
+        return darkMode
+          ? "bg-red-950 text-red-300 border-red-800"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      case "UPLOAD":
+        return darkMode
+          ? "bg-purple-950 text-purple-300 border-purple-800"
+          : "bg-purple-50 text-purple-700 border-purple-200";
+
+      case "DEPLOY":
+        return darkMode
+          ? "bg-cyan-950 text-cyan-300 border-cyan-800"
+          : "bg-cyan-50 text-cyan-700 border-cyan-200";
+
+      case "SUBMIT":
+        return darkMode
+          ? "bg-indigo-950 text-indigo-300 border-indigo-800"
+          : "bg-indigo-50 text-indigo-700 border-indigo-200";
+
+      default:
+        return darkMode
+          ? "bg-slate-800 text-slate-300 border-slate-700"
+          : "bg-slate-100 text-slate-600 border-slate-200";
+    }
+  };
+
+  const formatDetailValue = (key, value) => {
+    const formattedKey = key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, (char) => char.toUpperCase());
+
+    if (typeof value === "boolean") {
+      return `${formattedKey}: ${value ? "Enabled" : "Disabled"}`;
+    }
+
+    if (value === null || value === undefined || value === "") {
+      return `${formattedKey}: —`;
+    }
+
+    if (Array.isArray(value)) {
+      return `${formattedKey}: ${value.join(", ")}`;
+    }
+
+    if (typeof value === "object") {
+      return `${formattedKey}: ${JSON.stringify(value)}`;
+    }
+
+    return `${formattedKey}: ${value}`;
+  };
+
+  const formatDetails = (details) => {
+    if (!details) {
+      return "No additional details.";
+    }
+
+    if (typeof details === "string") {
+      return details;
+    }
+
+    if (typeof details === "object") {
+      return Object.entries(details)
+        .map(([key, value]) => formatDetailValue(key, value))
+        .join(" • ");
+    }
+
+    return String(details);
+  };
 
   // =========================================================
   // FILTER OPTIONS
   // =========================================================
 
-  const actions = [
-    "All Actions",
-    "LOGIN",
-    "LOGOUT",
-    "CREATE",
-    "UPDATE",
-    "DELETE",
-    "APPROVE",
-    "VERIFY",
-    "SUBMIT",
-    "UPLOAD",
-    "DOWNLOAD",
-    "EXPORT",
-    "VIEW",
-  ];
+  const actionOptions = useMemo(() => {
+    return [
+      "ALL",
+      ...Array.from(
+        new Set(state.auditEvents.map((event) => event.action))
+      ).sort(),
+    ];
+  }, [state.auditEvents]);
 
-  const modules = [
-    "All Modules",
-    "Authentication",
-    "User Management",
-    "Company Management",
-    "Internship Records",
-    "Document Management",
-    "Evaluation Management",
-    "Reports",
-    "System Notifications",
-    "System Settings",
-  ];
+  const moduleOptions = useMemo(() => {
+    return [
+      "ALL",
+      ...Array.from(
+        new Set(state.auditEvents.map((event) => event.module))
+      ).sort(),
+    ];
+  }, [state.auditEvents]);
 
   // =========================================================
-  // FILTER LOGS
+  // FILTERED LOGS
   // =========================================================
 
-  const filteredLogs = useMemo(() => {
-    return auditLogs.filter((log) => {
-      const search = searchTerm.toLowerCase().trim();
+  const logs = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
+    return state.auditEvents.filter((event) => {
       const matchesSearch =
-        !search ||
-        log.user.toLowerCase().includes(search) ||
-        log.action.toLowerCase().includes(search) ||
-        log.module.toLowerCase().includes(search) ||
-        log.details.toLowerCase().includes(search) ||
-        log.timestamp.toLowerCase().includes(search);
-
-      const logDate = log.timestamp.substring(0, 10);
-
-      const matchesDateFrom =
-        !dateFrom || logDate >= dateFrom;
-
-      const matchesDateTo =
-        !dateTo || logDate <= dateTo;
+        !query ||
+        JSON.stringify(event).toLowerCase().includes(query) ||
+        getActorName(event).toLowerCase().includes(query);
 
       const matchesAction =
-        actionFilter === "All Actions" ||
-        log.action === actionFilter;
+        actionFilter === "ALL" || event.action === actionFilter;
 
       const matchesModule =
-        moduleFilter === "All Modules" ||
-        log.module === moduleFilter;
+        moduleFilter === "ALL" || event.module === moduleFilter;
 
-      return (
-        matchesSearch &&
-        matchesDateFrom &&
-        matchesDateTo &&
-        matchesAction &&
-        matchesModule
-      );
+      return matchesSearch && matchesAction && matchesModule;
     });
-  }, [
-    auditLogs,
-    searchTerm,
-    dateFrom,
-    dateTo,
-    actionFilter,
-    moduleFilter,
-  ]);
+  }, [state.auditEvents, search, actionFilter, moduleFilter]);
 
   // =========================================================
-  // PAGINATION
+  // EXPORT CSV
   // =========================================================
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredLogs.length / rowsPerPage)
-  );
+  const exportCsv = () => {
+    if (logs.length === 0) {
+      return;
+    }
 
-  const safeCurrentPage = Math.min(currentPage, totalPages);
+    const header =
+      "event_id,actor_user_id,actor_name,actor_role,action,module,target_type,target_id,timestamp,details\n";
 
-  const startIndex = (safeCurrentPage - 1) * rowsPerPage;
+    const rows = logs.map((event) => {
+      const values = [
+        event.id,
+        event.actorUserId,
+        getActorName(event),
+        getRoleLabel(event.actorRole),
+        event.action,
+        event.module,
+        event.targetEntityType,
+        event.targetEntityId,
+        event.timestamp,
+        JSON.stringify(event.details ?? {}),
+      ];
 
-  const currentLogs = filteredLogs.slice(
-    startIndex,
-    startIndex + rowsPerPage
-  );
+      return values
+        .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
+        .join(",");
+    });
 
-  // =========================================================
-  // RESET PAGE WHEN FILTERS CHANGE
-  // =========================================================
+    const blob = new Blob([header + rows.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
 
-  const handleSearchChange = (value) => {
-    setSearchTerm(value);
-    setCurrentPage(1);
-  };
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
 
-  const handleDateFromChange = (value) => {
-    setDateFrom(value);
-    setCurrentPage(1);
-  };
+    link.href = url;
+    link.download = "sims-audit-events.csv";
 
-  const handleDateToChange = (value) => {
-    setDateTo(value);
-    setCurrentPage(1);
-  };
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-  const handleActionChange = (value) => {
-    setActionFilter(value);
-    setCurrentPage(1);
-  };
-
-  const handleModuleChange = (value) => {
-    setModuleFilter(value);
-    setCurrentPage(1);
+    URL.revokeObjectURL(url);
   };
 
   // =========================================================
@@ -268,143 +254,20 @@ const AuditLogs = () => {
   // =========================================================
 
   const clearFilters = () => {
-    setSearchTerm("");
-    setDateFrom("");
-    setDateTo("");
-    setActionFilter("All Actions");
-    setModuleFilter("All Modules");
-    setCurrentPage(1);
+    setSearch("");
+    setActionFilter("ALL");
+    setModuleFilter("ALL");
   };
 
   // =========================================================
-  // CSV EXPORT
+  // STYLES
   // =========================================================
 
-  const exportCSV = () => {
-    if (filteredLogs.length === 0) {
-      return;
-    }
-
-    const headers = [
-      "Timestamp",
-      "User",
-      "Action",
-      "Module",
-      "Details",
-    ];
-
-    const rows = filteredLogs.map((log) => [
-      log.timestamp,
-      log.user,
-      log.action,
-      log.module,
-      log.details,
-    ]);
-
-    const csvContent = [
-      headers,
-      ...rows,
-    ]
-      .map((row) =>
-        row
-          .map((value) => {
-            const text = String(value ?? "");
-
-            return `"${text.replace(/"/g, '""')}"`;
-          })
-          .join(",")
-      )
-      .join("\n");
-
-    const blob = new Blob([csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-
-    link.href = url;
-
-    link.download = `audit-logs-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
-  };
-
-  // =========================================================
-  // ACTION BADGE
-  // =========================================================
-
-  const getActionClass = (action) => {
-    if (darkMode) {
-      switch (action) {
-        case "LOGIN":
-        case "APPROVE":
-        case "VERIFY":
-          return "bg-emerald-950 text-emerald-400 border-emerald-800";
-
-        case "DELETE":
-          return "bg-red-950 text-red-400 border-red-800";
-
-        case "UPDATE":
-        case "CREATE":
-          return "bg-blue-950 text-blue-400 border-blue-800";
-
-        case "SUBMIT":
-        case "UPLOAD":
-          return "bg-purple-950 text-purple-400 border-purple-800";
-
-        case "DOWNLOAD":
-        case "EXPORT":
-          return "bg-amber-950 text-amber-400 border-amber-800";
-
-        default:
-          return "bg-slate-800 text-slate-300 border-slate-700";
-      }
-    }
-
-    switch (action) {
-      case "LOGIN":
-      case "APPROVE":
-      case "VERIFY":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-      case "DELETE":
-        return "bg-red-50 text-red-700 border-red-200";
-
-      case "UPDATE":
-      case "CREATE":
-        return "bg-blue-50 text-blue-700 border-blue-200";
-
-      case "SUBMIT":
-      case "UPLOAD":
-        return "bg-purple-50 text-purple-700 border-purple-200";
-
-      case "DOWNLOAD":
-      case "EXPORT":
-        return "bg-amber-50 text-amber-700 border-amber-200";
-
-      default:
-        return "bg-slate-100 text-slate-600 border-slate-200";
-    }
-  };
-
-  // =========================================================
-  // PAGE BUTTONS
-  // =========================================================
-
-  const pageButtons = Array.from(
-    { length: totalPages },
-    (_, index) => index + 1
-  );
+  const inputClass = `h-9 border rounded-sm px-3 text-xs outline-none transition ${
+    darkMode
+      ? "bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-slate-400"
+      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-slate-500"
+  }`;
 
   // =========================================================
   // RETURN
@@ -412,638 +275,410 @@ const AuditLogs = () => {
 
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] px-4 py-5 sm:px-6 lg:px-8 transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+      className={`min-h-[calc(100vh-5rem)] px-4 py-6 sm:px-6 lg:px-8 transition-colors duration-300 ${
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
-      <div className="max-w-[1400px] mx-auto">
-
+      <div className="max-w-7xl mx-auto">
         {/* ===================================================
             PAGE HEADER
         =================================================== */}
 
-        <div className="mb-5">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div>
-              <p
-                className={`text-xs font-medium mb-1 ${
-                  darkMode
-                    ? "text-slate-500"
-                    : "text-slate-400"
-                }`}
-              >
-                Administration / Security
-              </p>
+        <div className="mb-6">
+          <p
+            className={`text-[10px] uppercase tracking-widest font-bold ${
+              darkMode ? "text-slate-500" : "text-slate-400"
+            }`}
+          >
+            Administrator Portal
+          </p>
 
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-                Audit Logs
-              </h1>
+          <h1 className="text-xl sm:text-2xl font-black mt-1">Audit Logs</h1>
 
-              <p
-                className={`text-xs sm:text-sm mt-1 ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
-                }`}
-              >
-                Review and monitor system activity and administrative actions.
-              </p>
-            </div>
+          <p
+            className={`text-xs sm:text-sm mt-1 ${
+              darkMode ? "text-slate-400" : "text-slate-500"
+            }`}
+          >
+            Review system activity and administrative actions recorded
+            throughout the portal.
+          </p>
+        </div>
 
-            <div
-              className={`text-xs px-3 py-2 rounded-lg border ${
-                darkMode
-                  ? "bg-slate-900 border-slate-700 text-slate-400"
-                  : "bg-white border-slate-200 text-slate-500"
+        {/* ===================================================
+            SUMMARY
+        =================================================== */}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          {/* TOTAL */}
+
+          <div
+            className={`border rounded-lg p-4 ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-300"
+            }`}
+          >
+            <p
+              className={`text-[10px] font-bold uppercase tracking-wide ${
+                darkMode ? "text-slate-500" : "text-slate-400"
               }`}
             >
-              {filteredLogs.length}{" "}
-              {filteredLogs.length === 1 ? "record" : "records"}
+              Total Events
+            </p>
+
+            <p className="text-xl font-black mt-1">
+              {state.auditEvents.length}
+            </p>
+          </div>
+
+          {/* FILTERED */}
+
+          <div
+            className={`border rounded-lg p-4 ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-300"
+            }`}
+          >
+            <p
+              className={`text-[10px] font-bold uppercase tracking-wide ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Displayed
+            </p>
+
+            <p className="text-xl font-black mt-1">{logs.length}</p>
+          </div>
+
+          {/* LATEST */}
+
+          <div
+            className={`border rounded-lg p-4 ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-300"
+            }`}
+          >
+            <p
+              className={`text-[10px] font-bold uppercase tracking-wide ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Latest Event
+            </p>
+
+            <p className="text-xs font-bold mt-2">
+              {state.auditEvents.length > 0
+                ? new Date(state.auditEvents[0].timestamp).toLocaleString()
+                : "No events"}
+            </p>
+          </div>
+        </div>
+
+        {/* ===================================================
+            FILTERS
+        =================================================== */}
+
+        <div
+          className={`border rounded-lg p-4 mb-5 ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-300"
+          }`}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {/* SEARCH */}
+
+            <div className="md:col-span-2">
+              <label
+                htmlFor="audit-search"
+                className="block text-[10px] font-bold mb-1.5"
+              >
+                Search Events
+              </label>
+
+              <input
+                id="audit-search"
+                type="text"
+                placeholder="Search actor, action, module, target..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className={`${inputClass} w-full`}
+              />
+            </div>
+
+            {/* ACTION */}
+
+            <div>
+              <label
+                htmlFor="audit-action"
+                className="block text-[10px] font-bold mb-1.5"
+              >
+                Action
+              </label>
+
+              <select
+                id="audit-action"
+                value={actionFilter}
+                onChange={(event) => setActionFilter(event.target.value)}
+                className={`${inputClass} w-full`}
+              >
+                {actionOptions.map((action) => (
+                  <option key={action} value={action}>
+                    {action === "ALL" ? "All Actions" : action}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* MODULE */}
+
+            <div>
+              <label
+                htmlFor="audit-module"
+                className="block text-[10px] font-bold mb-1.5"
+              >
+                Module
+              </label>
+
+              <select
+                id="audit-module"
+                value={moduleFilter}
+                onChange={(event) => setModuleFilter(event.target.value)}
+                className={`${inputClass} w-full`}
+              >
+                {moduleOptions.map((module) => (
+                  <option key={module} value={module}>
+                    {module === "ALL" ? "All Modules" : module}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* FILTER ACTIONS */}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+            <p
+              className={`text-[10px] ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Showing {logs.length} of {state.auditEvents.length} events
+            </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className={`h-8 px-4 border rounded-sm text-[10px] font-semibold transition ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Clear Filters
+              </button>
+
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={logs.length === 0}
+                className={`h-8 px-4 rounded-sm text-[10px] font-semibold transition ${
+                  logs.length === 0
+                    ? darkMode
+                      ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                      : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : darkMode
+                    ? "bg-slate-700 border border-slate-500 text-white hover:bg-slate-600"
+                    : "bg-slate-700 border border-slate-800 text-white hover:bg-slate-800"
+                }`}
+              >
+                Export CSV
+              </button>
             </div>
           </div>
         </div>
 
         {/* ===================================================
-            MAIN PANEL
+            AUDIT TABLE
         =================================================== */}
 
         <div
-          className={`rounded-xl border shadow-sm overflow-hidden ${
+          className={`border rounded-lg overflow-hidden ${
             darkMode
               ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-200"
+              : "bg-white border-slate-300"
           }`}
         >
-
-          {/* =================================================
-              TOOLBAR
-          ================================================= */}
-
-          <div
-            className={`p-4 border-b ${
-              darkMode
-                ? "border-slate-700"
-                : "border-slate-200"
-            }`}
-          >
-            <div className="flex flex-col xl:flex-row gap-3">
-
-              {/* SEARCH */}
-
-              <div className="relative flex-1">
-                <span
-                  className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${
-                    darkMode
-                      ? "text-slate-500"
-                      : "text-slate-400"
-                  }`}
-                >
-                  🔍
-                </span>
-
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) =>
-                    handleSearchChange(e.target.value)
-                  }
-                  placeholder="Search audit logs..."
-                  className={`w-full h-10 pl-9 pr-3 rounded-lg border text-xs outline-none transition ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-blue-500"
-                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400"
-                  }`}
-                />
-              </div>
-
-              {/* DATE FROM */}
-
-              <div className="flex items-center gap-2">
-                <label
-                  className={`text-[10px] font-semibold whitespace-nowrap ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
-                  }`}
-                >
-                  From
-                </label>
-
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) =>
-                    handleDateFromChange(e.target.value)
-                  }
-                  className={`h-10 px-3 rounded-lg border text-xs outline-none transition ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-200 focus:border-blue-500"
-                      : "bg-slate-50 border-slate-200 text-slate-700 focus:border-slate-400"
-                  }`}
-                />
-              </div>
-
-              {/* DATE TO */}
-
-              <div className="flex items-center gap-2">
-                <label
-                  className={`text-[10px] font-semibold whitespace-nowrap ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
-                  }`}
-                >
-                  To
-                </label>
-
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) =>
-                    handleDateToChange(e.target.value)
-                  }
-                  className={`h-10 px-3 rounded-lg border text-xs outline-none transition ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-200 focus:border-blue-500"
-                      : "bg-slate-50 border-slate-200 text-slate-700 focus:border-slate-400"
-                  }`}
-                />
-              </div>
-
-              {/* FILTER BUTTON */}
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowFilters((prev) => !prev)
-                }
-                className={`h-10 px-4 rounded-lg border text-xs font-semibold transition ${
-                  showFilters
-                    ? darkMode
-                      ? "bg-white text-slate-900 border-white"
-                      : "bg-slate-800 text-white border-slate-800"
-                    : darkMode
-                    ? "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"
-                    : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200"
-                }`}
-              >
-                ⚙ Filter
-              </button>
-
-              {/* EXPORT */}
-
-              <button
-                type="button"
-                onClick={exportCSV}
-                disabled={filteredLogs.length === 0}
-                className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
-                  filteredLogs.length === 0
-                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                    : darkMode
-                    ? "bg-white text-slate-900 hover:bg-slate-200"
-                    : "bg-slate-800 text-white hover:bg-slate-700"
-                }`}
-              >
-                ↓ Export CSV
-              </button>
-            </div>
-
-            {/* =================================================
-                ADVANCED FILTERS
-            ================================================= */}
-
-            {showFilters && (
-              <div
-                className={`mt-4 pt-4 border-t grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 ${
-                  darkMode
-                    ? "border-slate-700"
-                    : "border-slate-200"
-                }`}
-              >
-                {/* ACTION */}
-
-                <div>
-                  <label
-                    className={`block text-[10px] font-bold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    Action
-                  </label>
-
-                  <select
-                    value={actionFilter}
-                    onChange={(e) =>
-                      handleActionChange(e.target.value)
-                    }
-                    className={`w-full h-9 px-3 rounded-lg border text-xs outline-none ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700 text-slate-200"
-                        : "bg-white border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {actions.map((action) => (
-                      <option key={action} value={action}>
-                        {action}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* MODULE */}
-
-                <div>
-                  <label
-                    className={`block text-[10px] font-bold mb-1.5 ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    Module
-                  </label>
-
-                  <select
-                    value={moduleFilter}
-                    onChange={(e) =>
-                      handleModuleChange(e.target.value)
-                    }
-                    className={`w-full h-9 px-3 rounded-lg border text-xs outline-none ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700 text-slate-200"
-                        : "bg-white border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {modules.map((module) => (
-                      <option key={module} value={module}>
-                        {module}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* CLEAR */}
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className={`h-9 px-4 rounded-lg text-xs font-semibold transition ${
-                      darkMode
-                        ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    }`}
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* =================================================
-              TABLE
-          ================================================= */}
-
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse">
+            <table className="w-full text-left text-xs min-w-[1000px]">
+              {/* HEADER */}
 
-              {/* TABLE HEADER */}
-
-              <thead>
-                <tr
-                  className={
-                    darkMode
-                      ? "bg-slate-800/70"
-                      : "bg-slate-50"
-                  }
-                >
-                  <th
-                    className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                      darkMode
-                        ? "text-slate-400 border-slate-700"
-                        : "text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    Timestamp
+              <thead
+                className={
+                  darkMode
+                    ? "bg-slate-800 text-slate-300"
+                    : "bg-slate-100 text-slate-600"
+                }
+              >
+                <tr>
+                  <th className="px-4 py-3 font-bold whitespace-nowrap">
+                    Time
                   </th>
 
-                  <th
-                    className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                      darkMode
-                        ? "text-slate-400 border-slate-700"
-                        : "text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    User
-                  </th>
+                  <th className="px-4 py-3 font-bold">Actor</th>
 
-                  <th
-                    className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                      darkMode
-                        ? "text-slate-400 border-slate-700"
-                        : "text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    Action
-                  </th>
+                  <th className="px-4 py-3 font-bold">Action</th>
 
-                  <th
-                    className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                      darkMode
-                        ? "text-slate-400 border-slate-700"
-                        : "text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    Module
-                  </th>
+                  <th className="px-4 py-3 font-bold">Module</th>
 
-                  <th
-                    className={`px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide border-b ${
-                      darkMode
-                        ? "text-slate-400 border-slate-700"
-                        : "text-slate-500 border-slate-200"
-                    }`}
-                  >
-                    Details
-                  </th>
+                  <th className="px-4 py-3 font-bold">Target</th>
+
+                  <th className="px-4 py-3 font-bold">Details</th>
                 </tr>
               </thead>
 
-              {/* TABLE BODY */}
+              {/* BODY */}
 
               <tbody>
-                {currentLogs.length > 0 ? (
-                  currentLogs.map((log) => (
+                {logs.length > 0 ? (
+                  logs.map((event) => (
                     <tr
-                      key={log.id}
-                      className={`transition ${
+                      key={event.id}
+                      className={`border-t transition ${
                         darkMode
-                          ? "border-b border-slate-800 hover:bg-slate-800/60"
-                          : "border-b border-slate-100 hover:bg-slate-50"
+                          ? "border-slate-800 hover:bg-slate-800/50"
+                          : "border-slate-200 hover:bg-slate-50"
                       }`}
                     >
-                      {/* TIMESTAMP */}
+                      {/* TIME */}
 
-                      <td className="px-4 py-3 align-top">
-                        <span
-                          className={`text-[11px] font-mono whitespace-nowrap ${
-                            darkMode
-                              ? "text-slate-300"
-                              : "text-slate-600"
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="font-semibold">
+                          {new Date(event.timestamp).toLocaleDateString()}
+                        </div>
+
+                        <div
+                          className={`text-[10px] mt-0.5 ${
+                            darkMode ? "text-slate-500" : "text-slate-400"
                           }`}
                         >
-                          {log.timestamp}
-                        </span>
+                          {new Date(event.timestamp).toLocaleTimeString()}
+                        </div>
                       </td>
 
-                      {/* USER */}
+                      {/* ACTOR */}
 
-                      <td className="px-4 py-3 align-top">
-                        <div className="flex items-center gap-2.5">
+                      <td className="px-4 py-3">
+                        <div className="font-bold">{getActorName(event)}</div>
 
-                          <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
-                              darkMode
-                                ? "bg-slate-700 text-slate-200"
-                                : "bg-slate-200 text-slate-600"
-                            }`}
-                          >
-                            {log.user
-                              .split(" ")
-                              .map((word) => word[0])
-                              .slice(0, 2)
-                              .join("")}
-                          </div>
-
-                          <span
-                            className={`text-xs font-semibold whitespace-nowrap ${
-                              darkMode
-                                ? "text-slate-200"
-                                : "text-slate-700"
-                            }`}
-                          >
-                            {log.user}
-                          </span>
+                        <div
+                          className={`text-[10px] mt-0.5 ${
+                            darkMode ? "text-slate-500" : "text-slate-400"
+                          }`}
+                        >
+                          {getRoleLabel(event.actorRole)}
+                          {" · "}
+                          {event.actorUserId}
                         </div>
                       </td>
 
                       {/* ACTION */}
 
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-4 py-3">
                         <span
-                          className={`inline-flex items-center px-2 py-1 rounded-md border text-[9px] font-bold tracking-wide ${
-                            getActionClass(log.action)
-                          }`}
+                          className={`inline-flex items-center px-2 py-1 rounded-sm border text-[9px] font-bold ${getActionClass(
+                            event.action
+                          )}`}
                         >
-                          {log.action}
+                          {event.action}
                         </span>
                       </td>
 
                       {/* MODULE */}
 
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-4 py-3">
                         <span
-                          className={`text-xs font-medium ${
-                            darkMode
-                              ? "text-slate-300"
-                              : "text-slate-600"
+                          className={`text-[10px] font-semibold ${
+                            darkMode ? "text-slate-300" : "text-slate-700"
                           }`}
                         >
-                          {log.module}
+                          {event.module}
                         </span>
+                      </td>
+
+                      {/* TARGET */}
+
+                      <td className="px-4 py-3">
+                        <div className="font-semibold">
+                          {event.targetEntityType}
+                        </div>
+
+                        <div
+                          className={`text-[10px] mt-0.5 ${
+                            darkMode ? "text-slate-500" : "text-slate-400"
+                          }`}
+                        >
+                          {event.targetEntityId}
+                        </div>
                       </td>
 
                       {/* DETAILS */}
 
-                      <td className="px-4 py-3 align-top">
-                        <p
-                          className={`text-xs leading-relaxed max-w-[420px] ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                      <td className="px-4 py-3 max-w-[350px]">
+                        <div
+                          className={`text-[10px] leading-relaxed break-words ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
-                          {log.details}
-                        </p>
+                          {formatDetails(event.details)}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td
-                      colSpan="5"
-                      className="px-6 py-16 text-center"
-                    >
-                      <div className="flex flex-col items-center">
-
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl mb-3 ${
-                            darkMode
-                              ? "bg-slate-800"
-                              : "bg-slate-100"
-                          }`}
-                        >
-                          🔍
-                        </div>
-
-                        <p className="text-sm font-bold">
-                          No audit logs found
-                        </p>
-
-                        <p
-                          className={`text-xs mt-1 ${
-                            darkMode
-                              ? "text-slate-500"
-                              : "text-slate-400"
-                          }`}
-                        >
-                          Try adjusting your search or filters.
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={clearFilters}
-                          className={`mt-4 text-xs font-semibold ${
-                            darkMode
-                              ? "text-blue-400"
-                              : "text-slate-700"
-                          }`}
-                        >
-                          Clear all filters
-                        </button>
+                    <td colSpan="6" className="px-4 py-12 text-center">
+                      <div
+                        className={`text-sm font-bold ${
+                          darkMode ? "text-slate-300" : "text-slate-600"
+                        }`}
+                      >
+                        No audit events found
                       </div>
+
+                      <p
+                        className={`text-[10px] mt-1 ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
+                        Try changing your search or filter settings.
+                      </p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-
-          {/* =================================================
-              FOOTER / PAGINATION
-          ================================================= */}
-
-          <div
-            className={`px-4 py-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
-              darkMode
-                ? "border-slate-700"
-                : "border-slate-200"
-            }`}
-          >
-            <p
-              className={`text-[10px] sm:text-xs ${
-                darkMode
-                  ? "text-slate-500"
-                  : "text-slate-400"
-              }`}
-            >
-              {filteredLogs.length > 0
-                ? `Showing ${startIndex + 1}-${Math.min(
-                    startIndex + rowsPerPage,
-                    filteredLogs.length
-                  )} of ${filteredLogs.length} records`
-                : "Showing 0 records"}
-            </p>
-
-            {filteredLogs.length > 0 && (
-              <div className="flex items-center gap-1">
-
-                {/* PREVIOUS */}
-
-                <button
-                  type="button"
-                  disabled={safeCurrentPage === 1}
-                  onClick={() =>
-                    setCurrentPage((page) =>
-                      Math.max(1, page - 1)
-                    )
-                  }
-                  className={`w-8 h-8 rounded-lg text-xs font-semibold transition ${
-                    safeCurrentPage === 1
-                      ? "opacity-40 cursor-not-allowed"
-                      : darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
-                  }`}
-                >
-                  ‹
-                </button>
-
-                {/* PAGE NUMBERS */}
-
-                {pageButtons.map((page) => (
-                  <button
-                    key={page}
-                    type="button"
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 rounded-lg text-xs font-semibold transition ${
-                      safeCurrentPage === page
-                        ? darkMode
-                          ? "bg-white text-slate-900"
-                          : "bg-slate-800 text-white"
-                        : darkMode
-                        ? "text-slate-400 hover:bg-slate-800"
-                        : "text-slate-500 hover:bg-slate-100"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-
-                {/* NEXT */}
-
-                <button
-                  type="button"
-                  disabled={safeCurrentPage === totalPages}
-                  onClick={() =>
-                    setCurrentPage((page) =>
-                      Math.min(totalPages, page + 1)
-                    )
-                  }
-                  className={`w-8 h-8 rounded-lg text-xs font-semibold transition ${
-                    safeCurrentPage === totalPages
-                      ? "opacity-40 cursor-not-allowed"
-                      : darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
-                  }`}
-                >
-                  ›
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* ===================================================
-            DEMO NOTICE
+            FOOTER INFO
         =================================================== */}
 
-        <div
-          className={`mt-4 px-4 py-3 rounded-lg border text-[10px] leading-relaxed ${
-            darkMode
-              ? "bg-red-950/30 border-red-900 text-red-300"
-              : "bg-red-50 border-red-200 text-red-700"
+        <p
+          className={`text-[9px] mt-3 ${
+            darkMode ? "text-slate-600" : "text-slate-400"
           }`}
         >
-          <p className="font-bold mb-0.5">
-            ⚠️ Demo Project
-          </p>
-
-          <p>
-            Audit log entries shown here are dummy data.
-            Database integration has not been implemented yet.
-          </p>
-        </div>
+          Audit events are generated automatically by shared system actions such
+          as authentication, application processing, document review,
+          deployment, evaluations, and system settings updates.
+        </p>
       </div>
     </div>
   );
-};
-
-export default AuditLogs;
-
+}

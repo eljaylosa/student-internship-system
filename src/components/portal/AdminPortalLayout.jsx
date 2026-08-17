@@ -315,7 +315,7 @@ const AdminPortalLayout = () => {
     setIsNotificationOpen(false);
     setIsMobileSidebarOpen(false);
 
-    navigate("/admin", { replace: true });
+    navigate("/admin/login", { replace: true });
   };
 
   // =========================================================

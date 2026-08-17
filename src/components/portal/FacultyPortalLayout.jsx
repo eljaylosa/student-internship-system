@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
 
 // =========================================================
@@ -37,6 +38,7 @@ const notifications = [
 const FacultyPortalLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useMockStore();
 
   // =========================================================
   // SIDEBAR
@@ -290,6 +292,7 @@ const FacultyPortalLayout = () => {
   // =========================================================
 
   const handleLogout = () => {
+    logout();
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
 

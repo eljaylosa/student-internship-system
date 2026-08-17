@@ -116,7 +116,7 @@ const TermsAndConditions = () => {
 
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-500 text-center py-4 text-[11px] tracking-wide font-medium">
         &copy; 2026 SIMS |{" "}
-        <Link to="/privacy-policy" className="hover:text-slate-300">
+        <Link to="/privacy" className="hover:text-slate-300">
           Privacy Policy
         </Link>{" "}
         | <span className="text-slate-300">Terms of Service</span>

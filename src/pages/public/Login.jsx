@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
+import { getUserHome, useMockStore } from "../../data/mockStore.jsx";
 
 const Login = () => {
   // Active role tab
@@ -35,57 +36,25 @@ const Login = () => {
     }));
   };
 
-  // use nagivate
   const navigate = useNavigate();
+  const { login } = useMockStore();
 
   const demoAccounts = {
-    student: {
-      email: "student@gmail.com",
-      id: "STU-001",
-      password: "password",
-    },
-
-    faculty: {
-      email: "faculty@gmail.com",
-      id: "EMP-001",
-      password: "password",
-    },
-
-    company: {
-      email: "company@gmail.com",
-      id: "COMP-001",
-      password: "password",
-    },
+    student: { email: "student@gmail.com", id: "STU-001", password: "password" },
+    faculty: { email: "faculty@gmail.com", id: "FAC-001", password: "password" },
+    company: { email: "company@gmail.com", id: "SUP-001", password: "password" },
   };
 
-  // Handle login submission
+  // Handle login submission through the shared frontend session.
   const handleSubmit = (e) => {
     e.preventDefault();
-
     const currentForm = forms[activeRole];
-    const account = demoAccounts[activeRole];
-
-    if (
-      currentForm.id === account.id &&
-      currentForm.email === account.email ||
-      currentForm.password === account.password
-    ) {
-      if (activeRole === "student") {
-        navigate("/student/dashboard");
-      }
-
-      if (activeRole === "faculty") {
-        navigate("/faculty/dashboard");
-      }
-
-      if (activeRole === "company") {
-        navigate("/company/dashboard");
-      }
-
+    const result = login(activeRole, currentForm.emailOrId.trim(), currentForm.password);
+    if (!result.ok) {
+      alert(result.message);
       return;
     }
-
-    alert("Invalid Account ID or Password.");
+    navigate(getUserHome(activeRole), { replace: true });
   };
 
   // Portal configuration

@@ -1,17 +1,22 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
-const STORAGE_KEY = "sims_company_feedback";
-
-const Feedback = () => {
+export default function Feedback() {
   const { darkMode } = useOutletContext();
+  const { state, submitEvaluation } = useMockStore();
+
+  // Only officially deployed interns can receive employer feedback.
+  const assignments = state.assignments.filter(
+    (item) =>
+      item.companyId === "COM-001" &&
+      item.status === "Active" &&
+      item.deployedAt !== null
+  );
+
+  const [assignmentId, setAssignmentId] = useState(assignments[0]?.id || "");
 
   const [form, setForm] = useState({
-    internName: "",
-    internId: "",
-    internshipStart: "",
-    internshipEnd: "",
-    satisfaction: 0,
     strengths: "",
     improvements: "",
     recommendation: "",
@@ -19,58 +24,25 @@ const Feedback = () => {
 
   const [submitted, setSubmitted] = useState(false);
 
-  // =========================================
-  // THEME CLASSES
-  // =========================================
-
-  const pageText = darkMode ? "text-slate-100" : "text-slate-900";
-
-  const mutedText = darkMode ? "text-slate-400" : "text-slate-500";
-
-  const cardClass = darkMode
+  const card = darkMode
     ? "bg-slate-900 border-slate-700"
     : "bg-white border-slate-200";
 
-  const inputClass = darkMode
-    ? "w-full h-10 px-3 rounded-lg border border-slate-700 bg-slate-800 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-700 transition"
-    : "w-full h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition";
+  const handleSubmit = (event) => {
+    event.preventDefault();
 
-  const textareaClass = darkMode
-    ? "w-full px-3 py-3 rounded-lg border border-slate-700 bg-slate-800 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-700 transition resize-none"
-    : "w-full px-3 py-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition resize-none";
-
-  // =========================================
-  // FORM HANDLER
-  // =========================================
-
-  const handleChange = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    setSubmitted(false);
-  };
-
-  // =========================================
-  // SUBMIT FEEDBACK
-  // =========================================
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!form.internName.trim()) {
-      alert("Please enter the intern name.");
+    if (!assignmentId) {
+      alert("Please select an intern.");
       return;
     }
 
-    if (!form.internshipStart || !form.internshipEnd) {
-      alert("Please provide the internship period.");
+    if (!form.strengths.trim()) {
+      alert("Please provide the intern's strengths.");
       return;
     }
 
-    if (!form.satisfaction) {
-      alert("Please provide an overall satisfaction rating.");
+    if (!form.improvements.trim()) {
+      alert("Please provide areas for improvement.");
       return;
     }
 
@@ -79,343 +51,256 @@ const Feedback = () => {
       return;
     }
 
-    const feedback = {
-      id: Date.now(),
-      internName: form.internName.trim(),
-      internId: form.internId.trim(),
-      internshipStart: form.internshipStart,
-      internshipEnd: form.internshipEnd,
-      satisfaction: form.satisfaction,
-      strengths: form.strengths.trim(),
-      improvements: form.improvements.trim(),
-      recommendation: form.recommendation,
-      submittedAt: new Date().toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
-    };
+    submitEvaluation({
+      assignmentId,
 
-    try {
-      const existingFeedback = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) || "[]"
-      );
+      evaluatorRole: "Company Supervisor",
 
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify([feedback, ...existingFeedback])
-      );
-    } catch {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([feedback]));
-    }
+      evaluatorId: state.currentUser?.profileId,
 
-    setSubmitted(true);
+      type: "employer_feedback",
+
+      ratings: {},
+
+      comments: `Strengths: ${form.strengths.trim()}
+
+Areas for improvement: ${form.improvements.trim()}
+
+Recommendation: ${form.recommendation}`,
+    });
 
     setForm({
-      internName: "",
-      internId: "",
-      internshipStart: "",
-      internshipEnd: "",
-      satisfaction: 0,
       strengths: "",
       improvements: "",
       recommendation: "",
     });
+
+    setSubmitted(true);
   };
 
-  // =========================================
-  // RENDER
-  // =========================================
-
   return (
-    <div className="p-5 md:p-6 lg:p-8 max-w-[1400px] mx-auto">
-      <section
-        className={`w-full max-w-[1000px] mx-auto xl:mx-0 border rounded-2xl p-5 md:p-6 lg:p-7 ${cardClass}`}
-      >
-        {/* =========================================
-            PAGE HEADER
-        ========================================= */}
+    <div
+      className={`p-5 md:p-6 lg:p-8 max-w-[1000px] mx-auto ${
+        darkMode ? "text-slate-100" : "text-slate-900"
+      }`}
+    >
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
-        <div className="mb-6">
+      <div className="mb-6">
+        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+          Company Portal
+        </p>
+
+        <h1 className="text-2xl font-black">Employer Feedback</h1>
+
+        <p className="text-sm mt-1 text-slate-500">
+          Provide qualitative feedback about an intern's performance,
+          development, and overall internship experience.
+        </p>
+      </div>
+
+      {/* =====================================================
+          SUCCESS MESSAGE
+      ===================================================== */}
+
+      {submitted && (
+        <div
+          className={`mb-5 border rounded-2xl p-4 ${
+            darkMode
+              ? "bg-emerald-950/30 border-emerald-800"
+              : "bg-emerald-50 border-emerald-200"
+          }`}
+        >
           <p
-            className={`text-[10px] uppercase tracking-widest font-bold ${mutedText}`}
-          >
-            Company Portal
-          </p>
-
-          <h1 className={`text-xl font-black mt-1 ${pageText}`}>
-            Submit Feedback
-          </h1>
-
-          <p className={`text-xs mt-1 ${mutedText}`}>
-            Provide feedback about an intern's internship experience.
-          </p>
-        </div>
-
-        {/* =========================================
-            SUCCESS MESSAGE
-        ========================================= */}
-
-        {submitted && (
-          <div
-            className={`mb-5 rounded-xl border px-4 py-3 ${
-              darkMode
-                ? "bg-emerald-950/40 border-emerald-900 text-emerald-400"
-                : "bg-emerald-50 border-emerald-200 text-emerald-700"
+            className={`font-bold text-sm ${
+              darkMode ? "text-emerald-300" : "text-emerald-700"
             }`}
           >
-            <p className="text-xs font-bold">
-              Feedback submitted successfully.
+            Employer feedback submitted successfully.
+          </p>
+
+          <p
+            className={`text-xs mt-1 ${
+              darkMode ? "text-emerald-400" : "text-emerald-600"
+            }`}
+          >
+            The feedback has been recorded and will be available alongside the
+            intern's evaluation.
+          </p>
+        </div>
+      )}
+
+      {/* =====================================================
+          NO DEPLOYED INTERNS
+      ===================================================== */}
+
+      {assignments.length === 0 ? (
+        <section className={`border rounded-2xl p-6 ${card}`}>
+          <div className="text-center py-6">
+            <div className="text-3xl mb-3">💬</div>
+
+            <p className="font-semibold">
+              No interns are available for feedback.
             </p>
 
-            <p className="text-[10px] mt-1 opacity-80">
-              The feedback has been saved locally for this frontend demo.
+            <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+              Employer feedback can only be submitted for students who have been
+              officially deployed to your company.
             </p>
           </div>
-        )}
+        </section>
+      ) : (
+        /* =====================================================
+           FEEDBACK FORM
+        ===================================================== */
 
-        <form onSubmit={handleSubmit}>
-          {/* =========================================
-              INTERN INFORMATION
-          ========================================= */}
+        <form
+          className={`border rounded-2xl p-6 space-y-5 ${card}`}
+          onSubmit={handleSubmit}
+        >
+          {/* =====================================================
+              INTERN SELECTION
+          ===================================================== */}
 
-          <div className="mb-7">
-            <h2 className={`text-sm font-bold ${pageText} mb-4`}>
-              Intern Information
-            </h2>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
+              Internship Assignment
+            </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Intern Name */}
+            <select
+              className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-100"
+                  : "bg-white border-slate-200 text-slate-900"
+              }`}
+              value={assignmentId}
+              onChange={(event) => {
+                setAssignmentId(event.target.value);
+                setSubmitted(false);
+              }}
+            >
+              {assignments.map((assignment) => {
+                const student = state.students.find(
+                  (item) => item.id === assignment.studentId
+                );
 
-              <div>
-                <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
-                  Intern Name
-                </label>
-
-                <input
-                  type="text"
-                  value={form.internName}
-                  onChange={(e) => handleChange("internName", e.target.value)}
-                  placeholder="e.g. John Doe"
-                  className={inputClass}
-                />
-              </div>
-
-              {/* Intern ID */}
-
-              <div>
-                <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
-                  Intern ID
-                </label>
-
-                <input
-                  type="text"
-                  value={form.internId}
-                  onChange={(e) => handleChange("internId", e.target.value)}
-                  placeholder="e.g. 2026-0001"
-                  className={inputClass}
-                />
-              </div>
-            </div>
+                return (
+                  <option key={assignment.id} value={assignment.id}>
+                    {assignment.id} · {student?.fullName || "Unknown Student"}
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
-          {/* =========================================
-              INTERNSHIP PERIOD
-          ========================================= */}
-
-          <div className="mb-7">
-            <h2 className={`text-sm font-bold ${pageText} mb-4`}>
-              Internship Period
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Start Date */}
-
-              <div>
-                <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
-                  Start Date
-                </label>
-
-                <input
-                  type="date"
-                  value={form.internshipStart}
-                  onChange={(e) =>
-                    handleChange("internshipStart", e.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-
-              {/* End Date */}
-
-              <div>
-                <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
-                  End Date
-                </label>
-
-                <input
-                  type="date"
-                  value={form.internshipEnd}
-                  onChange={(e) =>
-                    handleChange("internshipEnd", e.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* =========================================
-              OVERALL SATISFACTION
-          ========================================= */}
-
-          <div className="mb-7">
-            <h2 className={`text-sm font-bold ${pageText} mb-3`}>
-              Overall Satisfaction
-            </h2>
-
-            <div className="flex flex-wrap gap-2">
-              {[1, 2, 3, 4, 5].map((rating) => (
-                <button
-                  key={rating}
-                  type="button"
-                  onClick={() => handleChange("satisfaction", rating)}
-                  aria-label={`Rate ${rating} out of 5`}
-                  className={`w-10 h-10 rounded-lg border text-xs font-bold transition ${
-                    form.satisfaction === rating
-                      ? darkMode
-                        ? "bg-white text-slate-900 border-white"
-                        : "bg-slate-900 text-white border-slate-900"
-                      : darkMode
-                      ? "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700"
-                      : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  {rating}
-                </button>
-              ))}
-            </div>
-
-            <p className={`text-[10px] mt-2 ${mutedText}`}>
-              1 = Very Unsatisfied &nbsp; • &nbsp; 5 = Very Satisfied
-            </p>
-          </div>
-
-          {/* =========================================
+          {/* =====================================================
               STRENGTHS
-          ========================================= */}
+          ===================================================== */}
 
-          <div className="mb-5">
-            <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
               Strengths
             </label>
 
             <textarea
+              className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                  : "bg-white border-slate-200 text-slate-900"
+              }`}
+              rows="5"
+              placeholder="Describe the intern's strengths, accomplishments, and positive contributions."
               value={form.strengths}
-              onChange={(e) => handleChange("strengths", e.target.value)}
-              placeholder="Describe the intern's strengths and positive contributions..."
-              rows={4}
-              className={textareaClass}
+              onChange={(event) => {
+                setForm((previous) => ({
+                  ...previous,
+                  strengths: event.target.value,
+                }));
+
+                setSubmitted(false);
+              }}
             />
           </div>
 
-          {/* =========================================
+          {/* =====================================================
               AREAS FOR IMPROVEMENT
-          ========================================= */}
+          ===================================================== */}
 
-          <div className="mb-7">
-            <label className={`block text-xs font-bold mb-1.5 ${pageText}`}>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
               Areas for Improvement
             </label>
 
             <textarea
+              className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                  : "bg-white border-slate-200 text-slate-900"
+              }`}
+              rows="5"
+              placeholder="Describe areas where the intern can continue improving."
               value={form.improvements}
-              onChange={(e) => handleChange("improvements", e.target.value)}
-              placeholder="Describe areas where the intern could improve..."
-              rows={4}
-              className={textareaClass}
+              onChange={(event) => {
+                setForm((previous) => ({
+                  ...previous,
+                  improvements: event.target.value,
+                }));
+
+                setSubmitted(false);
+              }}
             />
           </div>
 
-          {/* =========================================
+          {/* =====================================================
               RECOMMENDATION
-          ========================================= */}
+          ===================================================== */}
 
-          <div className="mb-7">
-            <h2 className={`text-sm font-bold ${pageText} mb-4`}>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
               Recommendation
-            </h2>
+            </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                {
-                  value: "Highly Recommend",
-                  label: "Highly Recommend",
-                },
-                {
-                  value: "Recommend",
-                  label: "Recommend",
-                },
-                {
-                  value: "Neutral",
-                  label: "Neutral",
-                },
-                {
-                  value: "Not Recommended",
-                  label: "Not Recommended",
-                },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
-                    form.recommendation === option.value
-                      ? darkMode
-                        ? "border-slate-500 bg-slate-800"
-                        : "border-slate-400 bg-slate-50"
-                      : darkMode
-                      ? "border-slate-700 hover:bg-slate-800"
-                      : "border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="recommendation"
-                    value={option.value}
-                    checked={form.recommendation === option.value}
-                    onChange={(e) =>
-                      handleChange("recommendation", e.target.value)
-                    }
-                    className="w-4 h-4"
-                  />
+            <select
+              className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-100"
+                  : "bg-white border-slate-200 text-slate-900"
+              }`}
+              value={form.recommendation}
+              onChange={(event) => {
+                setForm((previous) => ({
+                  ...previous,
+                  recommendation: event.target.value,
+                }));
 
-                  <span className={`text-xs ${pageText}`}>{option.label}</span>
-                </label>
-              ))}
-            </div>
+                setSubmitted(false);
+              }}
+            >
+              <option value="">Select recommendation</option>
+              <option value="Recommend">Recommend</option>
+              <option value="Recommend with conditions">
+                Recommend with conditions
+              </option>
+              <option value="Do not recommend">Do not recommend</option>
+            </select>
           </div>
 
-          {/* =========================================
+          {/* =====================================================
               SUBMIT
-          ========================================= */}
+          ===================================================== */}
 
-          <div
-            className={`border-t pt-5 ${
-              darkMode ? "border-slate-700" : "border-slate-200"
-            }`}
-          >
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition"
-              >
-                Submit Feedback
-              </button>
-            </div>
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              className="px-5 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+            >
+              Submit Feedback
+            </button>
           </div>
         </form>
-      </section>
+      )}
     </div>
   );
-};
-
-export default Feedback;
+}

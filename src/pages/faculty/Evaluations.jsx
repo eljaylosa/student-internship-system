@@ -1,481 +1,478 @@
-import React, { useState } from "react";
+import React, { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
-const Evaluations = () => {
+export default function Evaluations() {
   const { darkMode } = useOutletContext();
+  const { state } = useMockStore();
 
   // =========================================================
-  // EVALUATION DATA
+  // CURRENT FACULTY
   // =========================================================
 
-  const evaluationCriteria = [
-    "Professionalism",
-    "Technical Skills",
-    "Communication",
-    "Teamwork",
-    "Initiative",
-    "Attendance",
-  ];
-
-  const students = [
-    {
-      id: 1,
-      name: "John Doe",
-      company: "ABC Corp",
-      period: "May-Jun 2024",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      company: "XYZ Corporation",
-      period: "May-Jun 2024",
-    },
-    {
-      id: 3,
-      name: "Michael Santos",
-      company: "Tech Solutions",
-      period: "May-Jun 2024",
-    },
-  ];
+  const facultyId = state.currentUser?.profileId;
 
   // =========================================================
-  // STATE
+  // FACULTY'S ASSIGNMENTS
   // =========================================================
 
-  const [selectedStudentId, setSelectedStudentId] = useState(1);
-
-  const [ratings, setRatings] = useState({
-    Professionalism: 3,
-    "Technical Skills": 3,
-    Communication: 3,
-    Teamwork: 3,
-    Initiative: 3,
-    Attendance: 3,
-  });
-
-  const [feedback, setFeedback] = useState("");
-
-  const [submitMessage, setSubmitMessage] = useState({
-    type: "",
-    text: "",
-  });
+  const assignments = useMemo(
+    () =>
+      state.assignments.filter(
+        (assignment) => assignment.facultyId === facultyId
+      ),
+    [state.assignments, facultyId]
+  );
 
   // =========================================================
-  // THEME CLASSES
+  // EVALUATIONS CONNECTED TO FACULTY ASSIGNMENTS
   // =========================================================
 
-  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+  const assignmentIds = useMemo(
+    () => new Set(assignments.map((assignment) => assignment.id)),
+    [assignments]
+  );
 
-  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
+  const evaluations = useMemo(
+    () =>
+      state.evaluations.filter((evaluation) =>
+        assignmentIds.has(evaluation.assignmentId)
+      ),
+    [state.evaluations, assignmentIds]
+  );
 
-  const cardClass = darkMode
+  // =========================================================
+  // COMPANY → STUDENT
+  // =========================================================
+
+  const companyEvaluations = useMemo(
+    () =>
+      evaluations.filter(
+        (evaluation) => evaluation.evaluatorRole === "Company Supervisor"
+      ),
+    [evaluations]
+  );
+
+  // =========================================================
+  // STUDENT → COMPANY
+  // =========================================================
+
+  const studentEvaluations = useMemo(
+    () =>
+      evaluations.filter(
+        (evaluation) => evaluation.evaluatorRole === "Student"
+      ),
+    [evaluations]
+  );
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+
+  const getAssignment = (assignmentId) =>
+    state.assignments.find((assignment) => assignment.id === assignmentId);
+
+  const getStudent = (studentId) =>
+    state.students.find((student) => student.id === studentId);
+
+  const getCompany = (companyId) =>
+    state.companies.find((company) => company.id === companyId);
+
+  const getSupervisor = (supervisorId) =>
+    state.supervisors.find((supervisor) => supervisor.id === supervisorId);
+
+  const getStudentName = (assignment) => {
+    const student = getStudent(assignment?.studentId);
+
+    return student?.fullName || "Unknown Student";
+  };
+
+  const getCompanyName = (assignment) => {
+    const company = getCompany(assignment?.companyId);
+
+    return company?.name || "Unknown Company";
+  };
+
+  const getEvaluatorName = (evaluation) => {
+    if (evaluation.evaluatorRole === "Student") {
+      return getStudent(evaluation.evaluatorId)?.fullName || "Unknown Student";
+    }
+
+    if (evaluation.evaluatorRole === "Company Supervisor") {
+      return (
+        getSupervisor(evaluation.evaluatorId)?.fullName || "Unknown Supervisor"
+      );
+    }
+
+    return "Unknown";
+  };
+
+  const formatDate = (date) => {
+    if (!date) return "Unknown date";
+
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  // =========================================================
+  // RATING STARS
+  // =========================================================
+
+  const renderStars = (value) => {
+    const rating = Number(value) || 0;
+
+    return (
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span
+            key={star}
+            className={
+              star <= rating
+                ? "text-amber-400"
+                : darkMode
+                ? "text-slate-600"
+                : "text-slate-300"
+            }
+          >
+            ★
+          </span>
+        ))}
+
+        <span className="ml-2 text-xs font-semibold text-slate-500">
+          {rating}/5
+        </span>
+      </div>
+    );
+  };
+
+  // =========================================================
+  // SHARED STYLES
+  // =========================================================
+
+  const card = darkMode
     ? "bg-slate-900 border-slate-700"
-    : "bg-white border-slate-300";
+    : "bg-white border-slate-200";
 
-  const secondaryCardClass = darkMode
-    ? "bg-slate-800 border-slate-700"
+  const softCard = darkMode
+    ? "bg-slate-800/50 border-slate-700"
     : "bg-slate-50 border-slate-200";
 
-  const inputClass = darkMode
-    ? "bg-slate-800 border-slate-700 text-slate-200 placeholder:text-slate-500 focus:bg-slate-900 focus:border-slate-500"
-    : "bg-slate-50 border-slate-300 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-700";
-
   // =========================================================
-  // SELECTED STUDENT
+  // EVALUATION CARD
   // =========================================================
 
-  const selectedStudent =
-    students.find((student) => student.id === selectedStudentId) || students[0];
+  const EvaluationCard = ({ evaluation, direction }) => {
+    const assignment = getAssignment(evaluation.assignmentId);
 
-  // =========================================================
-  // RATING HANDLER
-  // =========================================================
+    if (!assignment) return null;
 
-  const handleRatingChange = (criterion, rating) => {
-    setRatings((prev) => ({
-      ...prev,
-      [criterion]: rating,
-    }));
+    const studentName = getStudentName(assignment);
 
-    setSubmitMessage({
-      type: "",
-      text: "",
-    });
-  };
+    const companyName = getCompanyName(assignment);
 
-  // =========================================================
-  // STUDENT HANDLER
-  // =========================================================
+    const evaluatorName = getEvaluatorName(evaluation);
 
-  const handleStudentChange = (e) => {
-    setSelectedStudentId(Number(e.target.value));
+    const isCompanyEvaluation = direction === "company";
 
-    setSubmitMessage({
-      type: "",
-      text: "",
-    });
-  };
-
-  // =========================================================
-  // SUBMIT EVALUATION
-  // =========================================================
-
-  const handleSubmitEvaluation = (e) => {
-    e.preventDefault();
-
-    if (Object.values(ratings).some((rating) => rating < 1)) {
-      setSubmitMessage({
-        type: "error",
-        text: "Please provide a rating for every evaluation criterion.",
-      });
-
-      return;
-    }
-
-    if (!feedback.trim()) {
-      setSubmitMessage({
-        type: "error",
-        text: "Please provide written feedback before submitting.",
-      });
-
-      return;
-    }
-
-    // Frontend placeholder.
-    // This will later connect to Supabase.
-
-    setSubmitMessage({
-      type: "success",
-      text: `Evaluation for ${selectedStudent.name} has been submitted successfully.`,
-    });
-  };
-
-  // =========================================================
-  // RATING LABEL
-  // =========================================================
-
-  const getRatingLabel = (rating) => {
-    const labels = {
-      1: "Poor",
-      2: "Needs Improvement",
-      3: "Satisfactory",
-      4: "Good",
-      5: "Excellent",
-    };
-
-    return labels[rating] || "";
-  };
-
-  // =========================================================
-  // RETURN
-  // =========================================================
-
-  return (
-    <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8 bg-transparent">
-      <div className="max-w-[1400px] mx-auto">
+    return (
+      <article className={`border rounded-2xl overflow-hidden ${card}`}>
         {/* =====================================================
-            PAGE HEADER
+            HEADER
         ===================================================== */}
 
-        <div className="mb-5 sm:mb-6">
-          <p
-            className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1 ${
-              darkMode ? "text-slate-500" : "text-slate-400"
-            }`}
-          >
-            Faculty Portal
-          </p>
+        <div
+          className={`px-5 py-4 border-b ${
+            darkMode ? "border-slate-700" : "border-slate-200"
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold">{studentName}</h3>
 
-          <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
-            Student Evaluations
-          </h1>
+                <span
+                  className={`px-2 py-1 rounded-full text-[10px] font-bold border ${
+                    isCompanyEvaluation
+                      ? darkMode
+                        ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : darkMode
+                      ? "bg-blue-950/40 text-blue-300 border-blue-800"
+                      : "bg-blue-50 text-blue-700 border-blue-200"
+                  }`}
+                >
+                  {isCompanyEvaluation
+                    ? "COMPANY → STUDENT"
+                    : "STUDENT → COMPANY"}
+                </span>
+              </div>
 
-          <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
-            Evaluate student performance and provide feedback for their
-            internship.
-          </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {assignment.id} · {companyName}
+              </p>
+            </div>
+
+            <span
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                darkMode
+                  ? "bg-emerald-950/40 text-emerald-300"
+                  : "bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              SUBMITTED
+            </span>
+          </div>
         </div>
 
         {/* =====================================================
-            EVALUATION CONTAINER
+            DETAILS
         ===================================================== */}
 
-        <section
-          className={`max-w-[1000px] border rounded-xl shadow-sm overflow-hidden ${cardClass}`}
-        >
-          <form onSubmit={handleSubmitEvaluation}>
-            <div className="p-4 sm:p-5 md:p-7 lg:p-8">
-              {/* =================================================
-                  SECTION HEADER
-              ================================================= */}
+        <div className="p-5">
+          <div className="grid md:grid-cols-3 gap-3 mb-5">
+            <div className={`border rounded-xl p-4 ${softCard}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                Student
+              </p>
 
-              <div className="mb-5">
-                <h2
-                  className={`text-base sm:text-lg font-bold ${headingClass}`}
-                >
-                  Performance Evaluation
-                </h2>
+              <p className="text-sm font-semibold mt-1">{studentName}</p>
+            </div>
 
-                <p className={`text-xs mt-1 ${mutedClass}`}>
-                  Rate the student's performance based on the following
-                  criteria.
-                </p>
-              </div>
+            <div className={`border rounded-xl p-4 ${softCard}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                Company
+              </p>
 
-              {/* =================================================
-                  STUDENT SELECTOR
-              ================================================= */}
+              <p className="text-sm font-semibold mt-1">{companyName}</p>
+            </div>
 
-              <div
-                className={`border rounded-lg p-3 sm:p-4 mb-7 ${secondaryCardClass}`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-                  <div className="flex-1 min-w-0">
-                    <label
-                      htmlFor="student"
-                      className={`block text-[10px] font-bold uppercase tracking-wide mb-1.5 ${mutedClass}`}
-                    >
-                      Student
-                    </label>
+            <div className={`border rounded-xl p-4 ${softCard}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                Submitted By
+              </p>
 
-                    <select
-                      id="student"
-                      value={selectedStudentId}
-                      onChange={handleStudentChange}
-                      className={`w-full h-10 px-3 rounded-lg border text-xs outline-none transition ${inputClass}`}
-                    >
-                      {students.map((student) => (
-                        <option
-                          key={student.id}
-                          value={student.id}
-                          className={
-                            darkMode
-                              ? "bg-slate-800 text-slate-100"
-                              : "bg-white text-slate-900"
-                          }
-                        >
-                          {student.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <p className="text-sm font-semibold mt-1">{evaluatorName}</p>
 
-                  <div className="sm:text-right">
-                    <p className={`text-xs font-semibold ${headingClass}`}>
-                      {selectedStudent.company}
-                    </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {formatDate(evaluation.submittedAt)}
+              </p>
+            </div>
+          </div>
 
-                    <p className={`text-[10px] mt-1 ${mutedClass}`}>
-                      Period: {selectedStudent.period}
-                    </p>
-                  </div>
-                </div>
-              </div>
+          {/* ===================================================
+              RATINGS
+          =================================================== */}
 
-              {/* =================================================
-                  RATING CRITERIA
-              ================================================= */}
+          {evaluation.ratings && Object.keys(evaluation.ratings).length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold mb-3">Evaluation Ratings</p>
 
-              <div className="space-y-1">
-                {evaluationCriteria.map((criterion) => {
-                  const currentRating = ratings[criterion];
-
-                  return (
+              <div className="grid md:grid-cols-2 gap-3">
+                {Object.entries(evaluation.ratings).map(
+                  ([criterion, rating]) => (
                     <div
                       key={criterion}
-                      className={`py-4 sm:py-5 border-b ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
-                      }`}
+                      className={`border rounded-xl p-4 ${softCard}`}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        {/* CRITERION */}
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-xs font-semibold">
+                          {criterion}
+                        </span>
 
-                        <div className="min-w-[150px]">
-                          <p
-                            className={`text-xs sm:text-sm font-semibold ${headingClass}`}
-                          >
-                            {criterion}
-                          </p>
-
-                          <p className={`text-[10px] mt-1 ${mutedClass}`}>
-                            {getRatingLabel(currentRating)}
-                          </p>
-                        </div>
-
-                        {/* RATING OPTIONS */}
-
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          {[1, 2, 3, 4, 5].map((rating) => {
-                            const active = currentRating === rating;
-
-                            return (
-                              <button
-                                key={rating}
-                                type="button"
-                                onClick={() =>
-                                  handleRatingChange(criterion, rating)
-                                }
-                                aria-label={`${criterion}: ${rating} out of 5`}
-                                className={`
-                                  w-9
-                                  h-9
-                                  sm:w-10
-                                  sm:h-10
-                                  rounded-md
-                                  border
-                                  text-xs
-                                  font-bold
-                                  transition-all
-                                  duration-150
-                                  ${
-                                    active
-                                      ? darkMode
-                                        ? "bg-slate-600 border-slate-500 text-white shadow-sm"
-                                        : "bg-slate-800 border-slate-800 text-white shadow-sm"
-                                      : darkMode
-                                      ? "bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700 hover:border-slate-500 hover:text-slate-200"
-                                      : "bg-slate-50 border-slate-300 text-slate-500 hover:bg-slate-200 hover:border-slate-400 hover:text-slate-800"
-                                  }
-                                `}
-                              >
-                                {rating}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <span className="text-xs font-bold text-slate-400">
+                          {rating}/5
+                        </span>
                       </div>
+
+                      {renderStars(rating)}
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* =================================================
-                  RATING GUIDE
-              ================================================= */}
-
-              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
-                <span className={`text-[10px] ${mutedClass}`}>1 — Poor</span>
-
-                <span className={`text-[10px] ${mutedClass}`}>
-                  2 — Needs Improvement
-                </span>
-
-                <span className={`text-[10px] ${mutedClass}`}>
-                  3 — Satisfactory
-                </span>
-
-                <span className={`text-[10px] ${mutedClass}`}>4 — Good</span>
-
-                <span className={`text-[10px] ${mutedClass}`}>
-                  5 — Excellent
-                </span>
-              </div>
-
-              {/* =================================================
-                  WRITTEN FEEDBACK
-              ================================================= */}
-
-              <div className="mt-7">
-                <label
-                  htmlFor="feedback"
-                  className={`block text-xs font-bold mb-2 ${headingClass}`}
-                >
-                  Written Feedback
-                </label>
-
-                <textarea
-                  id="feedback"
-                  value={feedback}
-                  onChange={(e) => {
-                    setFeedback(e.target.value);
-
-                    setSubmitMessage({
-                      type: "",
-                      text: "",
-                    });
-                  }}
-                  placeholder="Write your evaluation feedback..."
-                  rows={5}
-                  className={`
-                    w-full
-                    resize-none
-                    px-3
-                    py-3
-                    rounded-lg
-                    border
-                    text-xs
-                    sm:text-sm
-                    outline-none
-                    transition
-                    ${inputClass}
-                  `}
-                />
-
-                <p className={`text-[10px] mt-1.5 ${mutedClass}`}>
-                  Provide constructive feedback about the student's performance.
-                </p>
-              </div>
-
-              {/* =================================================
-                  SUBMIT MESSAGE
-              ================================================= */}
-
-              {submitMessage.text && (
-                <div
-                  className={`
-                    mt-5
-                    px-4
-                    py-3
-                    rounded-lg
-                    border
-                    text-xs
-                    font-medium
-                    ${
-                      submitMessage.type === "success"
-                        ? darkMode
-                          ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
-                          : "bg-emerald-50 border-emerald-200 text-emerald-700"
-                        : darkMode
-                        ? "bg-red-950/40 border-red-800 text-red-300"
-                        : "bg-red-50 border-red-200 text-red-700"
-                    }
-                  `}
-                >
-                  {submitMessage.text}
-                </div>
-              )}
-
-              {/* =================================================
-                  SUBMIT BUTTON
-              ================================================= */}
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  type="submit"
-                  className="
-                    w-full
-                    sm:w-auto
-                    px-6
-                    py-3
-                    rounded-lg
-                    bg-slate-800
-                    text-white
-                    text-xs
-                    font-bold
-                    hover:bg-slate-700
-                    active:bg-slate-900
-                    transition
-                  "
-                >
-                  Submit Evaluation
-                </button>
+                  )
+                )}
               </div>
             </div>
-          </form>
-        </section>
+          ) : (
+            <p className="text-sm text-slate-500">
+              No numerical ratings were provided.
+            </p>
+          )}
+
+          {/* ===================================================
+              COMMENTS
+          =================================================== */}
+
+          {evaluation.comments && (
+            <div className="mt-5">
+              <p className="text-xs font-semibold mb-2">Written Feedback</p>
+
+              <div
+                className={`border rounded-xl p-4 text-sm leading-relaxed whitespace-pre-line ${
+                  darkMode
+                    ? "border-slate-700 bg-slate-800/50 text-slate-300"
+                    : "border-slate-200 bg-slate-50 text-slate-600"
+                }`}
+              >
+                {evaluation.comments}
+              </div>
+            </div>
+          )}
+        </div>
+      </article>
+    );
+  };
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+
+  return (
+    <div
+      className={`p-5 md:p-6 lg:p-8 max-w-[1100px] mx-auto ${
+        darkMode ? "text-slate-100" : "text-slate-900"
+      }`}
+    >
+      {/* =====================================================
+          PAGE HEADER
+      ===================================================== */}
+
+      <div className="mb-7">
+        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+          Faculty Adviser Portal
+        </p>
+
+        <h1 className="text-2xl font-black">Evaluations</h1>
+
+        <p className="text-sm mt-1 text-slate-500">
+          Review internship evaluations submitted by students and company
+          supervisors.
+        </p>
       </div>
+
+      {/* =====================================================
+          SUMMARY
+      ===================================================== */}
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div className={`border rounded-2xl p-5 ${card}`}>
+          <p className="text-xs font-semibold text-slate-400">
+            Assigned Internships
+          </p>
+
+          <p className="text-2xl font-black mt-1">{assignments.length}</p>
+        </div>
+
+        <div className={`border rounded-2xl p-5 ${card}`}>
+          <p className="text-xs font-semibold text-slate-400">
+            Company Evaluations
+          </p>
+
+          <p className="text-2xl font-black mt-1">
+            {companyEvaluations.length}
+          </p>
+
+          <p className="text-xs text-slate-500 mt-1">Company → Student</p>
+        </div>
+
+        <div className={`border rounded-2xl p-5 ${card}`}>
+          <p className="text-xs font-semibold text-slate-400">
+            Student Evaluations
+          </p>
+
+          <p className="text-2xl font-black mt-1">
+            {studentEvaluations.length}
+          </p>
+
+          <p className="text-xs text-slate-500 mt-1">Student → Company</p>
+        </div>
+      </div>
+
+      {/* =====================================================
+          COMPANY → STUDENT
+      ===================================================== */}
+
+      <section className="mb-10">
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+            Company → Student
+          </p>
+
+          <h2 className="text-xl font-black">Company Evaluations</h2>
+
+          <p className="text-sm mt-1 text-slate-500">
+            Review performance evaluations submitted by company supervisors for
+            your assigned interns.
+          </p>
+        </div>
+
+        {companyEvaluations.length === 0 ? (
+          <section className={`border rounded-2xl p-6 ${card}`}>
+            <div className="text-center py-8">
+              <div className="text-3xl mb-3">📋</div>
+
+              <p className="font-semibold">No company evaluations yet.</p>
+
+              <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                Evaluations submitted by company supervisors will appear here.
+              </p>
+            </div>
+          </section>
+        ) : (
+          <div className="space-y-4">
+            {companyEvaluations.map((evaluation) => (
+              <EvaluationCard
+                key={evaluation.id}
+                evaluation={evaluation}
+                direction="company"
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* =====================================================
+          STUDENT → COMPANY
+      ===================================================== */}
+
+      <section>
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+            Student → Company
+          </p>
+
+          <h2 className="text-xl font-black">Student Evaluations</h2>
+
+          <p className="text-sm mt-1 text-slate-500">
+            Review evaluations submitted by your assigned interns about their
+            internship company and experience.
+          </p>
+        </div>
+
+        {studentEvaluations.length === 0 ? (
+          <section className={`border rounded-2xl p-6 ${card}`}>
+            <div className="text-center py-8">
+              <div className="text-3xl mb-3">📝</div>
+
+              <p className="font-semibold">No student evaluations yet.</p>
+
+              <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                Evaluations submitted by your assigned interns will appear here.
+              </p>
+            </div>
+          </section>
+        ) : (
+          <div className="space-y-4">
+            {studentEvaluations.map((evaluation) => (
+              <EvaluationCard
+                key={evaluation.id}
+                evaluation={evaluation}
+                direction="student"
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
-};
-
-export default Evaluations;
+}

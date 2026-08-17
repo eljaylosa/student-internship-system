@@ -286,7 +286,7 @@ const CompanyPortalLayout = () => {
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
 
-    navigate("/", { replace: true });
+    navigate("/login", { replace: true });
   };
 
   // =========================================================

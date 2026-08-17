@@ -2,49 +2,60 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 
 const SignUp = () => {
-  // Active role tab
   const [activeRole, setActiveRole] = useState("student");
 
-  // Independent form states for each user role
   const [forms, setForms] = useState({
     student: {
-      fullName: "",
+      firstName: "",
+      middleInitial: "",
+      lastName: "",
       studentId: "",
       email: "",
       department: "",
-      phone: "",
+      program: "",
       yearLevel: "",
+      phone: "",
       password: "",
       confirmPassword: "",
       agreeTerms: false,
     },
 
     faculty: {
-      fullName: "",
+      firstName: "",
+      middleInitial: "",
+      lastName: "",
       employeeId: "",
       email: "",
       department: "",
-      phone: "",
       position: "",
+      phone: "",
       password: "",
       confirmPassword: "",
       agreeTerms: false,
     },
 
     company: {
-      fullName: "",
+      firstName: "",
+      middleInitial: "",
+      lastName: "",
       companyName: "",
-      email: "",
-      designation: "",
-      phone: "",
+      companyEmail: "",
+      companyPhone: "",
+      companyAddress: "",
+      website: "",
       industry: "",
+      designation: "",
+      email: "",
+      phone: "",
+      businessRegistration: null,
+      birRegistration: null,
+      supportingDocument: null,
       password: "",
       confirmPassword: "",
       agreeTerms: false,
     },
   });
 
-  // Update form fields based on the selected role
   const handleChange = (role, field, value) => {
     setForms((prev) => ({
       ...prev,
@@ -55,34 +66,96 @@ const SignUp = () => {
     }));
   };
 
-  // Handle registration
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleFileChange = (field, file) => {
+    handleChange("company", field, file);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
 
     const currentForm = forms[activeRole];
 
-    // Validate password confirmation
     if (currentForm.password !== currentForm.confirmPassword) {
-      alert("Passwords do not match!");
+      alert("Passwords do not match.");
       return;
     }
 
-    // Validate terms and conditions
+    if (currentForm.password.length < 8) {
+      alert("Password must be at least 8 characters long.");
+      return;
+    }
+
     if (!currentForm.agreeTerms) {
-      alert("You must agree to the Terms & Conditions.");
+      alert("You must agree to the Terms & Conditions and Privacy Policy.");
       return;
     }
 
-    console.log(`Registering ${activeRole} account:`, currentForm);
+    /*
+      COMPANY REGISTRATION
+
+      Company accounts should NOT immediately become active.
+
+      Future database flow:
+
+      1. Save company registration as Pending.
+      2. Admin reviews company information and documents.
+      3. Admin approves the company.
+      4. Email verification is sent.
+      5. Phone/SMS verification is completed.
+      6. Account becomes Active.
+    */
+
+    if (activeRole === "company") {
+      if (!currentForm.businessRegistration) {
+        alert("Please upload your business registration document.");
+        return;
+      }
+
+      if (!currentForm.birRegistration) {
+        alert("Please upload your BIR registration document.");
+        return;
+      }
+
+      console.log("Company registration submitted for admin review:", {
+        ...currentForm,
+        businessRegistration:
+          currentForm.businessRegistration?.name || null,
+        birRegistration: currentForm.birRegistration?.name || null,
+        supportingDocument:
+          currentForm.supportingDocument?.name || null,
+        password: "[HIDDEN]",
+        confirmPassword: "[HIDDEN]",
+      });
+
+      alert(
+        "Company registration submitted successfully. Your registration will be reviewed by the administrator before your account can be verified."
+      );
+
+      return;
+    }
+
+    /*
+      STUDENT / FACULTY
+
+      Future database flow:
+
+      1. Create account as Pending Verification.
+      2. Send email verification.
+      3. Verify phone number through SMS OTP.
+      4. Activate account.
+    */
+
+    console.log(`Registering ${activeRole} account:`, {
+      ...currentForm,
+      password: "[HIDDEN]",
+      confirmPassword: "[HIDDEN]",
+    });
 
     alert(
-      `Account created successfully as a ${activeRole
-        .replace("faculty", "faculty adviser")
-        .replace("company", "company supervisor")}!`
+      `Registration submitted successfully. Please verify your email address to continue.`
     );
   };
 
-  // Portal configuration matching the Login page
   const portals = [
     {
       key: "student",
@@ -156,17 +229,21 @@ const SignUp = () => {
     },
   ];
 
-  // Get the currently selected portal
-  const activePortal = portals.find((portal) => portal.key === activeRole);
+  const activePortal = portals.find(
+    (portal) => portal.key === activeRole
+  );
 
-  // Shared input styles
+  const currentForm = forms[activeRole];
+
   const inputClass =
     "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition";
 
   const labelClass =
     "block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5";
 
-  // Calculate password strength
+  const sectionClass =
+    "border border-slate-100 rounded-xl p-5 bg-slate-50/50";
+
   const getPasswordStrength = (password) => {
     let strength = 0;
 
@@ -181,6 +258,7 @@ const SignUp = () => {
         label: "Very Weak",
         width: "20%",
         color: "bg-red-500",
+        textColor: "text-red-500",
       };
     }
 
@@ -189,6 +267,7 @@ const SignUp = () => {
         label: "Weak",
         width: "40%",
         color: "bg-orange-500",
+        textColor: "text-orange-500",
       };
     }
 
@@ -197,6 +276,7 @@ const SignUp = () => {
         label: "Medium",
         width: "60%",
         color: "bg-yellow-500",
+        textColor: "text-yellow-600",
       };
     }
 
@@ -205,6 +285,7 @@ const SignUp = () => {
         label: "Strong",
         width: "80%",
         color: "bg-blue-500",
+        textColor: "text-blue-500",
       };
     }
 
@@ -212,16 +293,193 @@ const SignUp = () => {
       label: "Very Strong",
       width: "100%",
       color: "bg-emerald-500",
+      textColor: "text-emerald-500",
     };
+  };
+
+  const renderNameFields = () => (
+    <div>
+      <label className={labelClass}>Full Name</label>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_80px] gap-3">
+        <input
+          type="text"
+          required
+          placeholder="First Name"
+          value={currentForm.firstName}
+          onChange={(event) =>
+            handleChange(activeRole, "firstName", event.target.value)
+          }
+          className={inputClass}
+        />
+
+        <input
+          type="text"
+          required
+          placeholder="Last Name"
+          value={currentForm.lastName}
+          onChange={(event) =>
+            handleChange(activeRole, "lastName", event.target.value)
+          }
+          className={inputClass}
+        />
+
+        <input
+          type="text"
+          maxLength={2}
+          placeholder="M.I."
+          value={currentForm.middleInitial}
+          onChange={(event) =>
+            handleChange(
+              activeRole,
+              "middleInitial",
+              event.target.value.toUpperCase()
+            )
+          }
+          className={inputClass}
+        />
+      </div>
+
+      <p className="text-[10px] text-slate-400 mt-1.5">
+        Enter your name exactly as it appears on your official records.
+      </p>
+    </div>
+  );
+
+  const renderPasswordFields = () => {
+    const strength = currentForm.password
+      ? getPasswordStrength(currentForm.password)
+      : null;
+
+    return (
+      <>
+        {/* PASSWORD */}
+        <div>
+          <label className={labelClass}>Password</label>
+
+          <input
+            type="password"
+            required
+            minLength={8}
+            placeholder="Create a strong password"
+            value={currentForm.password}
+            onChange={(event) =>
+              handleChange(activeRole, "password", event.target.value)
+            }
+            className={inputClass}
+          />
+
+          {strength && (
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Password Strength
+                </span>
+
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider ${strength.textColor}`}
+                >
+                  {strength.label}
+                </span>
+              </div>
+
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${strength.color}`}
+                  style={{ width: strength.width }}
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400 mt-2">
+                Use at least 8 characters with uppercase, lowercase, numbers,
+                and symbols.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* CONFIRM PASSWORD */}
+        <div>
+          <label className={labelClass}>Confirm Password</label>
+
+          <input
+            type="password"
+            required
+            minLength={8}
+            placeholder="Re-enter your password"
+            value={currentForm.confirmPassword}
+            onChange={(event) =>
+              handleChange(
+                activeRole,
+                "confirmPassword",
+                event.target.value
+              )
+            }
+            className={inputClass}
+          />
+
+          {currentForm.confirmPassword &&
+            currentForm.password !== currentForm.confirmPassword && (
+              <p className="text-[10px] text-red-500 mt-1.5 font-medium">
+                Passwords do not match.
+              </p>
+            )}
+        </div>
+      </>
+    );
+  };
+
+  const renderVerificationNotice = () => {
+    if (activeRole === "company") {
+      return (
+        <div className="rounded-xl border border-purple-100 bg-purple-50 p-4">
+          <div className="flex gap-3">
+            <div className="text-lg">🔐</div>
+
+            <div>
+              <p className="text-sm font-bold text-purple-900">
+                Company verification is required
+              </p>
+
+              <p className="text-xs text-purple-700 leading-relaxed mt-1">
+                Your registration and submitted documents will be reviewed by
+                a SIMS administrator. Email and SMS verification will only
+                proceed after your company registration has been approved.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <div className="flex gap-3">
+          <div className="text-lg">✉️</div>
+
+          <div>
+            <p className="text-sm font-bold text-blue-900">
+              Verification required
+            </p>
+
+            <p className="text-xs text-blue-700 leading-relaxed mt-1">
+              After registration, a verification email will be sent to your
+              email address. You will also need to verify your phone number
+              through SMS before your account can be fully activated.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      {/* System Navigation Top Bar */}
+      {/* NAVIGATION */}
       <header className="bg-slate-900 border-b border-slate-800 text-white px-8 py-4 flex justify-between items-center shadow-md">
         <Link
           to="/"
-          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition cursor-pointer font-bold"
+          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition font-bold"
         >
           Home
         </Link>
@@ -232,26 +490,27 @@ const SignUp = () => {
 
         <Link
           to="/login"
-          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition cursor-pointer font-bold"
+          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition font-bold"
         >
           Login
         </Link>
       </header>
 
-      {/* Main Registration Area */}
-      <main className="flex-1 flex flex-col items-center justify-center py-14 px-4 max-w-3xl mx-auto w-full">
-        {/* Page Heading */}
+      {/* MAIN */}
+      <main className="flex-1 flex flex-col items-center py-14 px-4 max-w-3xl mx-auto w-full">
+        {/* PAGE HEADER */}
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
             Create Your Account
           </h2>
 
-          <p className="text-sm text-slate-500 max-w-md mx-auto">
-            Select your gateway portal below to create your account.
+          <p className="text-sm text-slate-500 max-w-lg mx-auto">
+            Select your portal and provide accurate information to create your
+            SIMS account.
           </p>
         </div>
 
-        {/* Role Tabs */}
+        {/* ROLE TABS */}
         <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
           {portals.map((portal) => (
             <button
@@ -269,328 +528,593 @@ const SignUp = () => {
           ))}
         </div>
 
-        {/* Active Registration Card */}
-        <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full transition-all duration-300">
-          {/* Portal Icon */}
+        {/* FORM CARD */}
+        <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full">
+          {/* PORTAL ICON */}
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
               {activePortal.icon}
             </div>
           </div>
 
-          {/* Portal Header */}
           <h3 className="font-bold text-xl text-slate-800 text-center mb-1">
             {activePortal.label}
           </h3>
 
           <p className="text-xs text-slate-400 mb-8 tracking-wide font-medium uppercase text-center">
-            {activeRole} Registration
+            {activeRole === "company"
+              ? "Company Registration"
+              : `${activePortal.label} Registration`}
           </p>
 
-          {/* Registration Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Full Name */}
-            <div>
-              <label className={labelClass}>Full Name</label>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ================================
+                PERSONAL INFORMATION
+            ================================= */}
+            <section className={sectionClass}>
+              <div className="mb-5">
+                <h4 className="text-sm font-bold text-slate-800">
+                  Personal Information
+                </h4>
 
-              <input
-                type="text"
-                required
-                placeholder="Juan Dela Cruz"
-                value={forms[activeRole].fullName}
-                onChange={(e) =>
-                  handleChange(activeRole, "fullName", e.target.value)
-                }
-                className={inputClass}
-              />
-            </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Provide your legal name and contact information.
+                </p>
+              </div>
 
-            {/* Student ID */}
+              <div className="space-y-5">
+                {renderNameFields()}
+
+                {/* EMAIL */}
+                <div>
+                  <label className={labelClass}>
+                    {activeRole === "company"
+                      ? "Personal / Work Email"
+                      : "University Email"}
+                  </label>
+
+                  <input
+                    type="email"
+                    required
+                    placeholder={
+                      activeRole === "company"
+                        ? "name@company.com"
+                        : "name@university.edu.ph"
+                    }
+                    value={currentForm.email}
+                    onChange={(event) =>
+                      handleChange(activeRole, "email", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    This email will be used for account verification and
+                    important SIMS notifications.
+                  </p>
+                </div>
+
+                {/* PHONE */}
+                <div>
+                  <label className={labelClass}>Mobile Number</label>
+
+                  <input
+                    type="tel"
+                    required
+                    placeholder="+63 9XX XXX XXXX"
+                    value={currentForm.phone}
+                    onChange={(event) =>
+                      handleChange(activeRole, "phone", event.target.value)
+                    }
+                    className={inputClass}
+                  />
+
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    A verification code will be sent through SMS.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* ================================
+                STUDENT INFORMATION
+            ================================= */}
             {activeRole === "student" && (
-              <div>
-                <label className={labelClass}>Student ID</label>
+              <section className={sectionClass}>
+                <div className="mb-5">
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Student Information
+                  </h4>
 
-                <input
-                  type="text"
-                  required
-                  placeholder="2024-00123"
-                  value={forms.student.studentId}
-                  onChange={(e) =>
-                    handleChange("student", "studentId", e.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-            )}
-
-            {/* Faculty Employee ID */}
-            {activeRole === "faculty" && (
-              <div>
-                <label className={labelClass}>Employee ID</label>
-
-                <input
-                  type="text"
-                  required
-                  placeholder="EMP-99231"
-                  value={forms.faculty.employeeId}
-                  onChange={(e) =>
-                    handleChange("faculty", "employeeId", e.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-            )}
-
-            {/* Company Name */}
-            {activeRole === "company" && (
-              <div>
-                <label className={labelClass}>Company Name</label>
-
-                <input
-                  type="text"
-                  required
-                  placeholder="Tech Solutions Inc."
-                  value={forms.company.companyName}
-                  onChange={(e) =>
-                    handleChange("company", "companyName", e.target.value)
-                  }
-                  className={inputClass}
-                />
-              </div>
-            )}
-
-            {/* Email */}
-            <div>
-              <label className={labelClass}>Email Address</label>
-
-              <input
-                type="email"
-                required
-                placeholder="email@university.edu.ph"
-                value={forms[activeRole].email}
-                onChange={(e) =>
-                  handleChange(activeRole, "email", e.target.value)
-                }
-                className={inputClass}
-              />
-            </div>
-
-            {/* Student Fields */}
-            {activeRole === "student" && (
-              <>
-                <div>
-                  <label className={labelClass}>Department</label>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="Computer Science"
-                    value={forms.student.department}
-                    onChange={(e) =>
-                      handleChange("student", "department", e.target.value)
-                    }
-                    className={inputClass}
-                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Enter your official university information.
+                  </p>
                 </div>
 
-                <div>
-                  <label className={labelClass}>Year Level</label>
+                <div className="space-y-5">
+                  <div>
+                    <label className={labelClass}>Student ID</label>
 
-                  <select
-                    required
-                    value={forms.student.yearLevel}
-                    onChange={(e) =>
-                      handleChange("student", "yearLevel", e.target.value)
-                    }
-                    className={`${inputClass} cursor-pointer`}
-                  >
-                    <option value="" disabled>
-                      Select Year Level
-                    </option>
-                    <option value="1st Year">1st Year</option>
-                    <option value="2nd Year">2nd Year</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
-                    <option value="5th Year">5th Year</option>
-                  </select>
-                </div>
-              </>
-            )}
-
-            {/* Faculty Fields */}
-            {activeRole === "faculty" && (
-              <>
-                <div>
-                  <label className={labelClass}>Department / College</label>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="College of Information Technology"
-                    value={forms.faculty.department}
-                    onChange={(e) =>
-                      handleChange("faculty", "department", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass}>Academic Rank / Position</label>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="Assistant Professor"
-                    value={forms.faculty.position}
-                    onChange={(e) =>
-                      handleChange("faculty", "position", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Company Fields */}
-            {activeRole === "company" && (
-              <>
-                <div>
-                  <label className={labelClass}>Corporate Designation</label>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="HR Manager / Lead Developer"
-                    value={forms.company.designation}
-                    onChange={(e) =>
-                      handleChange("company", "designation", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass}>Industry</label>
-
-                  <input
-                    type="text"
-                    required
-                    placeholder="Information Technology"
-                    value={forms.company.industry}
-                    onChange={(e) =>
-                      handleChange("company", "industry", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Phone */}
-            <div>
-              <label className={labelClass}>Phone Number</label>
-
-              <input
-                type="tel"
-                required
-                placeholder="+63 9XX XXX XXXX"
-                value={forms[activeRole].phone}
-                onChange={(e) =>
-                  handleChange(activeRole, "phone", e.target.value)
-                }
-                className={inputClass}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className={labelClass}>Password</label>
-
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={forms[activeRole].password}
-                onChange={(e) =>
-                  handleChange(activeRole, "password", e.target.value)
-                }
-                className={inputClass}
-              />
-
-              {/* Password Strength Meter */}
-              {forms[activeRole].password && (
-                <div className="mt-3">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Password Strength
-                    </span>
-
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider ${
-                        getPasswordStrength(forms[activeRole].password)
-                          .label === "Very Weak"
-                          ? "text-red-500"
-                          : getPasswordStrength(forms[activeRole].password)
-                              .label === "Weak"
-                          ? "text-orange-500"
-                          : getPasswordStrength(forms[activeRole].password)
-                              .label === "Medium"
-                          ? "text-yellow-600"
-                          : getPasswordStrength(forms[activeRole].password)
-                              .label === "Strong"
-                          ? "text-blue-500"
-                          : "text-emerald-500"
-                      }`}
-                    >
-                      {getPasswordStrength(forms[activeRole].password).label}
-                    </span>
-                  </div>
-
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        getPasswordStrength(forms[activeRole].password).color
-                      }`}
-                      style={{
-                        width: getPasswordStrength(forms[activeRole].password)
-                          .width,
-                      }}
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2024-00123"
+                      value={currentForm.studentId}
+                      onChange={(event) =>
+                        handleChange(
+                          "student",
+                          "studentId",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
                     />
                   </div>
 
-                  <p className="text-[10px] text-slate-400 mt-2">
-                    Use at least 8 characters with uppercase, lowercase,
-                    numbers, and symbols.
+                  <div>
+                    <label className={labelClass}>
+                      College / Department
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. College of Information and Communications Technology"
+                      value={currentForm.department}
+                      onChange={(event) =>
+                        handleChange(
+                          "student",
+                          "department",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Program</label>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. BS Information Technology"
+                      value={currentForm.program}
+                      onChange={(event) =>
+                        handleChange(
+                          "student",
+                          "program",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Year Level</label>
+
+                    <select
+                      required
+                      value={currentForm.yearLevel}
+                      onChange={(event) =>
+                        handleChange(
+                          "student",
+                          "yearLevel",
+                          event.target.value
+                        )
+                      }
+                      className={`${inputClass} cursor-pointer`}
+                    >
+                      <option value="" disabled>
+                        Select Year Level
+                      </option>
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year">4th Year</option>
+                      <option value="5th Year">5th Year</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ================================
+                FACULTY INFORMATION
+            ================================= */}
+            {activeRole === "faculty" && (
+              <section className={sectionClass}>
+                <div className="mb-5">
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Faculty Information
+                  </h4>
+
+                  <p className="text-xs text-slate-400 mt-1">
+                    Enter your official university employment information.
                   </p>
                 </div>
-              )}
-            </div>
 
-            {/* Confirm Password */}
-            <div>
-              <label className={labelClass}>Confirm Password</label>
+                <div className="space-y-5">
+                  <div>
+                    <label className={labelClass}>Employee ID</label>
 
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={forms[activeRole].confirmPassword}
-                onChange={(e) =>
-                  handleChange(activeRole, "confirmPassword", e.target.value)
-                }
-                className={inputClass}
-              />
-            </div>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. EMP-99231"
+                      value={currentForm.employeeId}
+                      onChange={(event) =>
+                        handleChange(
+                          "faculty",
+                          "employeeId",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
 
-            {/* Terms and Conditions */}
+                  <div>
+                    <label className={labelClass}>
+                      College / Department
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. College of Information Technology"
+                      value={currentForm.department}
+                      onChange={(event) =>
+                        handleChange(
+                          "faculty",
+                          "department",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>
+                      Academic Rank / Position
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Assistant Professor"
+                      value={currentForm.position}
+                      onChange={(event) =>
+                        handleChange(
+                          "faculty",
+                          "position",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ================================
+                COMPANY INFORMATION
+            ================================= */}
+            {activeRole === "company" && (
+              <>
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Company Information
+                    </h4>
+
+                    <p className="text-xs text-slate-400 mt-1">
+                      Provide the official information of your organization.
+                    </p>
+                  </div>
+
+                  <div className="space-y-5">
+                    {/* COMPANY NAME */}
+                    <div>
+                      <label className={labelClass}>
+                        Registered Company Name
+                      </label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. ABC Technologies Inc."
+                        value={currentForm.companyName}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "companyName",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    {/* COMPANY EMAIL */}
+                    <div>
+                      <label className={labelClass}>
+                        Company Email Address
+                      </label>
+
+                      <input
+                        type="email"
+                        required
+                        placeholder="hr@company.com"
+                        value={currentForm.companyEmail}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "companyEmail",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    {/* COMPANY PHONE */}
+                    <div>
+                      <label className={labelClass}>
+                        Company Contact Number
+                      </label>
+
+                      <input
+                        type="tel"
+                        required
+                        placeholder="+63 9XX XXX XXXX"
+                        value={currentForm.companyPhone}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "companyPhone",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    {/* INDUSTRY */}
+                    <div>
+                      <label className={labelClass}>Industry</label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Information Technology"
+                        value={currentForm.industry}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "industry",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    {/* ADDRESS */}
+                    <div>
+                      <label className={labelClass}>
+                        Company Address
+                      </label>
+
+                      <textarea
+                        required
+                        rows="3"
+                        placeholder="Complete business address"
+                        value={currentForm.companyAddress}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "companyAddress",
+                            event.target.value
+                          )
+                        }
+                        className={`${inputClass} resize-none`}
+                      />
+                    </div>
+
+                    {/* WEBSITE */}
+                    <div>
+                      <label className={labelClass}>
+                        Company Website
+                        <span className="ml-1 text-slate-400 font-medium normal-case">
+                          (Optional)
+                        </span>
+                      </label>
+
+                      <input
+                        type="url"
+                        placeholder="https://company.com"
+                        value={currentForm.website}
+                        onChange={(event) =>
+                          handleChange(
+                            "company",
+                            "website",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* REPRESENTATIVE */}
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Company Representative
+                    </h4>
+
+                    <p className="text-xs text-slate-400 mt-1">
+                      Provide your role and contact information as the person
+                      representing this company.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>
+                      Position / Designation
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. HR Manager / Company Supervisor"
+                      value={currentForm.designation}
+                      onChange={(event) =>
+                        handleChange(
+                          "company",
+                          "designation",
+                          event.target.value
+                        )
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                </section>
+
+                {/* DOCUMENTS */}
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Company Verification Documents
+                    </h4>
+
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      These documents will be reviewed by a SIMS
+                      administrator before the company account can proceed to
+                      email and SMS verification.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* BUSINESS REGISTRATION */}
+                    <div>
+                      <label className={labelClass}>
+                        Business Registration
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "businessRegistration",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload the appropriate official business registration
+                        document.
+                      </p>
+                    </div>
+
+                    {/* BIR */}
+                    <div>
+                      <label className={labelClass}>
+                        BIR Registration
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "birRegistration",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload your official BIR registration document.
+                      </p>
+                    </div>
+
+                    {/* SUPPORTING */}
+                    <div>
+                      <label className={labelClass}>
+                        Supporting Document
+                        <span className="ml-1 text-slate-400 font-medium normal-case">
+                          (Optional)
+                        </span>
+                      </label>
+
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "supportingDocument",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        You may provide another document that helps establish
+                        the legitimacy of the organization.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* VERIFICATION NOTICE */}
+            {renderVerificationNotice()}
+
+            {/* SECURITY */}
+            <section className={sectionClass}>
+              <div className="mb-5">
+                <h4 className="text-sm font-bold text-slate-800">
+                  Account Security
+                </h4>
+
+                <p className="text-xs text-slate-400 mt-1">
+                  Create the password you will use to sign in to SIMS.
+                </p>
+              </div>
+
+              <div className="space-y-5">
+                {renderPasswordFields()}
+              </div>
+            </section>
+
+            {/* TERMS */}
             <div className="flex items-start gap-3 pt-1">
               <input
                 type="checkbox"
                 required
-                checked={forms[activeRole].agreeTerms}
-                onChange={(e) =>
-                  handleChange(activeRole, "agreeTerms", e.target.checked)
+                checked={currentForm.agreeTerms}
+                onChange={(event) =>
+                  handleChange(
+                    activeRole,
+                    "agreeTerms",
+                    event.target.checked
+                  )
                 }
                 className="mt-1 h-4 w-4 rounded border-slate-300"
               />
@@ -614,16 +1138,18 @@ const SignUp = () => {
               </label>
             </div>
 
-            {/* Create Account Button */}
+            {/* SUBMIT */}
             <button
               type="submit"
-              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer`}
+              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200`}
             >
-              Create {activePortal.label} Account
+              {activeRole === "company"
+                ? "Submit Company Registration"
+                : `Create ${activePortal.label} Account`}
             </button>
           </form>
 
-          {/* Login Redirect */}
+          {/* LOGIN */}
           <div className="border-t border-slate-100 mt-8 pt-6 text-center">
             <p className="text-sm text-slate-500">
               Already have an account?{" "}
@@ -637,7 +1163,7 @@ const SignUp = () => {
           </div>
         </div>
 
-        {/* Footer */}
+        {/* FOOTER */}
         <footer className="mt-8 text-center text-xs text-slate-400">
           © 2026 SIMS |{" "}
           <Link to="/privacy" className="hover:text-slate-700">

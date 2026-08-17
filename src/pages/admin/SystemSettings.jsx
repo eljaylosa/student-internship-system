@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore";
 
 // =========================================================
 // COMPONENT
@@ -8,37 +9,60 @@ import { useOutletContext } from "react-router-dom";
 const SystemSettings = () => {
   const { darkMode } = useOutletContext();
 
+  const { state, updateSystemSettings } = useMockStore();
+
   // =========================================================
-  // SYSTEM SETTINGS
+  // STORE SETTINGS
+  // =========================================================
+
+  const storeSettings = state.settings;
+
+  // =========================================================
+  // LOCAL FORM STATE
+  //
+  // These temporarily hold the values while editing.
+  // They are saved to mockStore only when Save Settings
+  // is clicked.
   // =========================================================
 
   const [systemName, setSystemName] = useState(
-    "Student Internship Management System"
+    storeSettings.systemName || "Student Internship Management System"
   );
 
-  const [academicYear, setAcademicYear] = useState("2026 - 2027");
+  const [academicYear, setAcademicYear] = useState(
+    storeSettings.academicYear || "2026 - 2027"
+  );
 
-  const [internshipDuration, setInternshipDuration] = useState("480");
+  const [internshipDuration, setInternshipDuration] = useState(
+    storeSettings.internshipDuration || "480"
+  );
 
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(
+    storeSettings.maintenanceMode ?? false
+  );
 
-  // =========================================================
-  // NOTIFICATION SETTINGS
-  // =========================================================
+  const [emailNotifications, setEmailNotifications] = useState(
+    storeSettings.emailNotifications ?? true
+  );
 
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [systemNotifications, setSystemNotifications] = useState(true);
-  const [applicationNotifications, setApplicationNotifications] =
-    useState(true);
+  const [systemNotifications, setSystemNotifications] = useState(
+    storeSettings.systemNotifications ?? true
+  );
+
+  const [applicationNotifications, setApplicationNotifications] = useState(
+    storeSettings.applicationNotifications ?? true
+  );
 
   // =========================================================
   // SECURITY SETTINGS
+  //
+  // These are not currently stored in initialState.settings,
+  // so we keep them locally for now.
   // =========================================================
 
   const [sessionTimeout, setSessionTimeout] = useState("30");
 
-  const [twoFactorAuthentication, setTwoFactorAuthentication] =
-    useState(false);
+  const [twoFactorAuthentication, setTwoFactorAuthentication] = useState(false);
 
   // =========================================================
   // FEEDBACK
@@ -47,11 +71,44 @@ const SystemSettings = () => {
   const [feedback, setFeedback] = useState("");
 
   // =========================================================
-  // SAVE SETTINGS
+  // SYNC FORM WITH STORE
+  //
+  // If the store changes from another component, update
+  // the form values as well.
   // =========================================================
 
-  const handleSaveSettings = () => {
-    setFeedback("System settings saved successfully.");
+  useEffect(() => {
+    setSystemName(
+      storeSettings.systemName || "Student Internship Management System"
+    );
+
+    setAcademicYear(storeSettings.academicYear || "2026 - 2027");
+
+    setInternshipDuration(storeSettings.internshipDuration || "480");
+
+    setMaintenanceMode(storeSettings.maintenanceMode ?? false);
+
+    setEmailNotifications(storeSettings.emailNotifications ?? true);
+
+    setSystemNotifications(storeSettings.systemNotifications ?? true);
+
+    setApplicationNotifications(storeSettings.applicationNotifications ?? true);
+  }, [
+    storeSettings.systemName,
+    storeSettings.academicYear,
+    storeSettings.internshipDuration,
+    storeSettings.maintenanceMode,
+    storeSettings.emailNotifications,
+    storeSettings.systemNotifications,
+    storeSettings.applicationNotifications,
+  ]);
+
+  // =========================================================
+  // FEEDBACK HELPER
+  // =========================================================
+
+  const showFeedback = (message) => {
+    setFeedback(message);
 
     setTimeout(() => {
       setFeedback("");
@@ -59,28 +116,65 @@ const SystemSettings = () => {
   };
 
   // =========================================================
+  // SAVE SETTINGS
+  // =========================================================
+
+  const handleSaveSettings = () => {
+    updateSystemSettings({
+      systemName,
+      academicYear,
+      internshipDuration,
+      maintenanceMode,
+      emailNotifications,
+      systemNotifications,
+      applicationNotifications,
+    });
+
+    showFeedback("System settings saved successfully.");
+  };
+
+  // =========================================================
   // RESET SETTINGS
   // =========================================================
 
   const handleResetSettings = () => {
-    setSystemName("Student Internship Management System");
-    setAcademicYear("2026 - 2027");
-    setInternshipDuration("480");
+    const defaultSettings = {
+      systemName: "Student Internship Management System",
+      academicYear: "2026 - 2027",
+      internshipDuration: "480",
+      maintenanceMode: false,
+      emailNotifications: true,
+      systemNotifications: true,
+      applicationNotifications: true,
+    };
 
-    setMaintenanceMode(false);
+    // Reset local form
 
-    setEmailNotifications(true);
-    setSystemNotifications(true);
-    setApplicationNotifications(true);
+    setSystemName(defaultSettings.systemName);
+
+    setAcademicYear(defaultSettings.academicYear);
+
+    setInternshipDuration(defaultSettings.internshipDuration);
+
+    setMaintenanceMode(defaultSettings.maintenanceMode);
+
+    setEmailNotifications(defaultSettings.emailNotifications);
+
+    setSystemNotifications(defaultSettings.systemNotifications);
+
+    setApplicationNotifications(defaultSettings.applicationNotifications);
+
+    // Reset security settings
 
     setSessionTimeout("30");
+
     setTwoFactorAuthentication(false);
 
-    setFeedback("Settings have been reset.");
+    // Save reset values to mockStore
 
-    setTimeout(() => {
-      setFeedback("");
-    }, 3000);
+    updateSystemSettings(defaultSettings);
+
+    showFeedback("Settings have been reset.");
   };
 
   // =========================================================
@@ -103,11 +197,7 @@ const SystemSettings = () => {
         <div className="min-w-0">
           <p
             className={`text-xs font-semibold ${
-              danger
-                ? darkMode
-                  ? "text-red-400"
-                  : "text-red-600"
-                : ""
+              danger ? (darkMode ? "text-red-400" : "text-red-600") : ""
             }`}
           >
             {label}
@@ -164,9 +254,7 @@ const SystemSettings = () => {
   // =========================================================
 
   const sectionClass = `border rounded-sm p-4 ${
-    darkMode
-      ? "bg-slate-800 border-slate-600"
-      : "bg-slate-50 border-slate-300"
+    darkMode ? "bg-slate-800 border-slate-600" : "bg-slate-50 border-slate-300"
   }`;
 
   // =========================================================
@@ -176,13 +264,10 @@ const SystemSettings = () => {
   return (
     <div
       className={`min-h-[calc(100vh-5rem)] px-4 py-6 sm:px-6 lg:px-8 transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
       <div className="max-w-5xl mx-auto">
-
         {/* ===================================================
             DEMO NOTICE
         =================================================== */}
@@ -197,11 +282,13 @@ const SystemSettings = () => {
           <p className="font-bold mb-1">⚠️ Demo Project</p>
 
           <p>
-            These system settings are currently stored locally for demonstration.
+            These system settings are currently stored in the application's mock
+            store for demonstration.
           </p>
 
           <p className="mt-1">
-            No database or permanent system configuration is implemented yet.
+            No database or permanent server-side configuration is implemented
+            yet.
           </p>
         </div>
 
@@ -221,9 +308,7 @@ const SystemSettings = () => {
           ================================================= */}
 
           <div className="mb-6">
-            <h1 className="text-lg sm:text-xl font-bold">
-              System Settings
-            </h1>
+            <h1 className="text-lg sm:text-xl font-bold">System Settings</h1>
 
             <p
               className={`text-xs mt-1 ${
@@ -259,13 +344,10 @@ const SystemSettings = () => {
           ================================================= */}
 
           <div className="mb-5">
-            <h2 className="text-sm font-bold mb-2">
-              System Configuration
-            </h2>
+            <h2 className="text-sm font-bold mb-2">System Configuration</h2>
 
             <div className={sectionClass}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 {/* SYSTEM NAME */}
 
                 <div>
@@ -322,9 +404,7 @@ const SystemSettings = () => {
                     type="number"
                     min="1"
                     value={internshipDuration}
-                    onChange={(e) =>
-                      setInternshipDuration(e.target.value)
-                    }
+                    onChange={(e) => setInternshipDuration(e.target.value)}
                     className={inputClass}
                   />
 
@@ -351,10 +431,14 @@ const SystemSettings = () => {
                         : "bg-white border-slate-300"
                     }`}
                   >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
+                    <span
+                      className={`w-2 h-2 rounded-full mr-2 ${
+                        maintenanceMode ? "bg-red-500" : "bg-emerald-500"
+                      }`}
+                    />
 
                     <span className="text-xs font-semibold">
-                      System Online
+                      {maintenanceMode ? "Maintenance Mode" : "System Online"}
                     </span>
                   </div>
                 </div>
@@ -367,9 +451,7 @@ const SystemSettings = () => {
           ================================================= */}
 
           <div className="mb-5">
-            <h2 className="text-sm font-bold mb-2">
-              Notification Settings
-            </h2>
+            <h2 className="text-sm font-bold mb-2">Notification Settings</h2>
 
             <div className={sectionClass}>
               <SettingToggle
@@ -400,13 +482,10 @@ const SystemSettings = () => {
           ================================================= */}
 
           <div className="mb-5">
-            <h2 className="text-sm font-bold mb-2">
-              Security Settings
-            </h2>
+            <h2 className="text-sm font-bold mb-2">Security Settings</h2>
 
             <div className={sectionClass}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-
                 {/* SESSION TIMEOUT */}
 
                 <div>
@@ -420,9 +499,7 @@ const SystemSettings = () => {
                   <select
                     id="session-timeout"
                     value={sessionTimeout}
-                    onChange={(e) =>
-                      setSessionTimeout(e.target.value)
-                    }
+                    onChange={(e) => setSessionTimeout(e.target.value)}
                     className={inputClass}
                   >
                     <option value="15">15 minutes</option>
@@ -465,9 +542,7 @@ const SystemSettings = () => {
           ================================================= */}
 
           <div className="mb-6">
-            <h2 className="text-sm font-bold mb-2">
-              Maintenance
-            </h2>
+            <h2 className="text-sm font-bold mb-2">Maintenance</h2>
 
             <div
               className={`border rounded-sm p-4 ${
@@ -539,4 +614,3 @@ const SystemSettings = () => {
 };
 
 export default SystemSettings;
-

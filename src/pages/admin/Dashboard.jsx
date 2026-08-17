@@ -1,77 +1,213 @@
 import React from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
 const Dashboard = () => {
   const { darkMode } = useOutletContext();
+  const { state } = useMockStore();
 
   // =========================================================
-  // DASHBOARD DATA
+  // LIVE MOCK STORE DATA
+  // =========================================================
+
+  const users = state.users || [];
+  const applications = state.applications || [];
+  const assignments = state.assignments || [];
+  const auditEvents = state.auditEvents || [];
+
+  // =========================================================
+  // SYSTEM COUNTS
+  // =========================================================
+
+  const totalUsers = users.length;
+
+  const activeInternships = assignments.filter(
+    (assignment) => assignment.status === "Active"
+  ).length;
+
+  const pendingApplications = applications.filter(
+    (application) =>
+      application.status === "Pending" ||
+      application.status === "Under Review" ||
+      application.status === "Information Requested"
+  ).length;
+
+  // Reports are not yet a dedicated mockStore entity.
+  // For now, use audit events that represent important system actions.
+  const reportsCount = auditEvents.filter((event) =>
+    ["REPORT", "WARNING", "ISSUE"].includes(event.action)
+  ).length;
+
+  // =========================================================
+  // OVERVIEW CARDS
   // =========================================================
 
   const overviewCards = [
     {
       title: "Total Users",
-      value: "156",
+      value: totalUsers,
       description: "Registered users",
       icon: "👥",
     },
     {
       title: "Active Internships",
-      value: "48",
+      value: activeInternships,
       description: "Currently active",
       icon: "💼",
     },
     {
       title: "Pending",
-      value: "7",
+      value: pendingApplications,
       description: "Awaiting review",
       icon: "⏳",
     },
     {
       title: "Reports",
-      value: "12",
+      value: reportsCount,
       description: "Requires attention",
       icon: "📊",
     },
   ];
 
-  const recentActivities = [
+  // =========================================================
+  // INTERNSHIP DISTRIBUTION
+  // =========================================================
+
+  const activeCount = assignments.filter(
+    (assignment) => assignment.status === "Active"
+  ).length;
+
+  const pendingCount = assignments.filter(
+    (assignment) => assignment.status === "Pending"
+  ).length;
+
+  const completedCount = assignments.filter(
+    (assignment) => assignment.status === "Completed"
+  ).length;
+
+  const totalAssignments = assignments.length;
+
+  const activeDegrees =
+    totalAssignments > 0 ? (activeCount / totalAssignments) * 360 : 0;
+
+  const pendingDegrees =
+    totalAssignments > 0 ? (pendingCount / totalAssignments) * 360 : 0;
+
+  // =========================================================
+  // USER GROWTH
+  // =========================================================
+  //
+  // Since the current users in mockStore do not have registration
+  // dates, we create a simple distribution based on the existing
+  // audit/user data instead of inventing database dates.
+  //
+  // This can later be replaced with real registration timestamps.
+  // =========================================================
+
+  const userGrowthData = [
     {
-      id: 1,
-      action: "New student account registered",
-      user: "John Doe",
-      time: "10 minutes ago",
-      type: "User",
+      month: "Mar",
+      value: Math.max(1, Math.round(totalUsers * 0.35)),
     },
     {
-      id: 2,
-      action: "Internship application submitted",
-      user: "Maria Santos",
-      time: "32 minutes ago",
-      type: "Application",
+      month: "Apr",
+      value: Math.max(1, Math.round(totalUsers * 0.48)),
     },
     {
-      id: 3,
-      action: "Company supervisor account approved",
-      user: "ABC Corporation",
-      time: "1 hour ago",
-      type: "Company",
+      month: "May",
+      value: Math.max(1, Math.round(totalUsers * 0.58)),
     },
     {
-      id: 4,
-      action: "Faculty adviser profile updated",
-      user: "Prof. Smith",
-      time: "2 hours ago",
-      type: "Faculty",
+      month: "Jun",
+      value: Math.max(1, Math.round(totalUsers * 0.72)),
     },
     {
-      id: 5,
-      action: "Internship document submitted",
-      user: "James Cruz",
-      time: "3 hours ago",
-      type: "Document",
+      month: "Jul",
+      value: Math.max(1, Math.round(totalUsers * 0.86)),
+    },
+    {
+      month: "Aug",
+      value: Math.max(1, totalUsers),
     },
   ];
+
+  const maxGrowthValue = Math.max(
+    ...userGrowthData.map((item) => item.value),
+    1
+  );
+
+  // =========================================================
+  // RECENT SYSTEM ACTIVITY
+  // =========================================================
+
+  const recentActivities = auditEvents.slice(0, 5).map((event, index) => {
+    const actor = users.find((user) => user.id === event.actorUserId);
+
+    const actorLabel =
+      actor?.email || actor?.profileId || event.actorUserId || "System";
+
+    let actionLabel = event.action || "System activity";
+
+    switch (event.action) {
+      case "LOGIN":
+        actionLabel = "User logged into the system";
+        break;
+
+      case "LOGOUT":
+        actionLabel = "User logged out of the system";
+        break;
+
+      case "SUBMIT":
+        actionLabel = "New submission recorded";
+        break;
+
+      case "CREATE":
+        actionLabel = "New record created";
+        break;
+
+      case "UPDATE":
+        actionLabel = "System record updated";
+        break;
+
+      case "APPROVE":
+        actionLabel = "Record approved";
+        break;
+
+      case "REJECT":
+        actionLabel = "Record rejected";
+        break;
+
+      case "UPLOAD":
+        actionLabel = "Document uploaded";
+        break;
+
+      case "DEPLOY":
+        actionLabel = "Intern deployed";
+        break;
+
+      default:
+        break;
+    }
+
+    const timestamp = event.timestamp ? new Date(event.timestamp) : null;
+
+    const time = timestamp
+      ? timestamp.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "Unknown time";
+
+    return {
+      id: event.id || index,
+      action: actionLabel,
+      user: actorLabel,
+      time,
+      type: event.module || event.targetEntityType || "System",
+    };
+  });
 
   // =========================================================
   // THEME CLASSES
@@ -251,8 +387,6 @@ const Dashboard = () => {
               </p>
             </div>
 
-            {/* SIMPLE CHART */}
-
             <div className="h-56 sm:h-64 relative">
               {/* GRID */}
 
@@ -270,14 +404,7 @@ const Dashboard = () => {
               {/* CHART BARS */}
 
               <div className="absolute inset-x-0 bottom-0 top-3 flex items-end justify-around gap-2 px-2">
-                {[
-                  { month: "Mar", value: 35 },
-                  { month: "Apr", value: 48 },
-                  { month: "May", value: 58 },
-                  { month: "Jun", value: 72 },
-                  { month: "Jul", value: 86 },
-                  { month: "Aug", value: 100 },
-                ].map((item) => (
+                {userGrowthData.map((item) => (
                   <div
                     key={item.month}
                     className="flex flex-col items-center justify-end h-full flex-1"
@@ -291,7 +418,7 @@ const Dashboard = () => {
                         ${darkMode ? "bg-slate-300" : "bg-slate-800"}
                       `}
                       style={{
-                        height: `${item.value}%`,
+                        height: `${(item.value / maxGrowthValue) * 100}%`,
                       }}
                     />
 
@@ -325,7 +452,7 @@ const Dashboard = () => {
               </h2>
 
               <p className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}>
-                Current internship application status.
+                Current internship assignment status.
               </p>
             </div>
 
@@ -333,17 +460,26 @@ const Dashboard = () => {
               {/* DONUT */}
 
               <div className="relative w-40 h-40 flex-shrink-0">
-                <div
-                  className="
-                    absolute
-                    inset-0
-                    rounded-full
-                  "
-                  style={{
-                    background:
-                      "conic-gradient(#1e293b 0deg 180deg, #64748b 180deg 270deg, #cbd5e1 270deg 360deg)",
-                  }}
-                />
+                {totalAssignments > 0 ? (
+                  <div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: `conic-gradient(
+                        #1e293b 0deg ${activeDegrees}deg,
+                        #64748b ${activeDegrees}deg ${
+                        activeDegrees + pendingDegrees
+                      }deg,
+                        #cbd5e1 ${activeDegrees + pendingDegrees}deg 360deg
+                      )`,
+                    }}
+                  />
+                ) : (
+                  <div
+                    className={`absolute inset-0 rounded-full ${
+                      darkMode ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  />
+                )}
 
                 <div
                   className={`
@@ -358,7 +494,7 @@ const Dashboard = () => {
                   `}
                 >
                   <span className={`text-2xl font-black ${pageTitleClass}`}>
-                    48
+                    {totalAssignments}
                   </span>
 
                   <span className={`text-[9px] ${bodyTextClass}`}>Total</span>
@@ -376,7 +512,7 @@ const Dashboard = () => {
                   </div>
 
                   <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    24
+                    {activeCount}
                   </span>
                 </div>
 
@@ -388,7 +524,7 @@ const Dashboard = () => {
                   </div>
 
                   <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    12
+                    {pendingCount}
                   </span>
                 </div>
 
@@ -402,7 +538,7 @@ const Dashboard = () => {
                   </div>
 
                   <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    12
+                    {completedCount}
                   </span>
                 </div>
               </div>
@@ -474,55 +610,66 @@ const Dashboard = () => {
               </thead>
 
               <tbody>
-                {recentActivities.map((activity) => (
-                  <tr
-                    key={activity.id}
-                    className={`
-                      border-b last:border-b-0
-                      ${
-                        darkMode
-                          ? "border-slate-700 hover:bg-slate-800"
-                          : "border-slate-100 hover:bg-slate-50"
-                      }
-                    `}
-                  >
-                    <td
-                      className={`px-5 py-3.5 text-xs font-semibold ${pageTitleClass}`}
+                {recentActivities.length > 0 ? (
+                  recentActivities.map((activity) => (
+                    <tr
+                      key={activity.id}
+                      className={`
+                        border-b last:border-b-0
+                        ${
+                          darkMode
+                            ? "border-slate-700 hover:bg-slate-800"
+                            : "border-slate-100 hover:bg-slate-50"
+                        }
+                      `}
                     >
-                      {activity.action}
-                    </td>
-
-                    <td className={`px-5 py-3.5 text-xs ${bodyTextClass}`}>
-                      {activity.user}
-                    </td>
-
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={`
-                          inline-flex
-                          px-2.5
-                          py-1
-                          rounded-full
-                          text-[9px]
-                          font-bold
-                          ${
-                            darkMode
-                              ? "bg-slate-700 text-slate-300"
-                              : "bg-slate-100 text-slate-600"
-                          }
-                        `}
+                      <td
+                        className={`px-5 py-3.5 text-xs font-semibold ${pageTitleClass}`}
                       >
-                        {activity.type}
-                      </span>
-                    </td>
+                        {activity.action}
+                      </td>
 
+                      <td className={`px-5 py-3.5 text-xs ${bodyTextClass}`}>
+                        {activity.user}
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`
+                            inline-flex
+                            px-2.5
+                            py-1
+                            rounded-full
+                            text-[9px]
+                            font-bold
+                            ${
+                              darkMode
+                                ? "bg-slate-700 text-slate-300"
+                                : "bg-slate-100 text-slate-600"
+                            }
+                          `}
+                        >
+                          {activity.type}
+                        </span>
+                      </td>
+
+                      <td
+                        className={`px-5 py-3.5 text-xs text-right ${bodyTextClass}`}
+                      >
+                        {activity.time}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
                     <td
-                      className={`px-5 py-3.5 text-xs text-right ${bodyTextClass}`}
+                      colSpan="4"
+                      className={`px-5 py-8 text-center text-xs ${bodyTextClass}`}
                     >
-                      {activity.time}
+                      No system activity recorded yet.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -530,50 +677,56 @@ const Dashboard = () => {
           {/* MOBILE ACTIVITY LIST */}
 
           <div className="sm:hidden">
-            {recentActivities.map((activity) => (
-              <div
-                key={activity.id}
-                className={`
-                  p-4
-                  border-t
-                  ${darkMode ? "border-slate-700" : "border-slate-100"}
-                `}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className={`text-xs font-bold ${pageTitleClass}`}>
-                      {activity.action}
-                    </p>
+            {recentActivities.length > 0 ? (
+              recentActivities.map((activity) => (
+                <div
+                  key={activity.id}
+                  className={`
+                    p-4
+                    border-t
+                    ${darkMode ? "border-slate-700" : "border-slate-100"}
+                  `}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`text-xs font-bold ${pageTitleClass}`}>
+                        {activity.action}
+                      </p>
 
-                    <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
-                      {activity.user}
-                    </p>
+                      <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
+                        {activity.user}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`
+                        flex-shrink-0
+                        px-2
+                        py-1
+                        rounded-full
+                        text-[8px]
+                        font-bold
+                        ${
+                          darkMode
+                            ? "bg-slate-700 text-slate-300"
+                            : "bg-slate-100 text-slate-600"
+                        }
+                      `}
+                    >
+                      {activity.type}
+                    </span>
                   </div>
 
-                  <span
-                    className={`
-                      flex-shrink-0
-                      px-2
-                      py-1
-                      rounded-full
-                      text-[8px]
-                      font-bold
-                      ${
-                        darkMode
-                          ? "bg-slate-700 text-slate-300"
-                          : "bg-slate-100 text-slate-600"
-                      }
-                    `}
-                  >
-                    {activity.type}
-                  </span>
+                  <p className={`text-[9px] mt-2 ${bodyTextClass}`}>
+                    {activity.time}
+                  </p>
                 </div>
-
-                <p className={`text-[9px] mt-2 ${bodyTextClass}`}>
-                  {activity.time}
-                </p>
+              ))
+            ) : (
+              <div className={`p-6 text-center text-xs ${bodyTextClass}`}>
+                No system activity recorded yet.
               </div>
-            ))}
+            )}
           </div>
         </section>
       </div>

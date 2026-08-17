@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const { login } = useMockStore();
 
   // =========================================================
   // STATE
@@ -23,10 +25,7 @@ const AdminLogin = () => {
   // DEMO ADMIN ACCOUNT
   // =========================================================
 
-  const adminAccount = {
-    email: "admin@gmail.com",
-    password: "password",
-  };
+  const adminAccount = { email: "admin@sims.local", password: "password" };
 
   // =========================================================
   // HANDLE INPUT
@@ -58,14 +57,9 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     setTimeout(() => {
-      if (
-        formData.email === adminAccount.email &&
-        formData.password === adminAccount.password
-      ) {
-        navigate("/admin/dashboard", { replace: true });
-      } else {
-        setErrorMessage("Invalid administrator credentials.");
-      }
+      const result = login("admin", formData.email.trim(), formData.password);
+      if (result.ok) navigate("/admin/dashboard", { replace: true });
+      else setErrorMessage("Invalid administrator credentials.");
 
       setIsLoading(false);
     }, 500);
