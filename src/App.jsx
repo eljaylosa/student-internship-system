@@ -72,12 +72,30 @@ import CompanyMessages from "./pages/company/Messages.jsx";
 import CompanySettings from "./pages/company/Settings.jsx";
 
 // =========================================================
+// ADMIN PORTAL
+// =========================================================
+
+import AdminLogin from "./pages/admin/Login.jsx";
+import AdminDashboard from "./pages/admin/Dashboard.jsx";
+import AdminProfile from "./pages/admin/Profile.jsx"
+import AdminUserManagement from "./pages/admin/UserManagement.jsx";
+import AdminCompanyManagement from "./pages/admin/CompanyManagement.jsx";
+import AdminInternshipRecords from "./pages/admin/InternshipRecords.jsx";
+import AdminDocumentManagement from "./pages/admin/DocumentManagement.jsx";
+import AdminEvaluationManagement from "./pages/admin/EvaluationManagement.jsx";
+import AdminReports from "./pages/admin/Reports.jsx";
+import AdminSystemNotification from "./pages/admin/SystemNotification.jsx";
+import AdminSystemSettings from "./pages/admin/SystemSettings.jsx";
+import AdminAuditLogs from "./pages/admin/AuditLogs.jsx"
+
+// =========================================================
 // LAYOUTS
 // =========================================================
 
 import StudentPortalLayout from "./components/portal/StudentPortalLayout.jsx";
 import FacultyPortalLayout from "./components/portal/FacultyPortalLayout.jsx";
 import CompanyPortalLayout from "./components/portal/CompanyPortalLayout.jsx";
+import AdminPortalLayout from "./components/portal/AdminPortalLayout.jsx";
 
 // =========================================================
 // APP CONTENT
@@ -93,8 +111,10 @@ function AppContent() {
   const isStudentPortal = location.pathname.startsWith("/student");
   const isFacultyPortal = location.pathname.startsWith("/faculty");
   const isCompanyPortal = location.pathname.startsWith("/company");
+  const isAdminPortal = location.pathname.startsWith("/admin");
 
-  const isPortal = isStudentPortal || isFacultyPortal || isCompanyPortal;
+  const isPortal =
+    isStudentPortal || isFacultyPortal || isCompanyPortal || isAdminPortal;
 
   return (
     <>
@@ -107,26 +127,21 @@ function AppContent() {
         {/* =====================================================
             PUBLIC ROUTES
         ===================================================== */}
-
         <Route path="/" element={<Home />} />
         <Route path="/home" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/services" element={<Services />} />
         <Route path="/contact" element={<Contact />} />
-
         {/* =====================================================
             AUTH ROUTES
         ===================================================== */}
-
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
-
         {/* =====================================================
             STUDENT PORTAL
         ===================================================== */}
-
         <Route path="/student" element={<StudentPortalLayout />}>
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
@@ -137,11 +152,9 @@ function AppContent() {
           <Route path="messages" element={<StudentMessages />} />
           <Route path="settings" element={<StudentSettings />} />
         </Route>
-
         {/* =====================================================
             FACULTY PORTAL
         ===================================================== */}
-
         <Route path="/faculty" element={<FacultyPortalLayout />}>
           <Route path="dashboard" element={<FacultyDashboard />} />
           <Route path="profile" element={<FacultyProfile />} />
@@ -154,7 +167,6 @@ function AppContent() {
           <Route path="messages" element={<FacultyMessages />} />
           <Route path="settings" element={<FacultySettings />} />
         </Route>
-
         {/* =====================================================
             COMPANY PORTAL
         ===================================================== */}
@@ -168,6 +180,28 @@ function AppContent() {
           <Route path="notifications" element={<CompanyNotification />} />
           <Route path="messages" element={<CompanyMessages />} />
           <Route path="settings" element={<CompanySettings />} />
+        </Route>
+
+        {/* =====================================================
+            ADMIN PORTAL
+        ===================================================== */}
+
+        {/* ADMIN LOGIN */}
+        <Route path="/admin" element={<AdminLogin />} />
+
+        {/* ADMIN ENVIRONMENT */}
+        <Route path="/admin" element={<AdminPortalLayout />}>
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="profile" element={<AdminProfile />} />
+          <Route path="users" element={<AdminUserManagement />} />
+          <Route path="companies" element={<AdminCompanyManagement />} />
+          <Route path="internships" element={<AdminInternshipRecords />} />
+          <Route path="documents" element={<AdminDocumentManagement />} />
+          <Route path="evaluations" element={<AdminEvaluationManagement />} />
+          <Route path="reports" element={<AdminReports />} />
+          <Route path="notifications" element={<AdminSystemNotification />} />
+          <Route path="settings" element={<AdminSystemSettings />} />
+          <Route path="audit-logs" element={<AdminAuditLogs />} />
         </Route>
       </Routes>
 
