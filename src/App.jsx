@@ -58,11 +58,26 @@ import FacultyMessages from "./pages/faculty/Messages.jsx";
 import FacultySettings from "./pages/faculty/Settings.jsx";
 
 // =========================================================
+// COMPANY PORTAL
+// =========================================================
+
+import CompanyDashboard from "./pages/company/Dashboard.jsx";
+import CompanyProfile from "./pages/company/Profile.jsx";
+import CompanyManageJobs from "./pages/company/ManageJobs.jsx";
+import CompanyInterns from "./pages/company/Interns.jsx";
+import CompanyEvaluate from "./pages/company/Evaluate.jsx";
+import CompanyFeedback from "./pages/company/Feedback.jsx";
+import CompanyNotification from "./pages/company/Notification.jsx";
+import CompanyMessages from "./pages/company/Messages.jsx";
+import CompanySettings from "./pages/company/Settings.jsx";
+
+// =========================================================
 // LAYOUTS
 // =========================================================
 
 import StudentPortalLayout from "./components/portal/StudentPortalLayout.jsx";
 import FacultyPortalLayout from "./components/portal/FacultyPortalLayout.jsx";
+import CompanyPortalLayout from "./components/portal/CompanyPortalLayout.jsx";
 
 // =========================================================
 // APP CONTENT
@@ -77,8 +92,9 @@ function AppContent() {
 
   const isStudentPortal = location.pathname.startsWith("/student");
   const isFacultyPortal = location.pathname.startsWith("/faculty");
+  const isCompanyPortal = location.pathname.startsWith("/company");
 
-  const isPortal = isStudentPortal || isFacultyPortal;
+  const isPortal = isStudentPortal || isFacultyPortal || isCompanyPortal;
 
   return (
     <>
@@ -137,6 +153,21 @@ function AppContent() {
           <Route path="notifications" element={<FacultyNotification />} />
           <Route path="messages" element={<FacultyMessages />} />
           <Route path="settings" element={<FacultySettings />} />
+        </Route>
+
+        {/* =====================================================
+            COMPANY PORTAL
+        ===================================================== */}
+        <Route path="/company" element={<CompanyPortalLayout />}>
+          <Route path="dashboard" element={<CompanyDashboard />} />
+          <Route path="profile" element={<CompanyProfile />} />
+          <Route path="jobs" element={<CompanyManageJobs />} />
+          <Route path="interns" element={<CompanyInterns />} />
+          <Route path="evaluate" element={<CompanyEvaluate />} />
+          <Route path="feedback" element={<CompanyFeedback />} />
+          <Route path="notifications" element={<CompanyNotification />} />
+          <Route path="messages" element={<CompanyMessages />} />
+          <Route path="settings" element={<CompanySettings />} />
         </Route>
       </Routes>
 
