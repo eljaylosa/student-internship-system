@@ -38,11 +38,13 @@ import StudentDashboard from "./pages/student/Dashboard.jsx";
 import StudentProfile from "./pages/student/Profile.jsx";
 import StudentApplication from "./pages/student/Application.jsx";
 import StudentDocuments from "./pages/student/Documents.jsx";
+import StudentDocumentTemplate from "./pages/student/DocumentTemplate.jsx"
 import StudentNotification from "./pages/student/Notification.jsx";
 import StudentInfo from "./pages/student/Info.jsx";
 import StudentMessages from "./pages/student/Messages.jsx";
 import StudentSettings from "./pages/student/Settings.jsx";
-import StudentEvaluation from "./pages/student/Evaluation.jsx"
+import StudentEvaluation from "./pages/student/Evaluation.jsx";
+
 
 // =========================================================
 // FACULTY PORTAL
@@ -79,16 +81,17 @@ import CompanySettings from "./pages/company/Settings.jsx";
 
 import AdminLogin from "./pages/admin/Login.jsx";
 import AdminDashboard from "./pages/admin/Dashboard.jsx";
-import AdminProfile from "./pages/admin/Profile.jsx"
+import AdminProfile from "./pages/admin/Profile.jsx";
 import AdminUserManagement from "./pages/admin/UserManagement.jsx";
 import AdminCompanyManagement from "./pages/admin/CompanyManagement.jsx";
 import AdminInternshipRecords from "./pages/admin/InternshipRecords.jsx";
 import AdminDocumentManagement from "./pages/admin/DocumentManagement.jsx";
+import AdminInformationManagement from "./pages/admin/InformationManagement";
 import AdminEvaluationManagement from "./pages/admin/EvaluationManagement.jsx";
 import AdminReports from "./pages/admin/Reports.jsx";
 import AdminSystemNotification from "./pages/admin/SystemNotification.jsx";
 import AdminSystemSettings from "./pages/admin/SystemSettings.jsx";
-import AdminAuditLogs from "./pages/admin/AuditLogs.jsx"
+import AdminAuditLogs from "./pages/admin/AuditLogs.jsx";
 
 // =========================================================
 // LAYOUTS
@@ -107,8 +110,18 @@ import { MockStoreProvider, useMockStore } from "./data/mockStore.jsx";
 function RoleGuard({ role, children }) {
   const { state } = useMockStore();
   const pathname = useLocation().pathname;
-  if (!state.currentUser) return <Navigate to={role === "admin" ? "/admin/login" : "/login"} replace state={{ from: pathname }} />;
-  if (state.currentUser.role !== role && state.currentUser.role !== "admin") return <Navigate to={"/" + state.currentUser.role + "/dashboard"} replace />;
+  if (!state.currentUser)
+    return (
+      <Navigate
+        to={role === "admin" ? "/admin/login" : "/login"}
+        replace
+        state={{ from: pathname }}
+      />
+    );
+  if (state.currentUser.role !== role && state.currentUser.role !== "admin")
+    return (
+      <Navigate to={"/" + state.currentUser.role + "/dashboard"} replace />
+    );
   return children;
 }
 
@@ -166,6 +179,7 @@ function AppContent() {
           <Route path="profile" element={<StudentProfile />} />
           <Route path="application" element={<StudentApplication />} />
           <Route path="documents" element={<StudentDocuments />} />
+          <Route path="templates" element={<StudentDocumentTemplate />} />
           <Route path="notifications" element={<StudentNotification />} />
           <Route path="info" element={<StudentInfo />} />
           <Route path="evaluation" element={<StudentEvaluation />} />
@@ -241,6 +255,7 @@ function AppContent() {
           <Route path="companies" element={<AdminCompanyManagement />} />
           <Route path="internships" element={<AdminInternshipRecords />} />
           <Route path="documents" element={<AdminDocumentManagement />} />
+          <Route path="information" element={<AdminInformationManagement />} />
           <Route path="evaluations" element={<AdminEvaluationManagement />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="notifications" element={<AdminSystemNotification />} />

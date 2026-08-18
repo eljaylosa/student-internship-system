@@ -136,6 +136,11 @@ export const initialState = {
       email: "faculty@gmail.com",
       facultyId: "FAC-001",
       department: "College of Information and Communications Technology",
+      position: "Faculty Adviser",
+      phone: "+63 917 123 4567",
+      address: "Balanga, Bataan",
+      specialization: "Information Technology",
+      employeeId: "FAC-2026-001",
     },
   ],
 
@@ -304,6 +309,93 @@ export const initialState = {
       name: "Completion Certificate",
       description: "Internship completion certificate.",
       fileName: "completion-certificate.pdf",
+    },
+  ],
+
+  /* =========================================================
+     INFORMATION MANAGEMENT
+     
+     ADMIN MANAGED INFORMATION
+     DISPLAYED IN STUDENT PORTAL
+  ========================================================= */
+
+  informationItems: [
+    {
+      id: "INFO-001",
+      title: "Internship Guidelines",
+      category: "Guidelines",
+      description:
+        "Important guidelines and requirements that students should follow during their internship.",
+      content:
+        "Review the internship guidelines before beginning your internship. This includes requirements, responsibilities, and important procedures.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
+    },
+
+    {
+      id: "INFO-002",
+      title: "Internship Requirements",
+      category: "Requirements",
+      description:
+        "Complete list of requirements that must be submitted before starting your internship.",
+      content:
+        "Students are required to complete and submit all necessary documents before their internship can officially begin.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
+    },
+
+    {
+      id: "INFO-003",
+      title: "Application Process",
+      category: "Application",
+      description:
+        "Learn how to apply for an internship and track your application status.",
+      content:
+        "Choose a company, select your preferred position, provide your availability, and submit your internship application.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
+    },
+
+    {
+      id: "INFO-004",
+      title: "Document Submission",
+      category: "Documents",
+      description:
+        "Information about the documents required for your internship application.",
+      content:
+        "Students must submit the required internship documents through the Document Submission section of the portal.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
+    },
+
+    {
+      id: "INFO-005",
+      title: "Internship Policies",
+      category: "Policies",
+      description:
+        "Important policies and rules that students must observe during their internship.",
+      content:
+        "Students are expected to follow the policies of both the institution and their assigned internship company.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
+    },
+
+    {
+      id: "INFO-006",
+      title: "Frequently Asked Questions",
+      category: "FAQ",
+      description:
+        "Answers to common questions about the internship process and requirements.",
+      content:
+        "Find answers to commonly asked questions regarding applications, documents, internship requirements, and other procedures.",
+      status: "Published",
+      createdAt: "2026-08-01T09:00:00.000Z",
+      updatedAt: "2026-08-01T09:00:00.000Z",
     },
   ],
 
@@ -534,7 +626,7 @@ export function MockStoreProvider({ children }) {
       getSupervisor: (id = state.currentUser?.profileId) =>
         state.supervisors.find((item) => item.id === id),
 
-      getCompany: (id = state.currentUser?.companyId) =>
+      getCompany: (id = state.currentUser?.profileId) =>
         state.companies.find((item) => item.id === id) ||
         state.companies.find((company) => company.supervisorIds?.includes(id)),
 
@@ -554,6 +646,16 @@ export function MockStoreProvider({ children }) {
 
       getDocumentsForAssignment: (assignmentId) =>
         state.documents.filter((item) => item.assignmentId === assignmentId),
+
+      /* =========================================================
+         INFORMATION GETTERS
+      ========================================================= */
+
+      getInformationItems: () =>
+        state.informationItems.filter((item) => item.status === "Published"),
+
+      getInformationItem: (id) =>
+        state.informationItems.find((item) => item.id === id),
 
       /* =========================================================
          EVALUATION GETTERS
@@ -717,6 +819,29 @@ export function MockStoreProvider({ children }) {
               patch
             );
           }
+        }),
+
+      /* =========================================================
+   FACULTY PROFILE
+========================================================= */
+
+      updateFacultyProfile: (facultyId, patch) =>
+        transact((draft) => {
+          const faculty = draft.faculty.find((item) => item.id === facultyId);
+
+          if (!faculty) return;
+
+          Object.assign(faculty, patch);
+
+          appendAudit(
+            draft,
+            draft.currentUser,
+            "UPDATE",
+            "Faculty Profile",
+            "Faculty",
+            facultyId,
+            patch
+          );
         }),
 
       /* =========================================================
@@ -1193,6 +1318,102 @@ export function MockStoreProvider({ children }) {
         }),
 
       /* =========================================================
+         INFORMATION MANAGEMENT
+         
+         ADMIN -> MANAGES
+         STUDENT -> READS PUBLISHED INFORMATION
+      ========================================================= */
+
+      createInformationItem: ({
+        title,
+        category,
+        description,
+        content,
+        status = "Published",
+      }) =>
+        transact((draft) => {
+          const id = `INFO-${String(draft.informationItems.length + 1).padStart(
+            3,
+            "0"
+          )}`;
+
+          const timestamp = now();
+
+          const record = {
+            id,
+            title: title.trim(),
+            category,
+            description: description.trim(),
+            content: content.trim(),
+            status,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          };
+
+          draft.informationItems.unshift(record);
+
+          appendAudit(
+            draft,
+            draft.currentUser,
+            "CREATE",
+            "Information Management",
+            "InformationItem",
+            id,
+            record
+          );
+        }),
+
+      updateInformationItem: (id, patch) =>
+        transact((draft) => {
+          const item = draft.informationItems.find(
+            (information) => information.id === id
+          );
+
+          if (!item) return;
+
+          Object.assign(item, {
+            ...patch,
+            updatedAt: now(),
+          });
+
+          appendAudit(
+            draft,
+            draft.currentUser,
+            "UPDATE",
+            "Information Management",
+            "InformationItem",
+            id,
+            patch
+          );
+        }),
+
+      deleteInformationItem: (id) =>
+        transact((draft) => {
+          const item = draft.informationItems.find(
+            (information) => information.id === id
+          );
+
+          if (!item) return;
+
+          draft.informationItems = draft.informationItems.filter(
+            (information) => information.id !== id
+          );
+
+          appendAudit(
+            draft,
+            draft.currentUser,
+            "DELETE",
+            "Information Management",
+            "InformationItem",
+            id,
+            {
+              title: item.title,
+              category: item.category,
+            }
+          );
+        }),
+
+      /* =========================================================
          DEPLOY INTERN
       ========================================================= */
 
@@ -1630,8 +1851,8 @@ export function MockStoreProvider({ children }) {
       ========================================================= */
 
       /* =========================================================
-   ADMIN SYSTEM NOTIFICATIONS
-========================================================= */
+         ADMIN SYSTEM NOTIFICATIONS
+      ========================================================= */
 
       broadcastNotification: ({
         targetPortal,
@@ -1647,8 +1868,8 @@ export function MockStoreProvider({ children }) {
 
         transact((draft) => {
           /* -------------------------------------------------------
-       FIND TARGET USERS
-    ------------------------------------------------------- */
+             FIND TARGET USERS
+          ------------------------------------------------------- */
 
           const activeUsers = draft.users.filter(
             (user) => user.status === STATUS.user.ACTIVE
@@ -1675,14 +1896,14 @@ export function MockStoreProvider({ children }) {
           }
 
           /* -------------------------------------------------------
-       GENERATE SYSTEM NOTIFICATION ID
-    ------------------------------------------------------- */
+             GENERATE SYSTEM NOTIFICATION ID
+          ------------------------------------------------------- */
 
           const broadcastId = `SYS-${Date.now()}`;
 
           /* -------------------------------------------------------
-       SEND TO EVERY TARGET USER
-    ------------------------------------------------------- */
+             SEND TO EVERY TARGET USER
+          ------------------------------------------------------- */
 
           recipients.forEach((user) => {
             notify(
@@ -1697,8 +1918,8 @@ export function MockStoreProvider({ children }) {
           });
 
           /* -------------------------------------------------------
-       AUDIT EVENT
-    ------------------------------------------------------- */
+             AUDIT EVENT
+          ------------------------------------------------------- */
 
           appendAudit(
             draft,
@@ -1789,6 +2010,7 @@ export function MockStoreProvider({ children }) {
             );
           }
         }),
+
       /* =========================================================
          SYSTEM SETTINGS
       ========================================================= */
@@ -1810,8 +2032,6 @@ export function MockStoreProvider({ children }) {
     }),
     [state]
   );
-
-
 
   /* =========================================================
      PROVIDER VALUE

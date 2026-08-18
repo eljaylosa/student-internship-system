@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { useMockStore } from "../../data/mockStore.jsx";
 
 const Info = () => {
   const { darkMode } = useOutletContext();
+  const { state } = useMockStore();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -25,97 +27,55 @@ const Info = () => {
     : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400 focus:border-slate-800 focus:ring-slate-100";
 
   // =========================================
-  // INTERNSHIP INFORMATION
+  // INFORMATION DATA
+  // =========================================
+  // Student Portal now reads information managed
+  // by Admin Portal > Information Management.
+  //
+  // Only published information should be shown.
   // =========================================
 
-  const informationItems = [
-    {
-      id: 1,
-      title: "Internship Guidelines",
-      category: "Guidelines",
-      description:
-        "Important guidelines and requirements that students should follow during their internship.",
-      content:
-        "Review the internship guidelines before beginning your internship. This includes requirements, responsibilities, and important procedures.",
-    },
-    {
-      id: 2,
-      title: "Internship Requirements",
-      category: "Requirements",
-      description:
-        "Complete list of requirements that must be submitted before starting your internship.",
-      content:
-        "Students are required to complete and submit all necessary documents before their internship can officially begin.",
-    },
-    {
-      id: 3,
-      title: "Application Process",
-      category: "Application",
-      description:
-        "Learn how to apply for an internship and track your application status.",
-      content:
-        "Choose a company, select your preferred position, provide your availability, and submit your internship application.",
-    },
-    {
-      id: 4,
-      title: "Document Submission",
-      category: "Documents",
-      description:
-        "Information about the documents required for your internship application.",
-      content:
-        "Students must submit the required internship documents through the Document Submission section of the portal.",
-    },
-    {
-      id: 5,
-      title: "Internship Policies",
-      category: "Policies",
-      description:
-        "Important policies and rules that students must observe during their internship.",
-      content:
-        "Students are expected to follow the policies of both the institution and their assigned internship company.",
-    },
-    {
-      id: 6,
-      title: "Frequently Asked Questions",
-      category: "FAQ",
-      description:
-        "Answers to common questions about the internship process and requirements.",
-      content:
-        "Find answers to commonly asked questions regarding applications, documents, internship requirements, and other procedures.",
-    },
-  ];
+  const informationItems = useMemo(() => {
+    return (state.informationItems || []).filter(
+      (item) => item.status === "Published"
+    );
+  }, [state.informationItems]);
 
   // =========================================
   // CATEGORIES
   // =========================================
 
-  const categories = [
-    "All",
-    "Guidelines",
-    "Requirements",
-    "Application",
-    "Documents",
-    "Policies",
-    "FAQ",
-  ];
+  const categories = useMemo(() => {
+    const uniqueCategories = [
+      ...new Set(
+        informationItems
+          .map((item) => item.category)
+          .filter(Boolean)
+      ),
+    ];
+
+    return ["All", ...uniqueCategories];
+  }, [informationItems]);
 
   // =========================================
   // FILTER INFORMATION
   // =========================================
 
   const filteredInformation = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+
     return informationItems.filter((item) => {
-      const query = searchQuery.toLowerCase().trim();
-
       const matchesSearch =
-        item.title.toLowerCase().includes(query) ||
-        item.description.toLowerCase().includes(query);
+        item.title?.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        item.content?.toLowerCase().includes(query);
 
-      const matchesCategory = category === "All" || item.category === category;
+      const matchesCategory =
+        category === "All" || item.category === category;
 
       return matchesSearch && matchesCategory;
     });
-  }, [searchQuery, category]);
+  }, [informationItems, searchQuery, category]);
 
   // =========================================
   // VIEW DETAILS
@@ -127,6 +87,15 @@ const Info = () => {
 
   const closeDetails = () => {
     setSelectedInfo(null);
+  };
+
+  // =========================================
+  // CLEAR FILTERS
+  // =========================================
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCategory("All");
   };
 
   // =========================================
@@ -169,7 +138,7 @@ const Info = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
+            placeholder="Search information..."
             className={`w-full h-11 px-4 pr-10 rounded-xl border text-sm outline-none transition focus:ring-2 ${inputClass}`}
           />
 
@@ -204,14 +173,11 @@ const Info = () => {
           ))}
         </select>
 
-        {/* FILTER BUTTON */}
+        {/* CLEAR FILTER */}
 
         <button
           type="button"
-          onClick={() => {
-            setSearchQuery("");
-            setCategory("All");
-          }}
+          onClick={clearFilters}
           className={`h-11 px-5 rounded-xl border text-xs font-bold transition ${
             darkMode
               ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
@@ -268,21 +234,29 @@ const Info = () => {
                 }`}
               >
                 <div className="w-full h-full flex items-center justify-center relative">
-                  <div
-                    className={`w-[78%] h-[72%] rounded-lg border flex items-center justify-center ${
-                      darkMode
-                        ? "border-slate-600 bg-slate-700"
-                        : "border-slate-300 bg-slate-200"
-                    }`}
-                  >
-                    <span
-                      className={`text-4xl ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className={`w-[78%] h-[72%] rounded-lg border flex items-center justify-center ${
+                        darkMode
+                          ? "border-slate-600 bg-slate-700"
+                          : "border-slate-300 bg-slate-200"
                       }`}
                     >
-                      ▧
-                    </span>
-                  </div>
+                      <span
+                        className={`text-4xl ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
+                        ▧
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -301,7 +275,7 @@ const Info = () => {
                         : "bg-slate-100 text-slate-500"
                     }`}
                   >
-                    {item.category}
+                    {item.category || "General"}
                   </span>
                 </div>
 
@@ -316,7 +290,7 @@ const Info = () => {
                 <p
                   className={`text-xs leading-relaxed line-clamp-2 min-h-[36px] ${mutedClass}`}
                 >
-                  {item.description}
+                  {item.description || "No description available."}
                 </p>
 
                 {/* BUTTON */}
@@ -355,23 +329,24 @@ const Info = () => {
           </h2>
 
           <p className={`text-xs mt-1 ${mutedClass}`}>
-            Try changing your search or category filter.
+            {informationItems.length === 0
+              ? "There is currently no published internship information."
+              : "Try changing your search or category filter."}
           </p>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSearchQuery("");
-              setCategory("All");
-            }}
-            className={`mt-4 px-5 py-2.5 rounded-lg text-white text-xs font-bold transition ${
-              darkMode
-                ? "bg-slate-700 hover:bg-slate-600"
-                : "bg-slate-800 hover:bg-slate-700"
-            }`}
-          >
-            Reset Filters
-          </button>
+          {(searchQuery || category !== "All") && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className={`mt-4 px-5 py-2.5 rounded-lg text-white text-xs font-bold transition ${
+                darkMode
+                  ? "bg-slate-700 hover:bg-slate-600"
+                  : "bg-slate-800 hover:bg-slate-700"
+              }`}
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       )}
 
@@ -405,7 +380,7 @@ const Info = () => {
                       : "bg-slate-100 text-slate-500"
                   }`}
                 >
-                  {selectedInfo.category}
+                  {selectedInfo.category || "General"}
                 </span>
 
                 <h2 className={`text-lg font-bold ${headingClass}`}>
@@ -433,20 +408,30 @@ const Info = () => {
               {/* IMAGE */}
 
               <div
-                className={`h-44 rounded-xl flex items-center justify-center mb-5 border ${
+                className={`h-44 rounded-xl flex items-center justify-center mb-5 border overflow-hidden ${
                   darkMode
                     ? "bg-slate-800 border-slate-700"
                     : "bg-slate-100 border-slate-200"
                 }`}
               >
-                <span
-                  className={`text-5xl ${
-                    darkMode ? "text-slate-600" : "text-slate-300"
-                  }`}
-                >
-                  ▧
-                </span>
+                {selectedInfo.imageUrl ? (
+                  <img
+                    src={selectedInfo.imageUrl}
+                    alt={selectedInfo.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span
+                    className={`text-5xl ${
+                      darkMode ? "text-slate-600" : "text-slate-300"
+                    }`}
+                  >
+                    ▧
+                  </span>
+                )}
               </div>
+
+              {/* OVERVIEW */}
 
               <p
                 className={`text-sm font-semibold mb-2 ${
@@ -461,8 +446,12 @@ const Info = () => {
                   darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                {selectedInfo.content}
+                {selectedInfo.content ||
+                  selectedInfo.description ||
+                  "No additional information available."}
               </p>
+
+              {/* ADDITIONAL INFORMATION */}
 
               <div
                 className={`mt-5 p-4 rounded-xl border ${
@@ -518,3 +507,4 @@ const Info = () => {
 };
 
 export default Info;
+

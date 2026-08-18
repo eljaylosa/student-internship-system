@@ -4,26 +4,35 @@ import { useMockStore } from "../../data/mockStore.jsx";
 
 export default function Interns() {
   const { darkMode } = useOutletContext();
-  const { state, recordAttendance } = useMockStore();
+  const { state, recordAttendance, setAssignmentStatus } = useMockStore();
 
   const company = state.companies.find((item) => item.id === "COM-001");
 
-  // Only officially deployed assignments should appear
-  // in the company portal.
-  //
-  // Deployment is determined by:
-  // 1. Assignment belongs to this company
-  // 2. Assignment status is Active
-  // 3. deployedAt has been set by deployAssignment()
+  /*
+   * Only officially deployed assignments appear here.
+   *
+   * Active:
+   *   Intern is currently deployed.
+   *
+   * Completed:
+   *   Company has confirmed that the internship is finished.
+   *
+   * Completed assignments remain visible so the company can still
+   * review the intern's attendance/progress history.
+   */
   const assignments = state.assignments.filter(
     (item) =>
       item.companyId === company?.id &&
-      item.status === "Active" &&
+      ["Active", "Completed"].includes(item.status) &&
       item.deployedAt !== null
   );
 
+  const activeAssignments = assignments.filter(
+    (item) => item.status === "Active"
+  );
+
   const [form, setForm] = useState({
-    assignmentId: assignments[0]?.id || "",
+    assignmentId: activeAssignments[0]?.id || "",
     date: "2026-06-03",
     hours: "8",
     status: "Present",
@@ -34,6 +43,14 @@ export default function Interns() {
     ? "bg-slate-900 border-slate-700"
     : "bg-white border-slate-200";
 
+  const heading = darkMode ? "text-slate-100" : "text-slate-900";
+
+  const muted = darkMode ? "text-slate-400" : "text-slate-500";
+
+  const input = darkMode
+    ? "bg-slate-800 border-slate-700 text-slate-200"
+    : "bg-white border-slate-300 text-slate-800";
+
   const handleAssignmentChange = (event) => {
     setForm((previous) => ({
       ...previous,
@@ -43,7 +60,7 @@ export default function Interns() {
 
   const handleSaveAttendance = () => {
     if (!form.assignmentId) {
-      alert("No deployed intern selected.");
+      alert("No active intern selected.");
       return;
     }
 
@@ -51,6 +68,20 @@ export default function Interns() {
       ...form,
       hours: Number(form.hours),
     });
+
+    alert("Attendance entry saved successfully.");
+  };
+
+  const handleCompleteInternship = (assignmentId, studentName) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to mark ${studentName}'s internship as completed?`
+    );
+
+    if (!confirmed) return;
+
+    setAssignmentStatus(assignmentId, "Completed");
+
+    alert("Internship marked as completed.");
   };
 
   return (
@@ -59,6 +90,10 @@ export default function Interns() {
         darkMode ? "text-slate-100" : "text-slate-900"
       }`}
     >
+      {/* =====================================================
+          PAGE HEADER
+      ===================================================== */}
+
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
           Company Portal
@@ -66,9 +101,9 @@ export default function Interns() {
 
         <h1 className="text-2xl font-black">Assigned Interns</h1>
 
-        <p className="text-sm mt-1 text-slate-500">
-          View interns officially deployed to your company and record their
-          attendance and progress.
+        <p className={`text-sm mt-1 ${muted}`}>
+          View officially deployed interns, record their attendance, and mark
+          completed internships.
         </p>
       </div>
 
@@ -77,9 +112,11 @@ export default function Interns() {
           <div className="text-center py-6">
             <div className="text-3xl mb-3">👥</div>
 
-            <p className="font-semibold">No deployed interns yet.</p>
+            <p className={`font-semibold ${heading}`}>
+              No deployed interns yet.
+            </p>
 
-            <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+            <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
               Interns will appear here only after their required documents have
               been approved by the faculty adviser and the student has been
               officially deployed.
@@ -92,91 +129,121 @@ export default function Interns() {
               ATTENDANCE / PROGRESS
           ===================================================== */}
 
-          <section className={`border rounded-2xl p-5 mb-5 ${card}`}>
-            <h2 className="font-bold mb-4">Record attendance/progress</h2>
+          {activeAssignments.length > 0 && (
+            <section className={`border rounded-2xl p-5 mb-5 ${card}`}>
+              <div className="mb-4">
+                <h2 className={`font-bold ${heading}`}>
+                  Record Attendance / Progress
+                </h2>
 
-            <div className="grid md:grid-cols-5 gap-3">
-              <select
-                className="border rounded-lg px-3 py-2 text-sm"
-                value={form.assignmentId}
-                onChange={handleAssignmentChange}
-              >
-                {assignments.map((assignment) => (
-                  <option key={assignment.id} value={assignment.id}>
-                    {assignment.id} ·{" "}
-                    {
-                      state.students.find(
-                        (item) => item.id === assignment.studentId
-                      )?.fullName
-                    }
-                  </option>
-                ))}
-              </select>
+                <p className={`text-xs mt-1 ${muted}`}>
+                  Record daily attendance and internship hours for active
+                  interns.
+                </p>
+              </div>
 
-              <input
-                className="border rounded-lg px-3 py-2 text-sm"
-                type="date"
-                value={form.date}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    date: event.target.value,
-                  }))
-                }
-              />
+              <div className="grid md:grid-cols-5 gap-3">
+                {/* INTERN */}
 
-              <input
-                className="border rounded-lg px-3 py-2 text-sm"
-                type="number"
-                min="0"
-                value={form.hours}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    hours: event.target.value,
-                  }))
-                }
-              />
+                <select
+                  className={`border rounded-lg px-3 py-2 text-sm ${input}`}
+                  value={form.assignmentId}
+                  onChange={handleAssignmentChange}
+                >
+                  {activeAssignments.map((assignment) => {
+                    const student = state.students.find(
+                      (item) => item.id === assignment.studentId
+                    );
 
-              <select
-                className="border rounded-lg px-3 py-2 text-sm"
-                value={form.status}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    status: event.target.value,
-                  }))
-                }
-              >
-                <option>Present</option>
-                <option>Absent</option>
-                <option>Excused</option>
-              </select>
+                    return (
+                      <option key={assignment.id} value={assignment.id}>
+                        {student?.fullName || "Unknown Student"}
+                      </option>
+                    );
+                  })}
+                </select>
 
-              <button
-                className="rounded-lg bg-slate-900 text-white text-xs font-semibold"
-                onClick={handleSaveAttendance}
-              >
-                Save Entry
-              </button>
-            </div>
-          </section>
+                {/* DATE */}
+
+                <input
+                  className={`border rounded-lg px-3 py-2 text-sm ${input}`}
+                  type="date"
+                  value={form.date}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      date: event.target.value,
+                    }))
+                  }
+                />
+
+                {/* HOURS */}
+
+                <input
+                  className={`border rounded-lg px-3 py-2 text-sm ${input}`}
+                  type="number"
+                  min="0"
+                  value={form.hours}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      hours: event.target.value,
+                    }))
+                  }
+                />
+
+                {/* STATUS */}
+
+                <select
+                  className={`border rounded-lg px-3 py-2 text-sm ${input}`}
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      status: event.target.value,
+                    }))
+                  }
+                >
+                  <option>Present</option>
+                  <option>Absent</option>
+                  <option>Excused</option>
+                </select>
+
+                {/* SAVE */}
+
+                <button
+                  className="rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition"
+                  onClick={handleSaveAttendance}
+                >
+                  Save Entry
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* =====================================================
               DEPLOYED INTERNS
           ===================================================== */}
 
           <section className={`border rounded-2xl overflow-hidden ${card}`}>
-            <div className="px-5 py-4 border-b border-slate-200">
-              <h2 className="font-bold">Deployed Interns</h2>
+            <div
+              className={`px-5 py-4 border-b ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <h2 className={`font-bold ${heading}`}>Assigned Interns</h2>
 
-              <p className="text-xs text-slate-500 mt-1">
-                These students have completed document verification and have
-                been officially deployed to your company.
+              <p className={`text-xs mt-1 ${muted}`}>
+                Manage currently deployed and completed internship
+                assignments.
               </p>
             </div>
 
-            <div className="divide-y divide-slate-200">
+            <div
+              className={`divide-y ${
+                darkMode ? "divide-slate-700" : "divide-slate-200"
+              }`}
+            >
               {assignments.map((assignment) => {
                 const student = state.students.find(
                   (item) => item.id === assignment.studentId
@@ -191,30 +258,73 @@ export default function Interns() {
                   0
                 );
 
+                const isCompleted = assignment.status === "Completed";
+
                 return (
                   <div
                     key={assignment.id}
-                    className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    className="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5"
                   >
-                    <div>
+                    {/* =================================================
+                        INTERN INFORMATION
+                    ================================================= */}
+
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-bold">
+                        <p className={`font-bold ${heading}`}>
                           {student?.fullName || "Unknown Student"}
                         </p>
 
-                        <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                          DEPLOYED
-                        </span>
+                        {isCompleted ? (
+                          <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
+                            COMPLETED
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                            ACTIVE
+                          </span>
+                        )}
                       </div>
 
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className={`text-xs mt-1 ${muted}`}>
                         {assignment.id} · {assignment.startDate} to{" "}
                         {assignment.endDate}
                       </p>
+
+                      <p className={`text-xs mt-1 ${muted}`}>
+                        {logs.length} progress entries · {totalHours} hours
+                      </p>
                     </div>
 
-                    <div className="text-xs text-slate-600">
-                      {logs.length} progress entries · {totalHours} hours
+                    {/* =================================================
+                        ACTIONS
+                    ================================================= */}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isCompleted ? (
+                        <span
+                          className={`px-4 py-2 rounded-lg text-xs font-semibold ${
+                            darkMode
+                              ? "bg-slate-800 text-slate-300"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          Internship Completed
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCompleteInternship(
+                              assignment.id,
+                              student?.fullName || "this intern"
+                            )
+                          }
+                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                        >
+                          Mark as Completed
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

@@ -5,11 +5,7 @@ import { STATUS, useMockStore } from "../../data/mockStore.jsx";
 export default function Documents() {
   const { darkMode } = useOutletContext();
 
-  const {
-    state,
-    reviewDocument,
-    deployAssignment,
-  } = useMockStore();
+  const { state, reviewDocument, deployAssignment } = useMockStore();
 
   const facultyId = state.currentUser?.profileId;
 
@@ -49,30 +45,21 @@ export default function Documents() {
     });
 
     return Object.entries(groups).map(([studentId, studentDocuments]) => {
-      const student = state.students.find(
-        (item) => item.id === studentId
-      );
+      const student = state.students.find((item) => item.id === studentId);
 
       const assignment = state.assignments.find(
         (item) => item.id === studentDocuments[0]?.assignmentId
       );
 
-      const requiredTypes = state.documentTypes.filter(
-        (item) => item.required
-      );
+      const requiredTypes = state.documentTypes.filter((item) => item.required);
 
-      const approvedRequiredDocuments = studentDocuments.filter(
-        (document) => {
-          const type = state.documentTypes.find(
-            (item) => item.id === document.documentTypeId
-          );
+      const approvedRequiredDocuments = studentDocuments.filter((document) => {
+        const type = state.documentTypes.find(
+          (item) => item.id === document.documentTypeId
+        );
 
-          return (
-            type?.required &&
-            document.status === STATUS.document.APPROVED
-          );
-        }
-      );
+        return type?.required && document.status === STATUS.document.APPROVED;
+      });
 
       const allRequiredDocumentsApproved =
         requiredTypes.length > 0 &&
@@ -85,12 +72,31 @@ export default function Documents() {
       );
 
       const needsRevision = studentDocuments.filter(
-        (document) =>
-          document.status === STATUS.document.NEEDS_REVISION
+        (document) => document.status === STATUS.document.NEEDS_REVISION
       );
 
-      const deployed =
-        assignment?.status === STATUS.assignment.ACTIVE;
+      /*
+       * =====================================================
+       * ASSIGNMENT STATUS
+       * =====================================================
+       */
+
+      const deployed = assignment?.status === STATUS.assignment.ACTIVE;
+
+      const completed = assignment?.status === STATUS.assignment.COMPLETED;
+
+      const suspended = assignment?.status === STATUS.assignment.SUSPENDED;
+
+      const terminated = assignment?.status === STATUS.assignment.TERMINATED;
+
+      /*
+       * Deployment is finished/unavailable when the
+       * assignment is already Active, Completed, Suspended,
+       * or Terminated.
+       */
+
+      const deploymentFinished =
+        deployed || completed || suspended || terminated;
 
       return {
         studentId,
@@ -103,6 +109,10 @@ export default function Documents() {
         needsRevision,
         allRequiredDocumentsApproved,
         deployed,
+        completed,
+        suspended,
+        terminated,
+        deploymentFinished,
       };
     });
   }, [documents, state.students, state.assignments, state.documentTypes]);
@@ -158,7 +168,12 @@ export default function Documents() {
       return;
     }
 
-    if (group.deployed) {
+    /*
+     * Prevent deployment if the internship has already
+     * reached a final/current state.
+     */
+
+    if (group.deploymentFinished) {
       return;
     }
 
@@ -215,9 +230,7 @@ export default function Documents() {
   ).length;
 
   const readyForDeployment = studentGroups.filter(
-    (group) =>
-      group.allRequiredDocumentsApproved &&
-      !group.deployed
+    (group) => group.allRequiredDocumentsApproved && !group.deploymentFinished
   ).length;
 
   /*
@@ -241,13 +254,11 @@ export default function Documents() {
           Faculty Adviser Portal
         </p>
 
-        <h1 className="text-2xl font-black">
-          Document Verification
-        </h1>
+        <h1 className="text-2xl font-black">Document Verification</h1>
 
         <p className={`text-sm mt-1 ${mutedText}`}>
-          Review all internship requirements before deploying students
-          to their assigned companies.
+          Review all internship requirements before deploying students to their
+          assigned companies.
         </p>
       </div>
 
@@ -261,19 +272,13 @@ export default function Documents() {
             Submitted Documents
           </p>
 
-          <p className="text-2xl font-black mt-1">
-            {totalDocuments}
-          </p>
+          <p className="text-2xl font-black mt-1">{totalDocuments}</p>
         </div>
 
         <div className={`border rounded-2xl p-4 ${card}`}>
-          <p className={`text-xs font-semibold ${mutedText}`}>
-            Pending Review
-          </p>
+          <p className={`text-xs font-semibold ${mutedText}`}>Pending Review</p>
 
-          <p className="text-2xl font-black mt-1">
-            {pendingDocuments}
-          </p>
+          <p className="text-2xl font-black mt-1">{pendingDocuments}</p>
         </div>
 
         <div className={`border rounded-2xl p-4 ${card}`}>
@@ -281,9 +286,7 @@ export default function Documents() {
             Approved Documents
           </p>
 
-          <p className="text-2xl font-black mt-1">
-            {approvedDocuments}
-          </p>
+          <p className="text-2xl font-black mt-1">{approvedDocuments}</p>
         </div>
 
         <div className={`border rounded-2xl p-4 ${card}`}>
@@ -291,9 +294,7 @@ export default function Documents() {
             Ready for Deployment
           </p>
 
-          <p className="text-2xl font-black mt-1">
-            {readyForDeployment}
-          </p>
+          <p className="text-2xl font-black mt-1">{readyForDeployment}</p>
         </div>
       </div>
 
@@ -304,18 +305,14 @@ export default function Documents() {
       <section className={`border rounded-2xl overflow-hidden ${card}`}>
         <div
           className={`px-5 py-4 border-b ${
-            darkMode
-              ? "border-slate-700"
-              : "border-slate-200"
+            darkMode ? "border-slate-700" : "border-slate-200"
           }`}
         >
-          <h2 className="font-bold text-sm">
-            Student Document Verification
-          </h2>
+          <h2 className="font-bold text-sm">Student Document Verification</h2>
 
           <p className={`text-xs mt-1 ${mutedText}`}>
-            All required documents must be approved before the
-            student can be deployed to the company.
+            All required documents must be approved before the student can be
+            deployed to the company.
           </p>
         </div>
 
@@ -323,36 +320,29 @@ export default function Documents() {
           <div className="p-8 text-center">
             <div className="text-3xl mb-3">📄</div>
 
-            <p className="font-semibold">
-              No submitted documents
-            </p>
+            <p className="font-semibold">No submitted documents</p>
 
             <p className={`text-sm mt-1 ${mutedText}`}>
-              Students will appear here after they submit their
-              internship requirements.
+              Students will appear here after they submit their internship
+              requirements.
             </p>
           </div>
         ) : (
           <div
             className={`divide-y ${
-              darkMode
-                ? "divide-slate-700"
-                : "divide-slate-200"
+              darkMode ? "divide-slate-700" : "divide-slate-200"
             }`}
           >
             {studentGroups.map((group) => {
               const company = state.companies.find(
-                (item) =>
-                  item.id === group.assignment?.companyId
+                (item) => item.id === group.assignment?.companyId
               );
 
               return (
                 <div
                   key={group.studentId}
                   className={`p-5 ${
-                    darkMode
-                      ? "hover:bg-slate-800/30"
-                      : "hover:bg-slate-50"
+                    darkMode ? "hover:bg-slate-800/30" : "hover:bg-slate-50"
                   }`}
                 >
                   {/* =================================================
@@ -363,13 +353,24 @@ export default function Documents() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-black">
-                          {group.student?.fullName ||
-                            "Unknown Student"}
+                          {group.student?.fullName || "Unknown Student"}
                         </h3>
 
-                        {group.deployed ? (
+                        {group.completed ? (
+                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-purple-50 text-purple-700 border-purple-200">
+                            COMPLETED
+                          </span>
+                        ) : group.deployed ? (
                           <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-emerald-50 text-emerald-700 border-emerald-200">
                             DEPLOYED
+                          </span>
+                        ) : group.suspended ? (
+                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-amber-50 text-amber-700 border-amber-200">
+                            SUSPENDED
+                          </span>
+                        ) : group.terminated ? (
+                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-red-50 text-red-700 border-red-200">
+                            TERMINATED
                           </span>
                         ) : group.allRequiredDocumentsApproved ? (
                           <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
@@ -387,16 +388,13 @@ export default function Documents() {
                       </div>
 
                       <p className={`text-xs mt-1 ${mutedText}`}>
-                        {group.student?.studentId ||
-                          group.studentId}
+                        {group.student?.studentId || group.studentId}
                       </p>
 
                       {group.assignment && (
                         <p className={`text-xs mt-1 ${mutedText}`}>
                           Assignment: {group.assignment.id}
-                          {company?.name
-                            ? ` · ${company.name}`
-                            : ""}
+                          {company?.name ? ` · ${company.name}` : ""}
                         </p>
                       )}
                     </div>
@@ -419,8 +417,8 @@ export default function Documents() {
                       </p>
 
                       <p className="text-sm font-black mt-1">
-                        {group.approvedRequiredCount} /{" "}
-                        {group.requiredCount} approved
+                        {group.approvedRequiredCount} / {group.requiredCount}{" "}
+                        approved
                       </p>
 
                       <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 mt-2 overflow-hidden">
@@ -450,14 +448,11 @@ export default function Documents() {
                   <div className="mt-5 space-y-3">
                     {group.documents.map((document) => {
                       const type = state.documentTypes.find(
-                        (item) =>
-                          item.id ===
-                          document.documentTypeId
+                        (item) => item.id === document.documentTypeId
                       );
 
                       const isApproved =
-                        document.status ===
-                        STATUS.document.APPROVED;
+                        document.status === STATUS.document.APPROVED;
 
                       return (
                         <div
@@ -474,9 +469,7 @@ export default function Documents() {
                             <div className="flex items-start gap-3 min-w-0">
                               <div
                                 className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                                  darkMode
-                                    ? "bg-slate-700"
-                                    : "bg-white"
+                                  darkMode ? "bg-slate-700" : "bg-white"
                                 }`}
                               >
                                 📄
@@ -485,8 +478,7 @@ export default function Documents() {
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <p className="font-bold text-sm">
-                                    {type?.name ||
-                                      "Unknown Document"}
+                                    {type?.name || "Unknown Document"}
                                   </p>
 
                                   {type?.required && (
@@ -510,11 +502,8 @@ export default function Documents() {
                                   {document.fileName}
                                 </p>
 
-                                <p
-                                  className={`text-[10px] mt-1 ${mutedText}`}
-                                >
-                                  Version {document.version} ·{" "}
-                                  {document.id}
+                                <p className={`text-[10px] mt-1 ${mutedText}`}>
+                                  Version {document.version} · {document.id}
                                 </p>
                               </div>
                             </div>
@@ -524,11 +513,7 @@ export default function Documents() {
                             <div className="flex flex-wrap items-center gap-2 shrink-0">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setSelectedDocument(
-                                    document
-                                  )
-                                }
+                                onClick={() => setSelectedDocument(document)}
                                 className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
                                   darkMode
                                     ? "border-slate-600 hover:bg-slate-700"
@@ -542,11 +527,7 @@ export default function Documents() {
                                 <>
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      handleApprove(
-                                        document
-                                      )
-                                    }
+                                    onClick={() => handleApprove(document)}
                                     className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
                                   >
                                     ✓ Approve
@@ -554,11 +535,7 @@ export default function Documents() {
 
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      handleRevision(
-                                        document
-                                      )
-                                    }
+                                    onClick={() => handleRevision(document)}
                                     className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
                                       darkMode
                                         ? "border-red-900 text-red-400 hover:bg-red-950"
@@ -588,9 +565,7 @@ export default function Documents() {
                                   : "bg-white text-slate-500"
                               }`}
                             >
-                              <span className="font-bold">
-                                Review comment:
-                              </span>{" "}
+                              <span className="font-bold">Review comment:</span>{" "}
                               {document.reviewComment}
                             </div>
                           )}
@@ -605,21 +580,51 @@ export default function Documents() {
 
                   <div
                     className={`mt-5 pt-5 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
-                      darkMode
-                        ? "border-slate-700"
-                        : "border-slate-200"
+                      darkMode ? "border-slate-700" : "border-slate-200"
                     }`}
                   >
                     <div>
-                      {group.deployed ? (
+                      {group.completed ? (
+                        <>
+                          <p className="text-sm font-bold text-purple-600">
+                            ✓ Internship completed
+                          </p>
+
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            This student's internship has already been
+                            completed. Deployment is no longer available.
+                          </p>
+                        </>
+                      ) : group.deployed ? (
                         <>
                           <p className="text-sm font-bold text-emerald-600">
                             ✓ Intern deployed successfully
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            This student is now visible to the
-                            assigned company.
+                            This student is now visible to the assigned company.
+                          </p>
+                        </>
+                      ) : group.suspended ? (
+                        <>
+                          <p className="text-sm font-bold text-amber-600">
+                            Internship suspended
+                          </p>
+
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            Deployment is unavailable while this internship is
+                            suspended.
+                          </p>
+                        </>
+                      ) : group.terminated ? (
+                        <>
+                          <p className="text-sm font-bold text-red-600">
+                            Internship terminated
+                          </p>
+
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            This internship has been terminated. Deployment is
+                            no longer available.
                           </p>
                         </>
                       ) : group.allRequiredDocumentsApproved ? (
@@ -629,8 +634,7 @@ export default function Documents() {
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            This intern is ready to be deployed
-                            to the company.
+                            This intern is ready to be deployed to the company.
                           </p>
                         </>
                       ) : (
@@ -640,19 +644,22 @@ export default function Documents() {
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            Approve all required documents before
-                            deploying this intern.
+                            Approve all required documents before deploying this
+                            intern.
                           </p>
                         </>
                       )}
                     </div>
 
-                    {!group.deployed && (
+                    {/* =================================================
+                        DEPLOY BUTTON
+                        Only appears when deployment is still possible
+                    ================================================= */}
+
+                    {!group.deploymentFinished && (
                       <button
                         type="button"
-                        disabled={
-                          !group.allRequiredDocumentsApproved
-                        }
+                        disabled={!group.allRequiredDocumentsApproved}
                         onClick={() => handleDeploy(group)}
                         className={`px-5 py-2.5 rounded-lg text-xs font-bold transition ${
                           group.allRequiredDocumentsApproved
@@ -688,17 +695,13 @@ export default function Documents() {
                 ? "bg-slate-900 border-slate-700"
                 : "bg-white border-slate-200"
             }`}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
           >
             {/* MODAL HEADER */}
 
             <div
               className={`px-5 py-4 border-b flex items-center justify-between ${
-                darkMode
-                  ? "border-slate-700"
-                  : "border-slate-200"
+                darkMode ? "border-slate-700" : "border-slate-200"
               }`}
             >
               <div className="min-w-0">
@@ -706,20 +709,14 @@ export default function Documents() {
                   {selectedDocument.fileName}
                 </h2>
 
-                <p className={`text-xs mt-1 ${mutedText}`}>
-                  Document Preview
-                </p>
+                <p className={`text-xs mt-1 ${mutedText}`}>Document Preview</p>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  setSelectedDocument(null)
-                }
+                onClick={() => setSelectedDocument(null)}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg transition ${
-                  darkMode
-                    ? "hover:bg-slate-800"
-                    : "hover:bg-slate-100"
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
                 ×
@@ -736,26 +733,20 @@ export default function Documents() {
                     : "border-slate-200 bg-slate-50"
                 }`}
               >
-                <div className="text-5xl mb-4">
-                  📄
-                </div>
+                <div className="text-5xl mb-4">📄</div>
 
                 <h3 className="font-bold text-lg">
                   {selectedDocument.fileName}
                 </h3>
 
-                <p
-                  className={`text-sm mt-2 max-w-md ${mutedText}`}
-                >
-                  The uploaded document will be displayed
-                  here for faculty verification.
+                <p className={`text-sm mt-2 max-w-md ${mutedText}`}>
+                  The uploaded document will be displayed here for faculty
+                  verification.
                 </p>
 
-                <p
-                  className={`text-xs mt-3 ${mutedText}`}
-                >
-                  Actual file preview will be enabled when
-                  document storage is connected.
+                <p className={`text-xs mt-3 ${mutedText}`}>
+                  Actual file preview will be enabled when document storage is
+                  connected.
                 </p>
               </div>
 
@@ -764,23 +755,17 @@ export default function Documents() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
                 <div
                   className={`p-3 rounded-lg ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-50"
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
                   }`}
                 >
-                  <p
-                    className={`text-[10px] uppercase font-bold ${mutedText}`}
-                  >
+                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
                     Student
                   </p>
 
                   <p className="text-sm font-semibold mt-1">
                     {
                       state.students.find(
-                        (student) =>
-                          student.id ===
-                          selectedDocument.studentId
+                        (student) => student.id === selectedDocument.studentId
                       )?.fullName
                     }
                   </p>
@@ -788,23 +773,17 @@ export default function Documents() {
 
                 <div
                   className={`p-3 rounded-lg ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-50"
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
                   }`}
                 >
-                  <p
-                    className={`text-[10px] uppercase font-bold ${mutedText}`}
-                  >
+                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
                     Document Type
                   </p>
 
                   <p className="text-sm font-semibold mt-1">
                     {
                       state.documentTypes.find(
-                        (type) =>
-                          type.id ===
-                          selectedDocument.documentTypeId
+                        (type) => type.id === selectedDocument.documentTypeId
                       )?.name
                     }
                   </p>
@@ -812,14 +791,10 @@ export default function Documents() {
 
                 <div
                   className={`p-3 rounded-lg ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-50"
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
                   }`}
                 >
-                  <p
-                    className={`text-[10px] uppercase font-bold ${mutedText}`}
-                  >
+                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
                     Version
                   </p>
 
@@ -830,14 +805,10 @@ export default function Documents() {
 
                 <div
                   className={`p-3 rounded-lg ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-50"
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
                   }`}
                 >
-                  <p
-                    className={`text-[10px] uppercase font-bold ${mutedText}`}
-                  >
+                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
                     Status
                   </p>
 
@@ -850,20 +821,15 @@ export default function Documents() {
 
             {/* MODAL ACTIONS */}
 
-            {selectedDocument.status !==
-              STATUS.document.APPROVED && (
+            {selectedDocument.status !== STATUS.document.APPROVED && (
               <div
                 className={`px-5 py-4 border-t flex flex-col sm:flex-row justify-end gap-2 ${
-                  darkMode
-                    ? "border-slate-700"
-                    : "border-slate-200"
+                  darkMode ? "border-slate-700" : "border-slate-200"
                 }`}
               >
                 <button
                   type="button"
-                  onClick={() =>
-                    handleRevision(selectedDocument)
-                  }
+                  onClick={() => handleRevision(selectedDocument)}
                   className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
                     darkMode
                       ? "border-red-900 text-red-400 hover:bg-red-950"
@@ -875,9 +841,7 @@ export default function Documents() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    handleApprove(selectedDocument)
-                  }
+                  onClick={() => handleApprove(selectedDocument)}
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
                 >
                   Approve Document
@@ -890,4 +854,3 @@ export default function Documents() {
     </div>
   );
 }
-

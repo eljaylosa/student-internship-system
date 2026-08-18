@@ -5,32 +5,233 @@ import { STATUS, useMockStore } from "../../data/mockStore.jsx";
 export default function Application() {
   const { darkMode } = useOutletContext();
   const { state, submitApplication, saveApplicationDraft } = useMockStore();
-  const student = state.students.find((item) => item.id === state.currentUser?.profileId);
+  const student = state.students.find(
+    (item) => item.id === state.currentUser?.profileId
+  );
   const [activeTab, setActiveTab] = useState("apply");
-  const [opportunityId, setOpportunityId] = useState(state.opportunities.find((item) => item.status === STATUS.opportunity.ACTIVE)?.id || "");
+  const [opportunityId, setOpportunityId] = useState(
+    state.opportunities.find(
+      (item) => item.status === STATUS.opportunity.ACTIVE
+    )?.id || ""
+  );
   const [coverLetter, setCoverLetter] = useState("");
-  const opportunities = state.opportunities.filter((item) => item.status === STATUS.opportunity.ACTIVE);
-  const applications = state.applications.filter((item) => item.studentId === student?.id);
-  const assignment = state.assignments.find((item) => item.studentId === student?.id);
-  const selectedOpportunity = opportunities.find((item) => item.id === opportunityId);
-  const input = darkMode ? "bg-slate-800 border-slate-700 text-slate-100" : "bg-slate-50 border-slate-200 text-slate-700";
-  const card = darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200";
+  const opportunities = state.opportunities.filter(
+    (item) => item.status === STATUS.opportunity.ACTIVE
+  );
+  const applications = state.applications.filter(
+    (item) => item.studentId === student?.id
+  );
+  const assignment = state.assignments.find(
+    (item) => item.studentId === student?.id
+  );
+  const selectedOpportunity = opportunities.find(
+    (item) => item.id === opportunityId
+  );
+  const input = darkMode
+    ? "bg-slate-800 border-slate-700 text-slate-100"
+    : "bg-slate-50 border-slate-200 text-slate-700";
+  const card = darkMode
+    ? "bg-slate-900 border-slate-700"
+    : "bg-white border-slate-200";
   const apply = (draft = false) => {
-    if (!opportunityId) return alert("Please select an internship opportunity.");
-    if (draft) saveApplicationDraft({ studentId: student.id, opportunityId, coverLetter });
-    else submitApplication({ studentId: student.id, opportunityId, coverLetter });
+    if (!opportunityId)
+      return alert("Please select an internship opportunity.");
+    if (draft)
+      saveApplicationDraft({
+        studentId: student.id,
+        opportunityId,
+        coverLetter,
+      });
+    else
+      submitApplication({ studentId: student.id, opportunityId, coverLetter });
     setActiveTab("status");
   };
-  const statusTone = (status) => status === STATUS.application.APPROVED ? "text-emerald-600" : status === STATUS.application.REJECTED ? "text-red-600" : "text-amber-600";
-  return <div className={`p-5 md:p-6 lg:p-8 max-w-[1400px] mx-auto ${darkMode ? "text-slate-100" : "text-slate-900"}`}>
-    <div className="mb-6"><p className="text-xs uppercase tracking-widest font-bold text-slate-400">Student Portal</p><h1 className="text-2xl font-black">Internship Application</h1><p className="text-sm mt-1 text-slate-500">Apply to a shared company opportunity and track the same application faculty reviews.</p></div>
-    <div className={`inline-flex p-1 border rounded-xl mb-5 ${darkMode ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-200"}`}>
-      {["apply", "status"].map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 rounded-lg text-xs font-semibold ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{tab === "apply" ? "Apply" : "View Status"}</button>)}
+  const statusTone = (status) =>
+    status === STATUS.application.APPROVED
+      ? "text-emerald-600"
+      : status === STATUS.application.REJECTED
+      ? "text-red-600"
+      : "text-amber-600";
+  return (
+    <div
+      className={`p-5 md:p-6 lg:p-8 max-w-[1400px] mx-auto ${
+        darkMode ? "text-slate-100" : "text-slate-900"
+      }`}
+    >
+      <div className="mb-6">
+        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+          Student Portal
+        </p>
+        <h1 className="text-2xl font-black">Internship Application</h1>
+        <p className="text-sm mt-1 text-slate-500">
+          Apply to a shared company opportunity and track the same application
+          faculty reviews.
+        </p>
+      </div>
+      <div
+        className={`inline-flex p-1 border rounded-xl mb-5 ${
+          darkMode
+            ? "bg-slate-800 border-slate-700"
+            : "bg-slate-100 border-slate-200"
+        }`}
+      >
+        {["apply", "status"].map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`px-6 py-2.5 rounded-lg text-xs font-semibold ${
+              activeTab === tab
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500"
+            }`}
+          >
+            {tab === "apply" ? "Apply" : "View Status"}
+          </button>
+        ))}
+      </div>
+      {activeTab === "apply" ? (
+        <section className={`border rounded-2xl p-5 md:p-6 ${card}`}>
+          <h2 className="font-bold text-lg mb-4">Available opportunities</h2>
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            {opportunities.map((opportunity) => (
+              <button
+                key={opportunity.id}
+                type="button"
+                onClick={() => setOpportunityId(opportunity.id)}
+                className={`text-left border rounded-xl p-4 ${
+                  opportunityId === opportunity.id
+                    ? "border-blue-500 ring-2 ring-blue-100"
+                    : "border-slate-200"
+                }`}
+              >
+                <div className="flex justify-between gap-2">
+                  <strong>{opportunity.title}</strong>
+                  <span className="text-[10px] text-emerald-600">
+                    {opportunity.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {
+                    state.companies.find(
+                      (company) => company.id === opportunity.companyId
+                    )?.name
+                  }{" "}
+                  · {opportunity.location}
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  {opportunity.description}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-3">
+                  {opportunity.id} · {opportunity.availability}
+                </p>
+              </button>
+            ))}
+          </div>
+          {selectedOpportunity && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Selected opportunity
+                </label>
+                <input
+                  className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
+                  value={`${selectedOpportunity.id} — ${selectedOpportunity.title}`}
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Cover letter
+                </label>
+                <textarea
+                  rows="5"
+                  className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
+                  value={coverLetter}
+                  onChange={(event) => setCoverLetter(event.target.value)}
+                  placeholder="Explain your interest in this opportunity."
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg border text-xs font-semibold"
+                  onClick={() => apply(true)}
+                >
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold"
+                  onClick={() => apply(false)}
+                >
+                  Submit Application
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className={`border rounded-2xl p-5 md:p-6 ${card}`}>
+          <h2 className="font-bold text-lg mb-4">
+            Application and assignment status
+          </h2>
+          {applications.length === 0 ? (
+            <p className="text-sm text-slate-500">No applications yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {applications.map((application) => {
+                const opportunity = state.opportunities.find(
+                  (item) => item.id === application.opportunityId
+                );
+                return (
+                  <div key={application.id} className="border rounded-xl p-4">
+                    <div className="flex justify-between gap-4">
+                      <div>
+                        <p className="font-semibold">
+                          {opportunity?.title || application.opportunityId}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {application.id} · submitted{" "}
+                          {application.submittedAt
+                            ? new Date(
+                                application.submittedAt
+                              ).toLocaleDateString()
+                            : "not submitted"}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-xs font-bold ${statusTone(
+                          application.status
+                        )}`}
+                      >
+                        {application.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      {application.notes}
+                    </p>
+                    {application.assignmentId && (
+                      <p className="text-xs text-emerald-600 font-semibold mt-2">
+                        Assignment created: {application.assignmentId}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {assignment && (
+            <div className="mt-5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
+              <strong>Internship Assignment {assignment.id}</strong>
+              <p className="mt-1">
+                {assignment.startDate} to {assignment.endDate} ·{" "}
+                {assignment.status}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
     </div>
-    {activeTab === "apply" ? <section className={`border rounded-2xl p-5 md:p-6 ${card}`}>
-      <h2 className="font-bold text-lg mb-4">Available opportunities</h2>
-      <div className="grid md:grid-cols-2 gap-4 mb-6">{opportunities.map((opportunity) => <button key={opportunity.id} type="button" onClick={() => setOpportunityId(opportunity.id)} className={`text-left border rounded-xl p-4 ${opportunityId === opportunity.id ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200"}`}><div className="flex justify-between gap-2"><strong>{opportunity.title}</strong><span className="text-[10px] text-emerald-600">{opportunity.status}</span></div><p className="text-xs text-slate-500 mt-1">{state.companies.find((company) => company.id === opportunity.companyId)?.name} · {opportunity.location}</p><p className="text-xs text-slate-500 mt-2">{opportunity.description}</p><p className="text-[10px] text-slate-400 mt-3">{opportunity.id} · {opportunity.availability}</p></button>)}</div>
-      {selectedOpportunity && <div className="space-y-4"><div><label className="block text-xs font-semibold mb-1">Selected opportunity</label><input className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`} value={`${selectedOpportunity.id} — ${selectedOpportunity.title}`} readOnly /></div><div><label className="block text-xs font-semibold mb-1">Cover letter</label><textarea rows="5" className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`} value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Explain your interest in this opportunity." /></div><div className="flex gap-2"><button type="button" className="px-4 py-2 rounded-lg border text-xs font-semibold" onClick={() => apply(true)}>Save Draft</button><button type="button" className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold" onClick={() => apply(false)}>Submit Application</button></div></div>}
-    </section> : <section className={`border rounded-2xl p-5 md:p-6 ${card}`}><h2 className="font-bold text-lg mb-4">Application and assignment status</h2>{applications.length === 0 ? <p className="text-sm text-slate-500">No applications yet.</p> : <div className="space-y-3">{applications.map((application) => { const opportunity = state.opportunities.find((item) => item.id === application.opportunityId); return <div key={application.id} className="border rounded-xl p-4"><div className="flex justify-between gap-4"><div><p className="font-semibold">{opportunity?.title || application.opportunityId}</p><p className="text-xs text-slate-500">{application.id} · submitted {application.submittedAt ? new Date(application.submittedAt).toLocaleDateString() : "not submitted"}</p></div><span className={`text-xs font-bold ${statusTone(application.status)}`}>{application.status}</span></div><p className="text-xs text-slate-500 mt-2">{application.notes}</p>{application.assignmentId && <p className="text-xs text-emerald-600 font-semibold mt-2">Assignment created: {application.assignmentId}</p>}</div>; })}</div>}{assignment && <div className="mt-5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800"><strong>Internship Assignment {assignment.id}</strong><p className="mt-1">{assignment.startDate} to {assignment.endDate} · {assignment.status}</p></div>}</section>}
-  </div>;
+  );
 }

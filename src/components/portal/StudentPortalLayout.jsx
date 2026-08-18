@@ -164,14 +164,19 @@ const StudentPortalLayout = () => {
       path: "/student/profile",
     },
     {
-      name: "Application",
+      name: "Apply Now",
       icon: "📋",
       path: "/student/application",
     },
     {
-      name: "Documents",
+      name: "Upload Documents",
       icon: "📁",
       path: "/student/documents",
+    },
+    {
+      name: "Document Template",
+      icon: "📁",
+      path: "/student/templates"
     },
     {
       name: "Notifications",
@@ -186,7 +191,7 @@ const StudentPortalLayout = () => {
     {
       name: "Evaluations",
       icon: "📋",
-      path: "/student/evaluation"
+      path: "/student/evaluation",
     },
     {
       name: "Messages",

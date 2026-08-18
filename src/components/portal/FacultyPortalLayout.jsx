@@ -179,13 +179,13 @@ const FacultyPortalLayout = () => {
       path: "/faculty/students",
     },
     {
-      name: "Review Apps",
+      name: "Review Applications",
       icon: "📋",
       path: "/faculty/applications",
       badge: true,
     },
     {
-      name: "Documents",
+      name: "Review Documents",
       icon: "📁",
       path: "/faculty/documents",
     },
