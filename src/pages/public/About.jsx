@@ -31,15 +31,15 @@ const About = () => {
   // Ang 3 pangunahing user sectors na tinutulungan ng system naten
   const stakeholders = [
     {
-      title: "BPSU Students",
+      title: "Students",
       desc: "Easily upload requirements like CBAR Titles and PDS sheets digitally without handling physical prints.",
     },
     {
-      title: "Faculty Advisers",
+      title: "Registrar Advisers",
       desc: "Monitor student submissions, evaluate terminal records, and track deployments efficiently.",
     },
     {
-      title: "Cooperating Schools",
+      title: "Company Supervisors",
       desc: "Verify intern records, evaluate professional behavior, and communicate directly with BPSU.",
     },
   ];
@@ -56,10 +56,10 @@ const About = () => {
             About InternLink
           </h1>
           <p className="text-base text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            InternLink is a Web-Based and Mobile Student Internship Management
-            System (SIMS) tailored for Bataan Peninsula State University. It
-            replaces slow, legacy manual administrative tasks with fluid
-            cloud-based automation.
+            InternLink is a Web-Based Internship Management System (SIMS)
+            tailored for Students, Registrars, and Companies. It replaces slow,
+            legacy manual administrative tasks with fluid cloud-based
+            automation.
           </p>
         </div>
 
@@ -73,8 +73,7 @@ const About = () => {
               At present, many internship-related activities such as application
               processing, document submission, and record management are still
               handled manually or through separate communication platforms.
-              InternLink centralizes everything inside a secure web and mobile
-              ecosystem.
+              InternLink centralizes everything inside a secure web ecosystem.
             </p>
           </div>
 

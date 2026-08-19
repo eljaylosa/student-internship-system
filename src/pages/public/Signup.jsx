@@ -15,12 +15,14 @@ const SignUp = () => {
       program: "",
       yearLevel: "",
       phone: "",
+      cor: null,
+      studentIdDocument: null,
       password: "",
       confirmPassword: "",
       agreeTerms: false,
     },
 
-    faculty: {
+    registrar: {
       firstName: "",
       middleInitial: "",
       lastName: "",
@@ -29,6 +31,8 @@ const SignUp = () => {
       department: "",
       position: "",
       phone: "",
+      employeeIdDocument: null,
+      appointmentLetter: null,
       password: "",
       confirmPassword: "",
       agreeTerms: false,
@@ -66,8 +70,8 @@ const SignUp = () => {
     }));
   };
 
-  const handleFileChange = (field, file) => {
-    handleChange("company", field, file);
+  const handleFileChange = (role, field, file) => {
+    handleChange(role, field, file);
   };
 
   const handleSubmit = (event) => {
@@ -118,11 +122,9 @@ const SignUp = () => {
 
       console.log("Company registration submitted for admin review:", {
         ...currentForm,
-        businessRegistration:
-          currentForm.businessRegistration?.name || null,
+        businessRegistration: currentForm.businessRegistration?.name || null,
         birRegistration: currentForm.birRegistration?.name || null,
-        supportingDocument:
-          currentForm.supportingDocument?.name || null,
+        supportingDocument: currentForm.supportingDocument?.name || null,
         password: "[HIDDEN]",
         confirmPassword: "[HIDDEN]",
       });
@@ -135,25 +137,92 @@ const SignUp = () => {
     }
 
     /*
-      STUDENT / FACULTY
+      STUDENT REGISTRATION
+
+      Required verification documents:
+
+      1. Certificate of Registration (COR)
+      2. Student ID
 
       Future database flow:
 
       1. Create account as Pending Verification.
-      2. Send email verification.
-      3. Verify phone number through SMS OTP.
-      4. Activate account.
+      2. Registrar reviews submitted student documents.
+      3. Send email verification.
+      4. Verify phone number through SMS OTP.
+      5. Activate account.
     */
 
-    console.log(`Registering ${activeRole} account:`, {
-      ...currentForm,
-      password: "[HIDDEN]",
-      confirmPassword: "[HIDDEN]",
-    });
+    if (activeRole === "student") {
+      if (!currentForm.cor) {
+        alert("Please upload your Certificate of Registration (COR).");
+        return;
+      }
 
-    alert(
-      `Registration submitted successfully. Please verify your email address to continue.`
-    );
+      if (!currentForm.studentIdDocument) {
+        alert("Please upload your Student ID.");
+        return;
+      }
+
+      console.log("Student registration submitted:", {
+        ...currentForm,
+        cor: currentForm.cor?.name || null,
+        studentIdDocument: currentForm.studentIdDocument?.name || null,
+        password: "[HIDDEN]",
+        confirmPassword: "[HIDDEN]",
+      });
+
+      alert(
+        "Registration submitted successfully. Your documents will be reviewed before your account can be fully activated."
+      );
+
+      return;
+    }
+
+    /*
+      REGISTRAR REGISTRATION
+
+      Required verification documents:
+
+      1. University / Employee ID
+      2. Proof of Appointment / Authorization Letter
+
+      Future database flow:
+
+      1. Create account as Pending Verification.
+      2. Administrator reviews registrar credentials.
+      3. Send email verification.
+      4. Verify phone number through SMS OTP.
+      5. Activate account.
+    */
+
+    if (activeRole === "registrar") {
+      if (!currentForm.employeeIdDocument) {
+        alert("Please upload your University / Employee ID.");
+        return;
+      }
+
+      if (!currentForm.appointmentLetter) {
+        alert(
+          "Please upload your Proof of Appointment / Authorization Letter."
+        );
+        return;
+      }
+
+      console.log("Registrar registration submitted:", {
+        ...currentForm,
+        employeeIdDocument: currentForm.employeeIdDocument?.name || null,
+        appointmentLetter: currentForm.appointmentLetter?.name || null,
+        password: "[HIDDEN]",
+        confirmPassword: "[HIDDEN]",
+      });
+
+      alert(
+        "Registrar registration submitted successfully. Your credentials will be reviewed before your account can be fully activated."
+      );
+
+      return;
+    }
   };
 
   const portals = [
@@ -185,8 +254,8 @@ const SignUp = () => {
     },
 
     {
-      key: "faculty",
-      label: "Faculty Adviser",
+      key: "registrar",
+      label: "Registrar Adviser",
       accent: "from-emerald-500 to-teal-600",
       activeText: "text-emerald-600",
       icon: (
@@ -229,9 +298,7 @@ const SignUp = () => {
     },
   ];
 
-  const activePortal = portals.find(
-    (portal) => portal.key === activeRole
-  );
+  const activePortal = portals.find((portal) => portal.key === activeRole);
 
   const currentForm = forms[activeRole];
 
@@ -241,8 +308,10 @@ const SignUp = () => {
   const labelClass =
     "block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5";
 
-  const sectionClass =
-    "border border-slate-100 rounded-xl p-5 bg-slate-50/50";
+  const sectionClass = "border border-slate-100 rounded-xl p-5 bg-slate-50/50";
+
+  const fileInputClass =
+    "w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-semibold hover:file:bg-slate-200";
 
   const getPasswordStrength = (password) => {
     let strength = 0;
@@ -353,7 +422,6 @@ const SignUp = () => {
 
     return (
       <>
-        {/* PASSWORD */}
         <div>
           <label className={labelClass}>Password</label>
 
@@ -398,7 +466,6 @@ const SignUp = () => {
           )}
         </div>
 
-        {/* CONFIRM PASSWORD */}
         <div>
           <label className={labelClass}>Confirm Password</label>
 
@@ -409,11 +476,7 @@ const SignUp = () => {
             placeholder="Re-enter your password"
             value={currentForm.confirmPassword}
             onChange={(event) =>
-              handleChange(
-                activeRole,
-                "confirmPassword",
-                event.target.value
-              )
+              handleChange(activeRole, "confirmPassword", event.target.value)
             }
             className={inputClass}
           />
@@ -442,9 +505,31 @@ const SignUp = () => {
               </p>
 
               <p className="text-xs text-purple-700 leading-relaxed mt-1">
-                Your registration and submitted documents will be reviewed by
-                a SIMS administrator. Email and SMS verification will only
-                proceed after your company registration has been approved.
+                Your registration and submitted documents will be reviewed by a
+                SIMS administrator. Email and SMS verification will only proceed
+                after your company registration has been approved.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeRole === "registrar") {
+      return (
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+          <div className="flex gap-3">
+            <div className="text-lg">🏛️</div>
+
+            <div>
+              <p className="text-sm font-bold text-emerald-900">
+                Registrar verification is required
+              </p>
+
+              <p className="text-xs text-emerald-700 leading-relaxed mt-1">
+                Your university credentials and authorization documents will be
+                reviewed before your Registrar Adviser account can be fully
+                activated.
               </p>
             </div>
           </div>
@@ -459,13 +544,13 @@ const SignUp = () => {
 
           <div>
             <p className="text-sm font-bold text-blue-900">
-              Verification required
+              Student verification is required
             </p>
 
             <p className="text-xs text-blue-700 leading-relaxed mt-1">
-              After registration, a verification email will be sent to your
-              email address. You will also need to verify your phone number
-              through SMS before your account can be fully activated.
+              Your COR and Student ID will be reviewed before your account can
+              be fully activated. You will also need to verify your email and
+              phone number.
             </p>
           </div>
         </div>
@@ -548,9 +633,7 @@ const SignUp = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* ================================
-                PERSONAL INFORMATION
-            ================================= */}
+            {/* PERSONAL INFORMATION */}
             <section className={sectionClass}>
               <div className="mb-5">
                 <h4 className="text-sm font-bold text-slate-800">
@@ -567,20 +650,12 @@ const SignUp = () => {
 
                 {/* EMAIL */}
                 <div>
-                  <label className={labelClass}>
-                    {activeRole === "company"
-                      ? "Personal / Work Email"
-                      : "University Email"}
-                  </label>
+                  <label className={labelClass}>Email Address</label>
 
                   <input
                     type="email"
                     required
-                    placeholder={
-                      activeRole === "company"
-                        ? "name@company.com"
-                        : "name@university.edu.ph"
-                    }
+                    placeholder="Enter your email address"
                     value={currentForm.email}
                     onChange={(event) =>
                       handleChange(activeRole, "email", event.target.value)
@@ -616,193 +691,329 @@ const SignUp = () => {
               </div>
             </section>
 
-            {/* ================================
-                STUDENT INFORMATION
-            ================================= */}
+            {/* STUDENT INFORMATION */}
             {activeRole === "student" && (
-              <section className={sectionClass}>
-                <div className="mb-5">
-                  <h4 className="text-sm font-bold text-slate-800">
-                    Student Information
-                  </h4>
+              <>
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Student Information
+                    </h4>
 
-                  <p className="text-xs text-slate-400 mt-1">
-                    Enter your official university information.
-                  </p>
-                </div>
-
-                <div className="space-y-5">
-                  <div>
-                    <label className={labelClass}>Student ID</label>
-
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 2024-00123"
-                      value={currentForm.studentId}
-                      onChange={(event) =>
-                        handleChange(
-                          "student",
-                          "studentId",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Enter your official university information.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className={labelClass}>
-                      College / Department
-                    </label>
+                  <div className="space-y-5">
+                    <div>
+                      <label className={labelClass}>Student ID</label>
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. College of Information and Communications Technology"
-                      value={currentForm.department}
-                      onChange={(event) =>
-                        handleChange(
-                          "student",
-                          "department",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2024-00123"
+                        value={currentForm.studentId}
+                        onChange={(event) =>
+                          handleChange(
+                            "student",
+                            "studentId",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>College / Department</label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. College of Information and Communications Technology"
+                        value={currentForm.department}
+                        onChange={(event) =>
+                          handleChange(
+                            "student",
+                            "department",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Program</label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. BS Information Technology"
+                        value={currentForm.program}
+                        onChange={(event) =>
+                          handleChange("student", "program", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>Year Level</label>
+
+                      <select
+                        required
+                        value={currentForm.yearLevel}
+                        onChange={(event) =>
+                          handleChange(
+                            "student",
+                            "yearLevel",
+                            event.target.value
+                          )
+                        }
+                        className={`${inputClass} cursor-pointer`}
+                      >
+                        <option value="" disabled>
+                          Select Year Level
+                        </option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="5th Year">5th Year</option>
+                        <option value="6th Year">6th Year</option>
+                        <option value="7th Year">7th Year</option>
+                        <option value="Graduate / Master's">
+                          Graduate / Master's
+                        </option>
+                        <option value="Doctoral / PhD">Doctoral / PhD</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* STUDENT DOCUMENTS */}
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Student Verification Documents
+                    </h4>
+
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Upload your current university documents. These will be
+                      reviewed before your account can be fully activated.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className={labelClass}>Program</label>
+                  <div className="space-y-4">
+                    {/* COR */}
+                    <div>
+                      <label className={labelClass}>
+                        Certificate of Registration (COR)
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. BS Information Technology"
-                      value={currentForm.program}
-                      onChange={(event) =>
-                        handleChange(
-                          "student",
-                          "program",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "student",
+                            "cor",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className={fileInputClass}
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload your current Certificate of Registration.
+                      </p>
+                    </div>
+
+                    {/* STUDENT ID */}
+                    <div>
+                      <label className={labelClass}>
+                        Student ID
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "student",
+                            "studentIdDocument",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className={fileInputClass}
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload a clear image or scanned copy of your valid
+                        university Student ID.
+                      </p>
+                    </div>
                   </div>
-
-                  <div>
-                    <label className={labelClass}>Year Level</label>
-
-                    <select
-                      required
-                      value={currentForm.yearLevel}
-                      onChange={(event) =>
-                        handleChange(
-                          "student",
-                          "yearLevel",
-                          event.target.value
-                        )
-                      }
-                      className={`${inputClass} cursor-pointer`}
-                    >
-                      <option value="" disabled>
-                        Select Year Level
-                      </option>
-                      <option value="1st Year">1st Year</option>
-                      <option value="2nd Year">2nd Year</option>
-                      <option value="3rd Year">3rd Year</option>
-                      <option value="4th Year">4th Year</option>
-                      <option value="5th Year">5th Year</option>
-                    </select>
-                  </div>
-                </div>
-              </section>
+                </section>
+              </>
             )}
 
-            {/* ================================
-                FACULTY INFORMATION
-            ================================= */}
-            {activeRole === "faculty" && (
-              <section className={sectionClass}>
-                <div className="mb-5">
-                  <h4 className="text-sm font-bold text-slate-800">
-                    Faculty Information
-                  </h4>
+            {/* REGISTRAR INFORMATION */}
+            {activeRole === "registrar" && (
+              <>
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Registrar Information
+                    </h4>
 
-                  <p className="text-xs text-slate-400 mt-1">
-                    Enter your official university employment information.
-                  </p>
-                </div>
-
-                <div className="space-y-5">
-                  <div>
-                    <label className={labelClass}>Employee ID</label>
-
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. EMP-99231"
-                      value={currentForm.employeeId}
-                      onChange={(event) =>
-                        handleChange(
-                          "faculty",
-                          "employeeId",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Enter your official university employment information.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className={labelClass}>
-                      College / Department
-                    </label>
+                  <div className="space-y-5">
+                    <div>
+                      <label className={labelClass}>Employee ID</label>
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. College of Information Technology"
-                      value={currentForm.department}
-                      onChange={(event) =>
-                        handleChange(
-                          "faculty",
-                          "department",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. EMP-99231"
+                        value={currentForm.employeeId}
+                        onChange={(event) =>
+                          handleChange(
+                            "registrar",
+                            "employeeId",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>College / Department</label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. College of Information Technology"
+                        value={currentForm.department}
+                        onChange={(event) =>
+                          handleChange(
+                            "registrar",
+                            "department",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass}>
+                        Position / Designation
+                      </label>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Registrar Adviser"
+                        value={currentForm.position}
+                        onChange={(event) =>
+                          handleChange(
+                            "registrar",
+                            "position",
+                            event.target.value
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* REGISTRAR DOCUMENTS */}
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Registrar Verification Documents
+                    </h4>
+
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      These documents will verify your university employment and
+                      authorization to access the Registrar Adviser portal.
+                    </p>
                   </div>
 
-                  <div>
-                    <label className={labelClass}>
-                      Academic Rank / Position
-                    </label>
+                  <div className="space-y-4">
+                    {/* EMPLOYEE ID */}
+                    <div>
+                      <label className={labelClass}>
+                        University / Employee ID
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Assistant Professor"
-                      value={currentForm.position}
-                      onChange={(event) =>
-                        handleChange(
-                          "faculty",
-                          "position",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "registrar",
+                            "employeeIdDocument",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className={fileInputClass}
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload a clear image or scanned copy of your valid
+                        university employee ID.
+                      </p>
+                    </div>
+
+                    {/* APPOINTMENT LETTER */}
+                    <div>
+                      <label className={labelClass}>
+                        Proof of Appointment / Authorization Letter
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+
+                      <input
+                        type="file"
+                        required
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(event) =>
+                          handleFileChange(
+                            "registrar",
+                            "appointmentLetter",
+                            event.target.files?.[0] || null
+                          )
+                        }
+                        className={fileInputClass}
+                      />
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Upload an official document confirming your appointment
+                        or authorization as a Registrar Adviser.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </section>
+                </section>
+              </>
             )}
 
-            {/* ================================
-                COMPANY INFORMATION
-            ================================= */}
+            {/* COMPANY INFORMATION */}
             {activeRole === "company" && (
               <>
                 <section className={sectionClass}>
@@ -817,7 +1028,6 @@ const SignUp = () => {
                   </div>
 
                   <div className="space-y-5">
-                    {/* COMPANY NAME */}
                     <div>
                       <label className={labelClass}>
                         Registered Company Name
@@ -839,7 +1049,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* COMPANY EMAIL */}
                     <div>
                       <label className={labelClass}>
                         Company Email Address
@@ -861,7 +1070,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* COMPANY PHONE */}
                     <div>
                       <label className={labelClass}>
                         Company Contact Number
@@ -883,7 +1091,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* INDUSTRY */}
                     <div>
                       <label className={labelClass}>Industry</label>
 
@@ -903,11 +1110,8 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* ADDRESS */}
                     <div>
-                      <label className={labelClass}>
-                        Company Address
-                      </label>
+                      <label className={labelClass}>Company Address</label>
 
                       <textarea
                         required
@@ -925,7 +1129,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* WEBSITE */}
                     <div>
                       <label className={labelClass}>
                         Company Website
@@ -939,11 +1142,7 @@ const SignUp = () => {
                         placeholder="https://company.com"
                         value={currentForm.website}
                         onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "website",
-                            event.target.value
-                          )
+                          handleChange("company", "website", event.target.value)
                         }
                         className={inputClass}
                       />
@@ -965,9 +1164,7 @@ const SignUp = () => {
                   </div>
 
                   <div>
-                    <label className={labelClass}>
-                      Position / Designation
-                    </label>
+                    <label className={labelClass}>Position / Designation</label>
 
                     <input
                       type="text"
@@ -994,9 +1191,9 @@ const SignUp = () => {
                     </h4>
 
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      These documents will be reviewed by a SIMS
-                      administrator before the company account can proceed to
-                      email and SMS verification.
+                      These documents will be reviewed by a SIMS administrator
+                      before the company account can proceed to email and SMS
+                      verification.
                     </p>
                   </div>
 
@@ -1014,6 +1211,7 @@ const SignUp = () => {
                         accept=".pdf,.jpg,.jpeg,.png"
                         onChange={(event) =>
                           handleFileChange(
+                            "company",
                             "businessRegistration",
                             event.target.files?.[0] || null
                           )
@@ -1040,6 +1238,7 @@ const SignUp = () => {
                         accept=".pdf,.jpg,.jpeg,.png"
                         onChange={(event) =>
                           handleFileChange(
+                            "company",
                             "birRegistration",
                             event.target.files?.[0] || null
                           )
@@ -1052,20 +1251,51 @@ const SignUp = () => {
                       </p>
                     </div>
 
-                    {/* SUPPORTING */}
+                    {/* SUPPORTING DOCUMENT */}
                     <div>
-                      <label className={labelClass}>
-                        Supporting Document
-                        <span className="ml-1 text-slate-400 font-medium normal-case">
-                          (Optional)
-                        </span>
-                      </label>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <label className={`${labelClass} mb-0`}>
+                          Supporting Document
+                          <span className="ml-1 text-slate-400 font-medium normal-case">
+                            (Optional)
+                          </span>
+                        </label>
+
+                        {/* HOVER EXAMPLES */}
+                        <div className="relative group">
+                          <button
+                            type="button"
+                            className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 transition"
+                          >
+                            ?
+                          </button>
+
+                          <div className="absolute z-30 left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+                            <p className="font-bold text-white mb-1">
+                              Examples of supporting documents:
+                            </p>
+
+                            <ul className="list-disc list-inside text-slate-300 space-y-0.5">
+                              <li>Mayor's Permit</li>
+                              <li>SEC / DTI Certificate</li>
+                              <li>Company ID</li>
+                              <li>Authorization Letter</li>
+                              <li>
+                                Other documents supporting company legitimacy
+                              </li>
+                            </ul>
+
+                            <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45" />
+                          </div>
+                        </div>
+                      </div>
 
                       <input
                         type="file"
                         accept=".pdf,.jpg,.jpeg,.png"
                         onChange={(event) =>
                           handleFileChange(
+                            "company",
                             "supportingDocument",
                             event.target.files?.[0] || null
                           )
@@ -1074,8 +1304,8 @@ const SignUp = () => {
                       />
 
                       <p className="text-[10px] text-slate-400 mt-1.5">
-                        You may provide another document that helps establish
-                        the legitimacy of the organization.
+                        Optional document that can further establish the
+                        legitimacy of the organization.
                       </p>
                     </div>
                   </div>
@@ -1098,9 +1328,7 @@ const SignUp = () => {
                 </p>
               </div>
 
-              <div className="space-y-5">
-                {renderPasswordFields()}
-              </div>
+              <div className="space-y-5">{renderPasswordFields()}</div>
             </section>
 
             {/* TERMS */}
@@ -1110,11 +1338,7 @@ const SignUp = () => {
                 required
                 checked={currentForm.agreeTerms}
                 onChange={(event) =>
-                  handleChange(
-                    activeRole,
-                    "agreeTerms",
-                    event.target.checked
-                  )
+                  handleChange(activeRole, "agreeTerms", event.target.checked)
                 }
                 className="mt-1 h-4 w-4 rounded border-slate-300"
               />

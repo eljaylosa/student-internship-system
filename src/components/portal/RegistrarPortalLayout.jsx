@@ -9,38 +9,42 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const initialNotifications = [
   {
-    id: "CNOT-001",
-    title: "Internship Application Received",
+    id: "NOT-001",
+    title: "Internship Application Submitted",
     message:
-      "A new student internship application has been submitted to your company and is awaiting review.",
+      "A student has successfully submitted an internship application and it is awaiting registrar review.",
     relatedEntityType: "InternshipApplication",
     relatedEntityId: "APP-001",
     createdAt: "2026-08-18T08:30:00.000Z",
     readAt: null,
   },
   {
-    id: "CNOT-002",
-    title: "Document Review Update",
+    id: "NOT-002",
+    title: "Document Submission Received",
     message:
-      "A student's submitted internship document is ready for your review.",
+      "A student has submitted internship documents that are ready for registrar review.",
     relatedEntityType: "DocumentSubmission",
     relatedEntityId: "DOC-001",
     createdAt: "2026-08-17T14:15:00.000Z",
     readAt: null,
   },
   {
-    id: "CNOT-003",
-    title: "Internship Information Updated",
+    id: "NOT-003",
+    title: "Student Record Updated",
     message:
-      "New internship guidelines and information are now available in the Company Portal.",
-    relatedEntityType: "InformationItem",
-    relatedEntityId: "INFO-001",
+      "A student record has been updated and is available for review in the Student Records section.",
+    relatedEntityType: "StudentRecord",
+    relatedEntityId: "STU-001",
     createdAt: "2026-08-16T09:00:00.000Z",
     readAt: "2026-08-16T10:00:00.000Z",
   },
 ];
 
-const CompanyPortalLayout = () => {
+// =========================================================
+// COMPONENT
+// =========================================================
+
+const RegistrarPortalLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -130,13 +134,14 @@ const CompanyPortalLayout = () => {
   };
 
   const openNotification = (notification) => {
-    markNotificationRead(notification.id);
-
-    setSelectedNotification({
+    const updatedNotification = {
       ...notification,
       readAt: notification.readAt || new Date().toISOString(),
-    });
+    };
 
+    markNotificationRead(notification.id);
+
+    setSelectedNotification(updatedNotification);
     setIsNotificationOpen(false);
   };
 
@@ -149,7 +154,7 @@ const CompanyPortalLayout = () => {
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("companyPortalDarkMode") === "true";
+    return localStorage.getItem("registrarPortalDarkMode") === "true";
   });
 
   useEffect(() => {
@@ -159,7 +164,7 @@ const CompanyPortalLayout = () => {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem("companyPortalDarkMode", darkMode);
+    localStorage.setItem("registrarPortalDarkMode", darkMode);
   }, [darkMode]);
 
   // =========================================================
@@ -235,42 +240,53 @@ const CompanyPortalLayout = () => {
     {
       name: "Dashboard",
       icon: "▦",
-      path: "/company/dashboard",
+      path: "/registrar/dashboard",
     },
     {
-      name: "Manage Jobs",
-      icon: "💼",
-      path: "/company/jobs",
+      name: "My Profile",
+      icon: "👤",
+      path: "/registrar/profile",
     },
     {
-      name: "Manage Applications",
+      name: "Student Records",
+      icon: "🎓",
+      path: "/registrar/students",
+    },
+    {
+      name: "Review Applications",
       icon: "📋",
-      path: "/company/applications",
+      path: "/registrar/applications",
     },
     {
-      name: "Assigned Interns",
-      icon: "👥",
-      path: "/company/interns",
+      name: "Review Documents",
+      icon: "📁",
+      path: "/registrar/documents",
     },
     {
-      name: "Evaluate",
+      name: "Manage Deployment",
+      icon: "🚀",
+      path: "/registrar/deployment",
+    },
+    {
+      name: "Evaluations",
       icon: "📊",
-      path: "/company/evaluate",
+      path: "/registrar/evaluations",
     },
     {
-      name: "Feedback",
-      icon: "📝",
-      path: "/company/feedback",
+      name: "Notifications",
+      icon: "🔔",
+      path: "/registrar/notifications",
+      badge: unreadCount > 0,
     },
     {
       name: "Messages",
       icon: "💬",
-      path: "/company/messages",
+      path: "/registrar/messages",
     },
     {
       name: "Settings",
       icon: "⚙",
-      path: "/company/settings",
+      path: "/registrar/settings",
     },
   ];
 
@@ -278,11 +294,7 @@ const CompanyPortalLayout = () => {
   // EXPANDABLE MENUS
   // =========================================================
 
-  const [expandedMenus, setExpandedMenus] = useState({
-    "Internship Posts": false,
-    Applications: false,
-    Documents: false,
-  });
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   // =========================================================
   // SIDEBAR RESIZE
@@ -358,7 +370,7 @@ const CompanyPortalLayout = () => {
     });
 
     if (!currentItem) {
-      return "Company Portal";
+      return "Registrar Portal";
     }
 
     const child = currentItem.children?.find(
@@ -425,7 +437,7 @@ const CompanyPortalLayout = () => {
                 darkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
               }`}
             >
-              C
+              R
             </div>
 
             <div className="ml-3">
@@ -436,7 +448,7 @@ const CompanyPortalLayout = () => {
                   darkMode ? "text-slate-400" : "text-slate-400"
                 }`}
               >
-                Company Environment
+                Registrar Environment
               </p>
             </div>
           </div>
@@ -630,7 +642,7 @@ const CompanyPortalLayout = () => {
                     darkMode ? "text-slate-400" : "text-slate-400"
                   }`}
                 >
-                  Company Portal
+                  Registrar Portal
                 </p>
 
                 <h2 className="font-bold text-base sm:text-lg truncate">
@@ -787,7 +799,7 @@ const CompanyPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigateTo("/company/notifications")}
+                      onClick={() => navigateTo("/registrar/notifications")}
                       className={`w-full py-3 text-xs font-bold ${
                         darkMode
                           ? "text-blue-400 hover:bg-slate-700"
@@ -820,18 +832,18 @@ const CompanyPortalLayout = () => {
                         : "bg-slate-900 text-white"
                     }`}
                   >
-                    AC
+                    RA
                   </div>
 
                   <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">Acme Corporation</p>
+                    <p className="text-sm font-semibold">Registrar Admin</p>
 
                     <p
                       className={`text-xs ${
                         darkMode ? "text-slate-400" : "text-slate-400"
                       }`}
                     >
-                      Company Account
+                      Registrar Account
                     </p>
                   </div>
 
@@ -859,14 +871,14 @@ const CompanyPortalLayout = () => {
                         darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
-                      <p className="text-sm font-bold">Acme Corporation</p>
+                      <p className="text-sm font-bold">Registrar Admin</p>
 
                       <p
                         className={`text-xs mt-1 ${
                           darkMode ? "text-slate-400" : "text-slate-500"
                         }`}
                       >
-                        Company Account
+                        Registrar Account
                       </p>
                     </div>
 
@@ -874,20 +886,20 @@ const CompanyPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() => navigateTo("/company/profile")}
+                      onClick={() => navigateTo("/registrar/profile")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
                     >
-                      <span>🏢</span>
-                      <span>Company Profile</span>
+                      <span>👤</span>
+                      <span>My Profile</span>
                     </button>
 
                     {/* SETTINGS */}
 
                     <button
                       type="button"
-                      onClick={() => navigateTo("/company/settings")}
+                      onClick={() => navigateTo("/registrar/settings")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
@@ -1098,7 +1110,7 @@ const CompanyPortalLayout = () => {
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-                      navigateTo("/company/applications");
+                      navigateTo("/registrar/applications");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
                   >
@@ -1114,7 +1126,7 @@ const CompanyPortalLayout = () => {
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-                      navigateTo("/company/documents");
+                      navigateTo("/registrar/documents");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
                   >
@@ -1122,19 +1134,18 @@ const CompanyPortalLayout = () => {
                   </button>
                 )}
 
-                {/* INFORMATION */}
+                {/* STUDENT RECORD */}
 
-                {selectedNotification.relatedEntityType ===
-                  "InformationItem" && (
+                {selectedNotification.relatedEntityType === "StudentRecord" && (
                   <button
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-                      navigateTo("/company/info");
+                      navigateTo("/registrar/students");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition"
                   >
-                    View Information
+                    View Student Record
                   </button>
                 )}
 
@@ -1144,13 +1155,15 @@ const CompanyPortalLayout = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      const now = new Date().toISOString();
+
                       markNotificationRead(selectedNotification.id);
 
                       setSelectedNotification((previous) =>
                         previous
                           ? {
                               ...previous,
-                              readAt: new Date().toISOString(),
+                              readAt: now,
                             }
                           : previous
                       );
@@ -1189,4 +1202,4 @@ const CompanyPortalLayout = () => {
   );
 };
 
-export default CompanyPortalLayout;
+export default RegistrarPortalLayout;

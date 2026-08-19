@@ -1,7 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import { getUserHome, useMockStore } from "../../data/mockStore.jsx";
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
   // Active role tab
@@ -10,20 +8,48 @@ const Login = () => {
   // Independent form states for each user role
   const [forms, setForms] = useState({
     student: {
-      emailOrId: "",
+      email: "",
       password: "",
     },
 
-    faculty: {
-      emailOrId: "",
+    registrar: {
+      email: "",
       password: "",
     },
 
     company: {
-      emailOrId: "",
+      email: "",
       password: "",
     },
   });
+
+  const navigate = useNavigate();
+
+  // =========================================================
+  // LOCAL DEMO CREDENTIALS
+  // Temporary credentials until real authentication is added.
+  // Login uses EMAIL + PASSWORD only.
+  // =========================================================
+
+  const localCredentials = {
+    student: {
+      email: "student@gmail.com",
+      password: "password",
+      route: "/student/dashboard",
+    },
+
+    registrar: {
+      email: "registrar@gmail.com",
+      password: "password",
+      route: "/registrar/dashboard",
+    },
+
+    company: {
+      email: "company@gmail.com",
+      password: "password",
+      route: "/company/dashboard",
+    },
+  };
 
   // Update the form based on the selected role
   const handleChange = (role, field, value) => {
@@ -36,28 +62,39 @@ const Login = () => {
     }));
   };
 
-  const navigate = useNavigate();
-  const { login } = useMockStore();
+  // =========================================================
+  // LOGIN
+  // =========================================================
 
-  const demoAccounts = {
-    student: { email: "student@gmail.com", id: "STU-001", password: "password" },
-    faculty: { email: "faculty@gmail.com", id: "FAC-001", password: "password" },
-    company: { email: "company@gmail.com", id: "SUP-001", password: "password" },
-  };
-
-  // Handle login submission through the shared frontend session.
   const handleSubmit = (e) => {
     e.preventDefault();
+
     const currentForm = forms[activeRole];
-    const result = login(activeRole, currentForm.emailOrId.trim(), currentForm.password);
-    if (!result.ok) {
-      alert(result.message);
+    const credentials = localCredentials[activeRole];
+
+    const email = currentForm.email.trim().toLowerCase();
+    const password = currentForm.password;
+
+    // Check email
+    if (email !== credentials.email.toLowerCase()) {
+      alert("Invalid email or password.");
       return;
     }
-    navigate(getUserHome(activeRole), { replace: true });
+
+    // Check password
+    if (password !== credentials.password) {
+      alert("Invalid email or password.");
+      return;
+    }
+
+    // Successful login
+    navigate(credentials.route, { replace: true });
   };
 
-  // Portal configuration
+  // =========================================================
+  // PORTAL CONFIGURATION
+  // =========================================================
+
   const portals = [
     {
       key: "student",
@@ -87,8 +124,8 @@ const Login = () => {
     },
 
     {
-      key: "faculty",
-      label: "Faculty Adviser",
+      key: "registrar",
+      label: "Registrar Advisor",
       accent: "from-emerald-500 to-teal-600",
       activeText: "text-emerald-600",
       icon: (
@@ -124,7 +161,7 @@ const Login = () => {
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0 6.22-.62 9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
           />
         </svg>
       ),
@@ -136,26 +173,8 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      {/* System Navigation Top Bar */}
-      <header className="bg-slate-900 border-b border-slate-800 text-white px-8 py-4 flex justify-between items-center shadow-md">
-        <Link
-          to="/"
-          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition cursor-pointer font-bold"
-        >
-          Home
-        </Link>
-
-        <div className="text-sm md:text-base font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200 text-center">
-          STUDENT INTERNSHIP MANAGEMENT SYSTEM
-        </div>
-
-        <span className="text-xs uppercase tracking-widest text-white border-b-2 border-blue-400 pb-0.5 font-bold">
-          Login
-        </span>
-      </header>
-
       {/* Main Login Area */}
-      <main className="flex-1 flex flex-col items-center justify-center py-14 px-4 max-w-3xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center py-30 px-4 max-w-3xl mx-auto w-full">
         {/* Page Heading */}
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
@@ -206,19 +225,19 @@ const Login = () => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Account Access ID */}
+            {/* Email */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Account Access ID
+                Email Address
               </label>
 
               <input
-                type="text"
+                type="email"
                 required
-                placeholder="Email or ID Number"
-                value={forms[activeRole].emailOrId}
+                placeholder="Enter your email"
+                value={forms[activeRole].email}
                 onChange={(e) =>
-                  handleChange(activeRole, "emailOrId", e.target.value)
+                  handleChange(activeRole, "email", e.target.value)
                 }
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition"
               />

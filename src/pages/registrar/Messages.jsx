@@ -12,25 +12,31 @@ const Messages = () => {
     {
       id: 1,
       name: "John Doe",
-      role: "Intern",
+      role: "Student",
       unread: 2,
     },
     {
       id: 2,
-      name: "Jane Smith",
-      role: "Intern",
+      name: "Prof. Davis",
+      role: "Registrar Adviser",
       unread: 0,
     },
     {
       id: 3,
-      name: "Mike Wilson",
-      role: "Intern",
+      name: "ABC Corp",
+      role: "Company Supervisor",
       unread: 1,
     },
     {
       id: 4,
-      name: "Prof. Davis",
-      role: "Registrar Adviser",
+      name: "Sarah Lee",
+      role: "Student",
+      unread: 0,
+    },
+    {
+      id: 5,
+      name: "XYZ Ltd",
+      role: "Company Supervisor",
       unread: 0,
     },
   ];
@@ -44,25 +50,25 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Good morning, sir. I wanted to ask about my assigned tasks for today.",
+        text: "Good morning, Professor. I wanted to ask about my internship evaluation.",
         time: "9:20 AM",
       },
       {
         id: 2,
         sender: "sent",
-        text: "Good morning, John. Please continue working on the documentation we discussed yesterday.",
+        text: "Good morning, John. Sure, what would you like to know?",
         time: "9:24 AM",
       },
       {
         id: 3,
         sender: "received",
-        text: "Alright, sir. Should I submit the updated documentation before the end of the day?",
+        text: "I wanted to know if I need to submit any additional documents.",
         time: "9:26 AM",
       },
       {
         id: 4,
         sender: "sent",
-        text: "Yes. Please send it to me once you're finished so I can review it.",
+        text: "I'll check your records and let you know if anything is missing.",
         time: "9:30 AM",
       },
     ],
@@ -71,14 +77,14 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Good morning. I have completed the task assigned to me yesterday.",
-        time: "8:45 AM",
+        text: "Have you already reviewed the latest student submissions?",
+        time: "Yesterday",
       },
       {
         id: 2,
         sender: "sent",
-        text: "Great. Please send the completed file so I can check your work.",
-        time: "8:50 AM",
+        text: "Yes. I'm currently checking the remaining applications.",
+        time: "Yesterday",
       },
     ],
 
@@ -86,14 +92,8 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Sir, I would like to confirm the schedule for my assigned tasks this week.",
+        text: "Good day. We would like to provide an update regarding John's internship.",
         time: "10:15 AM",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Your current schedule is already updated. Please check the internship schedule and let me know if you have any concerns.",
-        time: "10:20 AM",
       },
     ],
 
@@ -101,14 +101,17 @@ const Messages = () => {
       {
         id: 1,
         sender: "received",
-        text: "Good day. I wanted to ask for an update regarding the interns' performance.",
-        time: "Yesterday",
+        text: "Professor, I have already uploaded my evaluation documents.",
+        time: "Monday",
       },
+    ],
+
+    5: [
       {
-        id: 2,
-        sender: "sent",
-        text: "Good day, Professor. The interns are progressing well. I will submit their performance updates once the evaluation period is completed.",
-        time: "Yesterday",
+        id: 1,
+        sender: "received",
+        text: "We have received the internship documents for your assigned student.",
+        time: "Friday",
       },
     ],
   };
@@ -281,7 +284,7 @@ const Messages = () => {
               darkMode ? "text-slate-500" : "text-slate-400"
             }`}
           >
-            Company Portal
+            Registrar Portal
           </p>
 
           <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
@@ -289,7 +292,7 @@ const Messages = () => {
           </h1>
 
           <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
-            Communicate with your assigned interns and registrar.
+            Communicate with students, registrar, and company supervisors.
           </p>
         </div>
 

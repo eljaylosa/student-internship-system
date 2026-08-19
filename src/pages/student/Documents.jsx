@@ -1,10 +1,103 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { STATUS, useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "currentUser": {
+    "id": "USR-002",
+    "role": "registrar",
+    "email": "registrar@gmail.com",
+    "password": "password",
+    "status": "Active",
+    "profileId": "FAC-001"
+  },
+  "assignments": [],
+  "documents": [],
+  "documentTypes": [
+    {
+      "id": "DT-001",
+      "name": "Resume/CV",
+      "required": true
+    },
+    {
+      "id": "DT-002",
+      "name": "Acceptance Letter",
+      "required": true
+    },
+    {
+      "id": "DT-003",
+      "name": "Internship Agreement",
+      "required": true
+    },
+    {
+      "id": "DT-004",
+      "name": "Medical Certificate",
+      "required": true
+    },
+    {
+      "id": "DT-005",
+      "name": "Parent Consent",
+      "required": true
+    },
+    {
+      "id": "DT-006",
+      "name": "Insurance Form",
+      "required": false
+    }
+  ]
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 export default function Documents() {
   const { darkMode } = useOutletContext();
-  const { state, submitDocument } = useMockStore();
+  const state = localState;
+  const submitDocument = (...args) => { void args; };
   const studentId = state.currentUser?.profileId;
   const assignment = state.assignments.find(
     (item) => item.studentId === studentId
@@ -51,7 +144,7 @@ export default function Documents() {
         </p>
       ) : (
         <p className="mb-4 text-xs text-amber-600">
-          No assignment yet. Ask a faculty adviser to review your application.
+          No assignment yet. Ask a registrar to review your application.
         </p>
       )}
       <section className={`border rounded-2xl overflow-hidden ${card}`}>

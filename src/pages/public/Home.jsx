@@ -14,19 +14,19 @@ const Home = () => {
   const portalRoles = [
     {
       title: "Student Portal",
-      action: "Submit CBAR & PDS",
+      action: "Submit Resume/CVs & PDS",
       icon: "🎓",
       color: "hover:border-blue-500",
     },
     {
-      title: "Faculty Adviser",
-      action: "Review Portfolio Assets",
+      title: "Registrar Portal",
+      action: "Review Document Assets",
       icon: "👨‍🏫",
       color: "hover:border-green-500",
     },
     {
-      title: "School Clerk / Admin",
-      action: "Map School Deployment",
+      title: "Company Portal",
+      action: "Opportunity Postings",
       icon: "💼",
       color: "hover:border-purple-500",
     },
@@ -41,13 +41,13 @@ const Home = () => {
             Student Internship Management System (SIMS)
           </span>
           <h1 className="text-4xl md:text-6xl font-bold mb-6 text-gray-900 leading-tight">
-            Streamlining BPSU Internships via{" "}
+            Streamlining Students Internships via{" "}
             <span className="text-blue-600">InternLink</span>
           </h1>
           <p className="text-base md:text-lg mb-10 text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            A specialized web and mobile environment engineered to eliminate
-            manual sorting, misplaced portfolios, and application bottlenecks
-            between students and cooperating institutions.
+            A specialized web environment engineered to eliminate manual
+            sorting, misplaced portfolios, and application bottlenecks between
+            students and cooperating companies.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             {/* Swapped standard anchor to active React-Router router hooks */}
@@ -112,7 +112,7 @@ const Home = () => {
               </div>
               {/* Link to the respective portal is available upon authentication. */}
               <Link
-                to="/signup"
+                to="/login"
                 className="text-xs font-semibold text-blue-600 block"
               >
                 Initialize Gateway →

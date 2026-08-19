@@ -1,6 +1,111 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore, STATUS } from "../../data/mockStore";
+
+// =========================================================
+// TEMPORARY PAGE-LOCAL DEMO DATA
+// =========================================================
+
+const initialState = {
+  users: [
+    {
+      id: "USR-001",
+      role: "student",
+      email: "student@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "STU-001",
+    },
+    {
+      id: "USR-002",
+      role: "registrar",
+      email: "registrar@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "FAC-001",
+    },
+    {
+      id: "USR-003",
+      role: "company",
+      email: "company@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "SUP-001",
+    },
+    {
+      id: "USR-004",
+      role: "admin",
+      email: "admin@sims.local",
+      password: "password",
+      status: "Active",
+      profileId: "ADM-001",
+    },
+  ],
+
+  students: [
+    {
+      id: "STU-001",
+      userId: "USR-001",
+      fullName: "John Doe",
+      email: "student@gmail.com",
+      studentId: "STU-001",
+      program: "BS Information Technology",
+      yearLevel: "2nd Year",
+      department: "College of Information and Communications Technology",
+      facultyId: "FAC-001",
+      phone: "+63 912 345 6789",
+      address: "Limay, Bataan",
+      gwa: "1.75",
+    },
+  ],
+
+  registrar: [
+    {
+      id: "FAC-001",
+      userId: "USR-002",
+      fullName: "Maria Santos",
+      email: "registrar@gmail.com",
+      facultyId: "FAC-001",
+      department: "College of Information and Communications Technology",
+      position: "Registrar Adviser",
+      phone: "+63 917 123 4567",
+      address: "Balanga, Bataan",
+      specialization: "Information Technology",
+      employeeId: "FAC-2026-001",
+    },
+  ],
+
+  supervisors: [
+    {
+      id: "SUP-001",
+      userId: "USR-003",
+      companyId: "COM-001",
+      fullName: "Mark Cruz",
+      email: "company@gmail.com",
+      position: "Company Supervisor",
+    },
+  ],
+
+  currentUser: {
+    id: "USR-004",
+    role: "admin",
+    email: "admin@sims.local",
+    password: "password",
+    status: "Active",
+    profileId: "ADM-001",
+  },
+};
+
+// =========================================================
+// STATUS
+// =========================================================
+
+const STATUS = {
+  user: {
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
+    PENDING: "Pending",
+  },
+};
 
 // =========================================================
 // COMPONENT
@@ -9,45 +114,82 @@ import { useMockStore, STATUS } from "../../data/mockStore";
 const UserManagement = () => {
   const { darkMode } = useOutletContext();
 
-  const { state, transact } = useMockStore();
+  // =======================================================
+  // LOCAL REACTIVE STATE
+  // =======================================================
 
-  // =========================================================
-  // STATE
-  // =========================================================
+  const [state, setState] = useState(initialState);
+
+  // =======================================================
+  // PAGE STATE
+  // =======================================================
 
   const [activeTab, setActiveTab] = useState("students");
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // =======================================================
+  // SEARCH & SORT
+  // =======================================================
 
-  const [modalMode, setModalMode] = useState("add");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [sortField, setSortField] = useState("name");
+
+  const [sortDirection, setSortDirection] = useState("asc");
+
+  // =======================================================
+  // EDIT MODAL
+  // =======================================================
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    status: STATUS.user.ACTIVE,
   });
+
+  // =======================================================
+  // DEACTIVATE VERIFICATION MODAL
+  // =======================================================
+
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+
+  const [userToDeactivate, setUserToDeactivate] = useState(null);
+
+  const [adminPassword, setAdminPassword] = useState("");
+
+  const [deactivateError, setDeactivateError] = useState("");
+
+  // =======================================================
+  // DELETE VERIFICATION MODAL
+  // =======================================================
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const [userToDelete, setUserToDelete] = useState(null);
+
+  const [deletePassword, setDeletePassword] = useState("");
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
+  const [deleteError, setDeleteError] = useState("");
 
   const usersPerPage = 6;
 
   // =========================================================
-  // CURRENT USERS
+  // ROLE MAP
   // =========================================================
 
   const roleMap = {
     students: "student",
-    faculty: "faculty",
+    registrar: "registrar",
     company: "company",
   };
 
   const currentRole = roleMap[activeTab];
-
-  const currentUsers = useMemo(() => {
-    return state.users.filter((user) => user.role === currentRole);
-  }, [state.users, currentRole]);
 
   // =========================================================
   // TABS
@@ -59,8 +201,8 @@ const UserManagement = () => {
       label: "Students",
     },
     {
-      key: "faculty",
-      label: "Faculty",
+      key: "registrar",
+      label: "Registrar",
     },
     {
       key: "company",
@@ -69,16 +211,193 @@ const UserManagement = () => {
   ];
 
   // =========================================================
+  // GET PROFILE
+  // =========================================================
+
+  const getUserProfile = (user) => {
+    if (!user) return null;
+
+    if (user.role === "student") {
+      return state.students.find((item) => item.id === user.profileId);
+    }
+
+    if (user.role === "registrar") {
+      return state.registrar.find((item) => item.id === user.profileId);
+    }
+
+    if (user.role === "company") {
+      return state.supervisors.find((item) => item.id === user.profileId);
+    }
+
+    return null;
+  };
+
+  // =========================================================
+  // GET ROLE LABEL
+  // =========================================================
+
+  const getRoleLabel = (role = currentRole) => {
+    if (role === "student") {
+      return "Student";
+    }
+
+    if (role === "registrar") {
+      return "Registrar Adviser";
+    }
+
+    if (role === "company") {
+      return "Company Supervisor";
+    }
+
+    if (role === "admin") {
+      return "Administrator";
+    }
+
+    return "User";
+  };
+
+  // =========================================================
+  // CURRENT USERS
+  // =========================================================
+
+  const currentUsers = useMemo(() => {
+    return state.users.filter((user) => user.role === currentRole);
+  }, [state.users, currentRole]);
+
+  // =========================================================
+  // SEARCH + SORTED USERS
+  // =========================================================
+
+  const processedUsers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    // -------------------------------------------------------
+    // SEARCH
+    // -------------------------------------------------------
+
+    let filteredUsers = currentUsers.filter((user) => {
+      const profile = getUserProfile(user);
+
+      const id = user.profileId || user.id || "";
+
+      const name = profile?.fullName || "";
+
+      const email = user.email || "";
+
+      if (!query) {
+        return true;
+      }
+
+      return (
+        id.toLowerCase().includes(query) ||
+        name.toLowerCase().includes(query) ||
+        email.toLowerCase().includes(query)
+      );
+    });
+
+    // -------------------------------------------------------
+    // SORT
+    // -------------------------------------------------------
+
+    filteredUsers.sort((a, b) => {
+      const profileA = getUserProfile(a);
+      const profileB = getUserProfile(b);
+
+      let valueA = "";
+      let valueB = "";
+
+      if (sortField === "id") {
+        valueA = a.profileId || a.id || "";
+        valueB = b.profileId || b.id || "";
+      }
+
+      if (sortField === "name") {
+        valueA = profileA?.fullName || a.email || "";
+        valueB = profileB?.fullName || b.email || "";
+      }
+
+      if (sortField === "email") {
+        valueA = a.email || "";
+        valueB = b.email || "";
+      }
+
+      if (sortField === "status") {
+        valueA = a.status || "";
+        valueB = b.status || "";
+      }
+
+      const comparison = valueA
+        .toString()
+        .localeCompare(valueB.toString(), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return filteredUsers;
+  }, [
+    currentUsers,
+    searchQuery,
+    sortField,
+    sortDirection,
+    state.students,
+    state.registrar,
+    state.supervisors,
+  ]);
+
+  // =========================================================
   // PAGINATION
   // =========================================================
 
-  const totalPages = Math.ceil(currentUsers.length / usersPerPage);
+  const totalPages = Math.ceil(processedUsers.length / usersPerPage);
 
   const paginatedUsers = useMemo(() => {
     const startIndex = (currentPage - 1) * usersPerPage;
 
-    return currentUsers.slice(startIndex, startIndex + usersPerPage);
-  }, [currentUsers, currentPage]);
+    return processedUsers.slice(startIndex, startIndex + usersPerPage);
+  }, [processedUsers, currentPage]);
+
+  // =========================================================
+  // SEARCH CHANGE
+  // =========================================================
+
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+
+    setCurrentPage(1);
+  };
+
+  // =========================================================
+  // SORT CHANGE
+  // =========================================================
+
+  const handleSortChange = (event) => {
+    setSortField(event.target.value);
+
+    setCurrentPage(1);
+  };
+
+  // =========================================================
+  // SORT DIRECTION
+  // =========================================================
+
+  const handleSortDirection = () => {
+    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+
+    setCurrentPage(1);
+  };
+
+  // =========================================================
+  // CLEAR SEARCH
+  // =========================================================
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+
+    setCurrentPage(1);
+  };
 
   // =========================================================
   // CHANGE TAB
@@ -86,41 +405,14 @@ const UserManagement = () => {
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
+
     setCurrentPage(1);
-  };
 
-  // =========================================================
-  // GET ROLE LABEL
-  // =========================================================
+    setSearchQuery("");
 
-  const getRoleLabel = () => {
-    if (activeTab === "students") {
-      return "Student";
-    }
+    setSortField("name");
 
-    if (activeTab === "faculty") {
-      return "Faculty Adviser";
-    }
-
-    return "Company Supervisor";
-  };
-
-  // =========================================================
-  // OPEN ADD MODAL
-  // =========================================================
-
-  const handleAddUser = () => {
-    setModalMode("add");
-
-    setSelectedUser(null);
-
-    setFormData({
-      name: "",
-      email: "",
-      status: STATUS.user.ACTIVE,
-    });
-
-    setIsModalOpen(true);
+    setSortDirection("asc");
   };
 
   // =========================================================
@@ -128,32 +420,30 @@ const UserManagement = () => {
   // =========================================================
 
   const handleEditUser = (user) => {
-    setModalMode("edit");
+    const profile = getUserProfile(user);
 
     setSelectedUser(user);
 
     setFormData({
-      name: user.name || "",
+      name: profile?.fullName || "",
       email: user.email || "",
-      status: user.status || STATUS.user.ACTIVE,
     });
 
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
   // =========================================================
-  // CLOSE MODAL
+  // CLOSE EDIT MODAL
   // =========================================================
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
 
     setSelectedUser(null);
 
     setFormData({
       name: "",
       email: "",
-      status: STATUS.user.ACTIVE,
     });
   };
 
@@ -171,11 +461,15 @@ const UserManagement = () => {
   };
 
   // =========================================================
-  // SAVE USER
+  // SAVE EDITED USER
   // =========================================================
 
   const handleSaveUser = (event) => {
     event.preventDefault();
+
+    if (!selectedUser) {
+      return;
+    }
 
     const name = formData.name.trim();
     const email = formData.email.trim();
@@ -184,228 +478,308 @@ const UserManagement = () => {
       return;
     }
 
-    // =======================================================
-    // EDIT EXISTING USER
-    // =======================================================
-
-    if (modalMode === "edit" && selectedUser) {
-      transact((draft) => {
-        const user = draft.users.find((item) => item.id === selectedUser.id);
-
-        if (!user) return;
-
-        user.email = email;
-        user.status = formData.status;
-
-        // ---------------------------------------------------
-        // Keep profile information synchronized
-        // ---------------------------------------------------
-
-        if (user.role === "student") {
-          const student = draft.students.find(
-            (item) => item.id === user.profileId
-          );
-
-          if (student) {
-            student.fullName = name;
-            student.email = email;
-          }
+    setState((prev) => {
+      const updatedUsers = prev.users.map((user) => {
+        if (user.id !== selectedUser.id) {
+          return user;
         }
 
-        if (user.role === "faculty") {
-          const faculty = draft.faculty.find(
-            (item) => item.id === user.profileId
-          );
-
-          if (faculty) {
-            faculty.fullName = name;
-            faculty.email = email;
-          }
-        }
-
-        if (user.role === "company") {
-          const supervisor = draft.supervisors.find(
-            (item) => item.id === user.profileId
-          );
-
-          if (supervisor) {
-            supervisor.fullName = name;
-            supervisor.email = email;
-          }
-        }
-
-        // ---------------------------------------------------
-        // Audit
-        // ---------------------------------------------------
-
-        draft.auditEvents.unshift({
-          id: `AUD-${String(draft.auditEvents.length + 1).padStart(3, "0")}`,
-
-          actorUserId: draft.currentUser?.id || "SYSTEM",
-
-          actorRole: draft.currentUser?.role || "system",
-
-          action: "UPDATE",
-
-          module: "User Management",
-
-          targetEntityType: "User",
-
-          targetEntityId: user.id,
-
-          timestamp: new Date().toISOString(),
-
-          details: {
-            name,
-            email,
-            status: formData.status,
-          },
-        });
+        return {
+          ...user,
+          email,
+        };
       });
 
-      handleCloseModal();
+      let updatedStudents = prev.students;
+      let updatedRegistrar = prev.registrar;
+      let updatedSupervisors = prev.supervisors;
+
+      // ===================================================
+      // STUDENT PROFILE
+      // ===================================================
+
+      if (selectedUser.role === "student") {
+        updatedStudents = prev.students.map((student) => {
+          if (student.id !== selectedUser.profileId) {
+            return student;
+          }
+
+          return {
+            ...student,
+            fullName: name,
+            email,
+          };
+        });
+      }
+
+      // ===================================================
+      // REGISTRAR PROFILE
+      // ===================================================
+
+      if (selectedUser.role === "registrar") {
+        updatedRegistrar = prev.registrar.map((registrar) => {
+          if (registrar.id !== selectedUser.profileId) {
+            return registrar;
+          }
+
+          return {
+            ...registrar,
+            fullName: name,
+            email,
+          };
+        });
+      }
+
+      // ===================================================
+      // COMPANY SUPERVISOR PROFILE
+      // ===================================================
+
+      if (selectedUser.role === "company") {
+        updatedSupervisors = prev.supervisors.map((supervisor) => {
+          if (supervisor.id !== selectedUser.profileId) {
+            return supervisor;
+          }
+
+          return {
+            ...supervisor,
+            fullName: name,
+            email,
+          };
+        });
+      }
+
+      return {
+        ...prev,
+        users: updatedUsers,
+        students: updatedStudents,
+        registrar: updatedRegistrar,
+        supervisors: updatedSupervisors,
+      };
+    });
+
+    handleCloseEditModal();
+  };
+
+  // =========================================================
+  // OPEN DEACTIVATE VERIFICATION
+  // =========================================================
+
+  const handleDeactivateUser = (user) => {
+    if (user.id === state.currentUser.id) {
+      return;
+    }
+
+    setUserToDeactivate(user);
+
+    setAdminPassword("");
+
+    setDeactivateError("");
+
+    setIsDeactivateModalOpen(true);
+  };
+
+  // =========================================================
+  // CLOSE DEACTIVATE MODAL
+  // =========================================================
+
+  const handleCloseDeactivateModal = () => {
+    setIsDeactivateModalOpen(false);
+
+    setUserToDeactivate(null);
+
+    setAdminPassword("");
+
+    setDeactivateError("");
+  };
+
+  // =========================================================
+  // CONFIRM DEACTIVATE
+  // =========================================================
+
+  const handleConfirmDeactivate = () => {
+    if (!userToDeactivate) {
+      return;
+    }
+
+    if (state.currentUser.role !== "admin") {
+      setDeactivateError("Only an administrator can deactivate user accounts.");
 
       return;
     }
 
-    // =======================================================
-    // ADD NEW USER
-    // =======================================================
+    if (adminPassword !== state.currentUser.password) {
+      setDeactivateError("Incorrect administrator password.");
 
-    const prefixes = {
-      students: "STU",
-      faculty: "FAC",
-      company: "SUP",
-    };
+      return;
+    }
 
-    const profilePrefix = prefixes[activeTab];
-
-    transact((draft) => {
-      // -----------------------------------------------------
-      // Generate User ID
-      // -----------------------------------------------------
-
-      const userNumber = draft.users.length + 1;
-
-      const userId = `USR-${String(userNumber).padStart(3, "0")}`;
-
-      // -----------------------------------------------------
-      // Generate Profile ID
-      // -----------------------------------------------------
-
-      const existingProfiles =
-        activeTab === "students"
-          ? draft.students
-          : activeTab === "faculty"
-          ? draft.faculty
-          : draft.supervisors;
-
-      const profileNumber = existingProfiles.length + 1;
-
-      const profileId = `${profilePrefix}-${String(profileNumber).padStart(
-        3,
-        "0"
-      )}`;
-
-      // -----------------------------------------------------
-      // Create user account
-      // -----------------------------------------------------
-
-      const newUser = {
-        id: userId,
-        role: currentRole,
-        email,
-        password: "password",
-        status: formData.status,
-        profileId,
-      };
-
-      draft.users.push(newUser);
-
-      // -----------------------------------------------------
-      // Create matching profile
-      // -----------------------------------------------------
-
-      if (currentRole === "student") {
-        draft.students.push({
-          id: profileId,
-          userId,
-          fullName: name,
-          email,
-          studentId: profileId,
-          program: "BS Information Technology",
-          yearLevel: "2nd Year",
-          department: "College of Information and Communications Technology",
-          facultyId: "FAC-001",
-          phone: "",
-          address: "",
-          gwa: "",
-        });
-      }
-
-      if (currentRole === "faculty") {
-        draft.faculty.push({
-          id: profileId,
-          userId,
-          fullName: name,
-          email,
-          facultyId: profileId,
-          department: "College of Information and Communications Technology",
-        });
-      }
-
-      if (currentRole === "company") {
-        // -----------------------------------------------
-        // New company supervisor
-        // -----------------------------------------------
-
-        const company = draft.companies[0];
-
-        draft.supervisors.push({
-          id: profileId,
-          userId,
-          companyId: company?.id || null,
-          fullName: name,
-          email,
-          position: "Company Supervisor",
-        });
-
-        if (company && !company.supervisorIds.includes(profileId)) {
-          company.supervisorIds.push(profileId);
+    setState((prev) => ({
+      ...prev,
+      users: prev.users.map((user) => {
+        if (user.id !== userToDeactivate.id) {
+          return user;
         }
+
+        return {
+          ...user,
+          status: STATUS.user.INACTIVE,
+        };
+      }),
+    }));
+
+    handleCloseDeactivateModal();
+  };
+
+  // =========================================================
+  // ACTIVATE USER
+  // =========================================================
+
+  const handleActivateUser = (user) => {
+    if (user.id === state.currentUser.id) {
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      users: prev.users.map((item) => {
+        if (item.id !== user.id) {
+          return item;
+        }
+
+        return {
+          ...item,
+          status: STATUS.user.ACTIVE,
+        };
+      }),
+    }));
+  };
+
+  // =========================================================
+  // OPEN DELETE VERIFICATION
+  // =========================================================
+
+  const handleDeleteUser = (user) => {
+    if (user.id === state.currentUser.id) {
+      return;
+    }
+
+    setUserToDelete(user);
+
+    setDeletePassword("");
+
+    setDeleteConfirmation("");
+
+    setDeleteError("");
+
+    setIsDeleteModalOpen(true);
+  };
+
+  // =========================================================
+  // CLOSE DELETE MODAL
+  // =========================================================
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+
+    setUserToDelete(null);
+
+    setDeletePassword("");
+
+    setDeleteConfirmation("");
+
+    setDeleteError("");
+  };
+
+  // =========================================================
+  // CONFIRM DELETE
+  // =========================================================
+
+  const handleConfirmDelete = () => {
+    if (!userToDelete) {
+      return;
+    }
+
+    if (state.currentUser.role !== "admin") {
+      setDeleteError(
+        "Only an administrator can permanently delete user accounts."
+      );
+
+      return;
+    }
+
+    if (deletePassword !== state.currentUser.password) {
+      setDeleteError("Incorrect administrator password.");
+
+      return;
+    }
+
+    if (deleteConfirmation.trim() !== userToDelete.email) {
+      setDeleteError("The user's email does not match.");
+
+      return;
+    }
+
+    setState((prev) => {
+      const deletedUser = userToDelete;
+
+      const updatedUsers = prev.users.filter(
+        (user) => user.id !== deletedUser.id
+      );
+
+      let updatedStudents = prev.students;
+
+      let updatedRegistrar = prev.registrar;
+
+      let updatedSupervisors = prev.supervisors;
+
+      // ===================================================
+      // DELETE STUDENT PROFILE
+      // ===================================================
+
+      if (deletedUser.role === "student") {
+        updatedStudents = prev.students.filter(
+          (student) => student.id !== deletedUser.profileId
+        );
       }
 
-      // -----------------------------------------------------
-      // Audit
-      // -----------------------------------------------------
+      // ===================================================
+      // DELETE REGISTRAR PROFILE
+      // ===================================================
 
-      draft.auditEvents.unshift({
-        id: `AUD-${String(draft.auditEvents.length + 1).padStart(3, "0")}`,
+      if (deletedUser.role === "registrar") {
+        updatedRegistrar = prev.registrar.filter(
+          (registrar) => registrar.id !== deletedUser.profileId
+        );
+      }
 
-        actorUserId: draft.currentUser?.id || "SYSTEM",
+      // ===================================================
+      // DELETE COMPANY SUPERVISOR PROFILE
+      // ===================================================
 
-        actorRole: draft.currentUser?.role || "system",
+      if (deletedUser.role === "company") {
+        updatedSupervisors = prev.supervisors.filter(
+          (supervisor) => supervisor.id !== deletedUser.profileId
+        );
+      }
 
-        action: "CREATE",
-
-        module: "User Management",
-
-        targetEntityType: "User",
-
-        targetEntityId: userId,
-
-        timestamp: new Date().toISOString(),
-
-        details: {
-          name,
-          email,
-          role: currentRole,
-          profileId,
-        },
-      });
+      return {
+        ...prev,
+        users: updatedUsers,
+        students: updatedStudents,
+        registrar: updatedRegistrar,
+        supervisors: updatedSupervisors,
+      };
     });
 
-    handleCloseModal();
+    setCurrentPage((prev) => {
+      const remainingUsers = Math.max(currentUsers.length - 1, 0);
+
+      const newTotalPages = Math.ceil(remainingUsers / usersPerPage);
+
+      return Math.min(prev, Math.max(newTotalPages, 1));
+    });
+
+    handleCloseDeleteModal();
   };
 
   // =========================================================
@@ -432,7 +806,7 @@ const UserManagement = () => {
             darkMode ? "text-slate-400" : "text-slate-500"
           }`}
         >
-          Manage students, faculty advisers, and company supervisors.
+          Manage registered students, registrars, and company supervisors.
         </p>
       </div>
 
@@ -452,56 +826,160 @@ const UserManagement = () => {
         =================================================== */}
 
         <div
-          className={`px-4 sm:px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+          className={`px-4 sm:px-5 py-4 border-b ${
             darkMode ? "border-slate-700" : "border-slate-200"
           }`}
         >
-          {/* TABS */}
+          {/* =================================================
+              TABS + INFO
+          ================================================= */}
 
-          <div
-            className={`flex items-center rounded-lg border overflow-hidden w-full sm:w-auto ${
-              darkMode
-                ? "border-slate-700 bg-slate-800"
-                : "border-slate-200 bg-slate-50"
-            }`}
-          >
-            {tabs.map((tab) => {
-              const active = activeTab === tab.key;
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* TABS */}
 
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => handleTabChange(tab.key)}
-                  className={`flex-1 sm:flex-none px-5 py-2 text-xs font-semibold transition ${
-                    active
-                      ? darkMode
-                        ? "bg-white text-slate-900"
-                        : "bg-slate-800 text-white"
-                      : darkMode
-                      ? "text-slate-300 hover:bg-slate-700"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            <div
+              className={`flex items-center rounded-lg border overflow-hidden w-full sm:w-auto ${
+                darkMode
+                  ? "border-slate-700 bg-slate-800"
+                  : "border-slate-200 bg-slate-50"
+              }`}
+            >
+              {tabs.map((tab) => {
+                const active = activeTab === tab.key;
+
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => handleTabChange(tab.key)}
+                    className={`flex-1 sm:flex-none px-5 py-2 text-xs font-semibold transition ${
+                      active
+                        ? darkMode
+                          ? "bg-white text-slate-900"
+                          : "bg-slate-800 text-white"
+                        : darkMode
+                        ? "text-slate-300 hover:bg-slate-700"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* INFO */}
+
+            <div
+              className={`text-[10px] ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Account creation is handled through registration requests.
+            </div>
           </div>
 
-          {/* ADD USER */}
+          {/* =================================================
+              SEARCH + SORT BAR
+          ================================================= */}
 
-          <button
-            type="button"
-            onClick={handleAddUser}
-            className={`w-full sm:w-auto px-4 py-2 rounded-lg text-xs font-bold transition ${
-              darkMode
-                ? "bg-white text-slate-900 hover:bg-slate-200"
-                : "bg-slate-800 text-white hover:bg-slate-700"
-            }`}
-          >
-            + Add User
-          </button>
+          <div className="mt-4 flex flex-col lg:flex-row gap-2">
+            {/* SEARCH */}
+
+            <div className="relative flex-1">
+              <span
+                className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none ${
+                  darkMode ? "text-slate-500" : "text-slate-400"
+                }`}
+              >
+                🔍
+              </span>
+
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder={`Search ${getRoleLabel()
+                  .toLowerCase()
+                  .replace(" adviser", "")} by ID, name, or email...`}
+                className={`w-full pl-9 pr-10 py-2.5 rounded-lg border outline-none text-xs transition ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-500"
+                    : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400"
+                }`}
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-sm transition ${
+                    darkMode
+                      ? "text-slate-400 hover:bg-slate-700 hover:text-white"
+                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  }`}
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* SORT */}
+
+            <div className="flex gap-2">
+              <select
+                value={sortField}
+                onChange={handleSortChange}
+                className={`flex-1 lg:w-40 px-3 py-2.5 rounded-lg border outline-none text-xs font-medium transition ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700 text-slate-200 focus:border-slate-500"
+                    : "bg-white border-slate-200 text-slate-700 focus:border-slate-400"
+                }`}
+              >
+                <option value="name">Sort by Name</option>
+                <option value="id">Sort by ID</option>
+                <option value="email">Sort by Email</option>
+                <option value="status">Sort by Status</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={handleSortDirection}
+                title={
+                  sortDirection === "asc"
+                    ? "Currently ascending. Click for descending."
+                    : "Currently descending. Click for ascending."
+                }
+                className={`w-11 rounded-lg border text-sm font-bold transition ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700"
+                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {sortDirection === "asc" ? "↑" : "↓"}
+              </button>
+            </div>
+          </div>
+
+          {/* SEARCH RESULT INFO */}
+
+          {(searchQuery || processedUsers.length !== currentUsers.length) && (
+            <div
+              className={`mt-3 text-[10px] ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Showing {processedUsers.length} of {currentUsers.length}{" "}
+              {getRoleLabel().toLowerCase()} accounts
+              {searchQuery && (
+                <>
+                  {" "}
+                  matching <strong>"{searchQuery}"</strong>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ===================================================
@@ -509,7 +987,7 @@ const UserManagement = () => {
         =================================================== */}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[650px] border-collapse">
+          <table className="w-full min-w-[820px] border-collapse">
             <thead>
               <tr
                 className={
@@ -562,16 +1040,11 @@ const UserManagement = () => {
 
             <tbody>
               {paginatedUsers.map((user) => {
-                const profile =
-                  user.role === "student"
-                    ? state.students.find((item) => item.id === user.profileId)
-                    : user.role === "faculty"
-                    ? state.faculty.find((item) => item.id === user.profileId)
-                    : state.supervisors.find(
-                        (item) => item.id === user.profileId
-                      );
+                const profile = getUserProfile(user);
 
                 const displayName = profile?.fullName || user.email;
+
+                const isCurrentAdmin = user.id === state.currentUser.id;
 
                 return (
                   <tr
@@ -621,6 +1094,10 @@ const UserManagement = () => {
                             ? darkMode
                               ? "bg-green-950 text-green-400 border border-green-800"
                               : "bg-green-100 text-green-700 border border-green-200"
+                            : user.status === STATUS.user.PENDING
+                            ? darkMode
+                              ? "bg-yellow-950 text-yellow-400 border border-yellow-800"
+                              : "bg-yellow-100 text-yellow-700 border border-yellow-200"
                             : darkMode
                             ? "bg-red-950 text-red-400 border border-red-800"
                             : "bg-red-100 text-red-700 border border-red-200"
@@ -630,20 +1107,85 @@ const UserManagement = () => {
                       </span>
                     </td>
 
-                    {/* ACTION */}
+                    {/* ACTIONS */}
 
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleEditUser(user)}
-                        className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition ${
-                          darkMode
-                            ? "bg-slate-700 text-white hover:bg-slate-600"
-                            : "bg-slate-700 text-white hover:bg-slate-800"
-                        }`}
-                      >
-                        Edit
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        {/* EDIT */}
+
+                        <button
+                          type="button"
+                          onClick={() => handleEditUser(user)}
+                          className={`px-4 py-1.5 rounded-md text-[10px] font-bold transition ${
+                            darkMode
+                              ? "bg-slate-700 text-white hover:bg-slate-600"
+                              : "bg-slate-700 text-white hover:bg-slate-800"
+                          }`}
+                        >
+                          Edit
+                        </button>
+
+                        {/* ACTIVATE */}
+
+                        {user.status === STATUS.user.INACTIVE && (
+                          <button
+                            type="button"
+                            disabled={isCurrentAdmin}
+                            onClick={() => handleActivateUser(user)}
+                            className={`px-4 py-1.5 rounded-md text-[10px] font-bold border transition ${
+                              isCurrentAdmin
+                                ? darkMode
+                                  ? "text-slate-600 border-slate-700 cursor-not-allowed"
+                                  : "text-slate-300 border-slate-200 cursor-not-allowed"
+                                : darkMode
+                                ? "text-green-400 border-green-800 hover:bg-green-950"
+                                : "text-green-700 border-green-200 hover:bg-green-50"
+                            }`}
+                          >
+                            Activate
+                          </button>
+                        )}
+
+                        {/* DEACTIVATE */}
+
+                        {user.status !== STATUS.user.INACTIVE && (
+                          <button
+                            type="button"
+                            disabled={isCurrentAdmin}
+                            onClick={() => handleDeactivateUser(user)}
+                            className={`px-4 py-1.5 rounded-md text-[10px] font-bold border transition ${
+                              isCurrentAdmin
+                                ? darkMode
+                                  ? "text-slate-600 border-slate-700 cursor-not-allowed"
+                                  : "text-slate-300 border-slate-200 cursor-not-allowed"
+                                : darkMode
+                                ? "text-orange-400 border-orange-800 hover:bg-orange-950"
+                                : "text-orange-600 border-orange-200 hover:bg-orange-50"
+                            }`}
+                          >
+                            Deactivate
+                          </button>
+                        )}
+
+                        {/* DELETE */}
+
+                        <button
+                          type="button"
+                          disabled={isCurrentAdmin}
+                          onClick={() => handleDeleteUser(user)}
+                          className={`px-4 py-1.5 rounded-md text-[10px] font-bold border transition ${
+                            isCurrentAdmin
+                              ? darkMode
+                                ? "text-slate-600 border-slate-700 cursor-not-allowed"
+                                : "text-slate-300 border-slate-200 cursor-not-allowed"
+                              : darkMode
+                              ? "text-red-400 border-red-800 hover:bg-red-950"
+                              : "text-red-600 border-red-200 hover:bg-red-50"
+                          }`}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -659,7 +1201,11 @@ const UserManagement = () => {
                       darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    No {getRoleLabel().toLowerCase()} accounts found.
+                    {searchQuery
+                      ? `No ${getRoleLabel()
+                          .toLowerCase()
+                          .replace(" adviser", "")} accounts match your search.`
+                      : `No ${getRoleLabel().toLowerCase()} accounts found.`}
                   </td>
                 </tr>
               )}
@@ -682,11 +1228,11 @@ const UserManagement = () => {
             }`}
           >
             Showing{" "}
-            {currentUsers.length === 0
+            {processedUsers.length === 0
               ? 0
               : (currentPage - 1) * usersPerPage + 1}{" "}
-            - {Math.min(currentPage * usersPerPage, currentUsers.length)} of{" "}
-            {currentUsers.length} users
+            - {Math.min(currentPage * usersPerPage, processedUsers.length)} of{" "}
+            {processedUsers.length} users
           </p>
 
           <div className="flex items-center justify-center sm:justify-end gap-1">
@@ -694,10 +1240,10 @@ const UserManagement = () => {
 
             <button
               type="button"
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || totalPages === 0}
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               className={`w-8 h-8 rounded-md text-xs font-bold transition ${
-                currentPage === 1
+                currentPage === 1 || totalPages === 0
                   ? darkMode
                     ? "text-slate-600 cursor-not-allowed"
                     : "text-slate-300 cursor-not-allowed"
@@ -720,6 +1266,7 @@ const UserManagement = () => {
               <button
                 key={page}
                 type="button"
+                disabled={totalPages === 0}
                 onClick={() => setCurrentPage(page)}
                 className={`w-8 h-8 rounded-md text-xs font-bold transition ${
                   currentPage === page
@@ -729,6 +1276,8 @@ const UserManagement = () => {
                     : darkMode
                     ? "text-slate-300 hover:bg-slate-800"
                     : "text-slate-600 hover:bg-slate-100"
+                } ${
+                  totalPages === 0 ? "text-slate-300 cursor-not-allowed" : ""
                 }`}
               >
                 {page}
@@ -760,15 +1309,15 @@ const UserManagement = () => {
       </div>
 
       {/* =====================================================
-          ADD / EDIT MODAL
+          EDIT USER MODAL
       ===================================================== */}
 
-      {isModalOpen && (
+      {isEditModalOpen && selectedUser && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
-              handleCloseModal();
+              handleCloseEditModal();
             }
           }}
         >
@@ -779,7 +1328,7 @@ const UserManagement = () => {
                 : "bg-white border-slate-200"
             }`}
           >
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div
               className={`px-5 py-4 border-b flex items-center justify-between ${
@@ -792,7 +1341,7 @@ const UserManagement = () => {
                     darkMode ? "text-white" : "text-slate-900"
                   }`}
                 >
-                  {modalMode === "add" ? "Add User" : "Edit User"}
+                  Edit User
                 </h2>
 
                 <p
@@ -800,15 +1349,13 @@ const UserManagement = () => {
                     darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
-                  {modalMode === "add"
-                    ? `Add a new ${getRoleLabel().toLowerCase()} account.`
-                    : `Update ${getRoleLabel().toLowerCase()} information.`}
+                  Update account information and status.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={handleCloseModal}
+                onClick={handleCloseEditModal}
                 className={`w-8 h-8 rounded-lg text-lg transition ${
                   darkMode
                     ? "text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -823,7 +1370,7 @@ const UserManagement = () => {
 
             <form onSubmit={handleSaveUser}>
               <div className="px-5 py-5 space-y-4">
-                {/* ROLE */}
+                {/* USER TYPE */}
 
                 <div>
                   <label
@@ -841,7 +1388,29 @@ const UserManagement = () => {
                         : "bg-slate-50 border-slate-200 text-slate-600"
                     }`}
                   >
-                    {getRoleLabel()}
+                    {getRoleLabel(selectedUser.role)}
+                  </div>
+                </div>
+
+                {/* ACCOUNT ID */}
+
+                <div>
+                  <label
+                    className={`block text-xs font-semibold mb-1.5 ${
+                      darkMode ? "text-slate-300" : "text-slate-700"
+                    }`}
+                  >
+                    Account ID
+                  </label>
+
+                  <div
+                    className={`w-full px-3 py-2.5 rounded-lg border text-xs ${
+                      darkMode
+                        ? "bg-slate-800 border-slate-700 text-slate-400"
+                        : "bg-slate-50 border-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {selectedUser.id}
                   </div>
                 </div>
 
@@ -900,40 +1469,9 @@ const UserManagement = () => {
                     }`}
                   />
                 </div>
-
-                {/* STATUS */}
-
-                <div>
-                  <label
-                    htmlFor="user-status"
-                    className={`block text-xs font-semibold mb-1.5 ${
-                      darkMode ? "text-slate-300" : "text-slate-700"
-                    }`}
-                  >
-                    Status
-                  </label>
-
-                  <select
-                    id="user-status"
-                    name="status"
-                    value={formData.status}
-                    onChange={handleFormChange}
-                    className={`w-full px-3 py-2.5 rounded-lg border outline-none text-xs transition ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700 text-white focus:border-slate-400"
-                        : "bg-white border-slate-300 text-slate-900 focus:border-slate-600"
-                    }`}
-                  >
-                    <option value="Active">Active</option>
-
-                    <option value="Inactive">Inactive</option>
-
-                    <option value="Pending">Pending</option>
-                  </select>
-                </div>
               </div>
 
-              {/* MODAL ACTIONS */}
+              {/* ACTIONS */}
 
               <div
                 className={`px-5 py-4 border-t flex justify-end gap-2 ${
@@ -942,7 +1480,7 @@ const UserManagement = () => {
               >
                 <button
                   type="button"
-                  onClick={handleCloseModal}
+                  onClick={handleCloseEditModal}
                   className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
                     darkMode
                       ? "text-slate-300 hover:bg-slate-800"
@@ -960,10 +1498,446 @@ const UserManagement = () => {
                       : "bg-slate-800 text-white hover:bg-slate-700"
                   }`}
                 >
-                  {modalMode === "add" ? "Add User" : "Save Changes"}
+                  Save Changes
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          DEACTIVATE VERIFICATION MODAL
+      ===================================================== */}
+
+      {isDeactivateModalOpen && userToDeactivate && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCloseDeactivateModal();
+            }
+          }}
+        >
+          <div
+            className={`w-full max-w-md rounded-xl shadow-2xl border overflow-hidden ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-200"
+            }`}
+          >
+            {/* HEADER */}
+
+            <div
+              className={`px-5 py-4 border-b ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                    darkMode
+                      ? "bg-orange-950 text-orange-400"
+                      : "bg-orange-100 text-orange-600"
+                  }`}
+                >
+                  !
+                </div>
+
+                <div>
+                  <h2
+                    className={`text-sm sm:text-base font-bold ${
+                      darkMode ? "text-white" : "text-slate-900"
+                    }`}
+                  >
+                    Deactivate User
+                  </h2>
+
+                  <p
+                    className={`text-[10px] mt-1 ${
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
+                    Administrator verification required.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* CONTENT */}
+
+            <div className="px-5 py-5 space-y-4">
+              {/* USER INFO */}
+
+              <div
+                className={`rounded-lg border p-4 ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
+                <p
+                  className={`text-[10px] uppercase font-bold tracking-wide mb-2 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  Account to be deactivated
+                </p>
+
+                <p
+                  className={`text-sm font-bold ${
+                    darkMode ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  {getUserProfile(userToDeactivate)?.fullName ||
+                    userToDeactivate.email}
+                </p>
+
+                <p
+                  className={`text-xs mt-1 ${
+                    darkMode ? "text-slate-400" : "text-slate-600"
+                  }`}
+                >
+                  {userToDeactivate.email}
+                </p>
+
+                <p
+                  className={`text-[10px] mt-2 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  {getRoleLabel(userToDeactivate.role)} • {userToDeactivate.id}
+                </p>
+              </div>
+
+              {/* WARNING */}
+
+              <div
+                className={`text-xs leading-relaxed ${
+                  darkMode ? "text-slate-400" : "text-slate-600"
+                }`}
+              >
+                <strong
+                  className={darkMode ? "text-orange-400" : "text-orange-600"}
+                >
+                  Note:
+                </strong>{" "}
+                Deactivating this account will prevent the user from accessing
+                the system. The account will not be deleted and can be activated
+                again later.
+              </div>
+
+              {/* ADMIN PASSWORD */}
+
+              <div>
+                <label
+                  htmlFor="admin-deactivate-password"
+                  className={`block text-xs font-semibold mb-1.5 ${
+                    darkMode ? "text-slate-300" : "text-slate-700"
+                  }`}
+                >
+                  Administrator Password
+                </label>
+
+                <input
+                  id="admin-deactivate-password"
+                  type="password"
+                  value={adminPassword}
+                  onChange={(event) => {
+                    setAdminPassword(event.target.value);
+                    setDeactivateError("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleConfirmDeactivate();
+                    }
+                  }}
+                  placeholder="Enter your administrator password"
+                  autoFocus
+                  className={`w-full px-3 py-2.5 rounded-lg border outline-none text-xs transition ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-orange-500"
+                      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-orange-500"
+                  }`}
+                />
+
+                {deactivateError && (
+                  <p
+                    className={`text-[10px] mt-1.5 ${
+                      darkMode ? "text-red-400" : "text-red-600"
+                    }`}
+                  >
+                    {deactivateError}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+
+            <div
+              className={`px-5 py-4 border-t flex justify-end gap-2 ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={handleCloseDeactivateModal}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                  darkMode
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDeactivate}
+                disabled={!adminPassword}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                  adminPassword
+                    ? "bg-orange-600 text-white hover:bg-orange-700"
+                    : darkMode
+                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                Deactivate User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          DELETE VERIFICATION MODAL
+      ===================================================== */}
+
+      {isDeleteModalOpen && userToDelete && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCloseDeleteModal();
+            }
+          }}
+        >
+          <div
+            className={`w-full max-w-md rounded-xl shadow-2xl border overflow-hidden ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-200"
+            }`}
+          >
+            {/* DELETE HEADER */}
+
+            <div
+              className={`px-5 py-4 border-b ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                    darkMode
+                      ? "bg-red-950 text-red-400"
+                      : "bg-red-100 text-red-600"
+                  }`}
+                >
+                  !
+                </div>
+
+                <div>
+                  <h2
+                    className={`text-sm sm:text-base font-bold ${
+                      darkMode ? "text-white" : "text-slate-900"
+                    }`}
+                  >
+                    Permanently Delete User
+                  </h2>
+
+                  <p
+                    className={`text-[10px] mt-1 ${
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* DELETE CONTENT */}
+
+            <div className="px-5 py-5 space-y-4">
+              {/* USER INFO */}
+
+              <div
+                className={`rounded-lg border p-4 ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
+                <p
+                  className={`text-[10px] uppercase font-bold tracking-wide mb-2 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  Account to be deleted
+                </p>
+
+                <p
+                  className={`text-sm font-bold ${
+                    darkMode ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  {getUserProfile(userToDelete)?.fullName || userToDelete.email}
+                </p>
+
+                <p
+                  className={`text-xs mt-1 ${
+                    darkMode ? "text-slate-400" : "text-slate-600"
+                  }`}
+                >
+                  {userToDelete.email}
+                </p>
+
+                <p
+                  className={`text-[10px] mt-2 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  {getRoleLabel(userToDelete.role)} • {userToDelete.id}
+                </p>
+              </div>
+
+              {/* WARNING */}
+
+              <div
+                className={`text-xs leading-relaxed ${
+                  darkMode ? "text-slate-400" : "text-slate-600"
+                }`}
+              >
+                <strong className={darkMode ? "text-red-400" : "text-red-600"}>
+                  Warning:
+                </strong>{" "}
+                This permanently removes the user's account and associated
+                profile from the current system data.
+              </div>
+
+              {/* ADMIN PASSWORD */}
+
+              <div>
+                <label
+                  htmlFor="admin-delete-password"
+                  className={`block text-xs font-semibold mb-1.5 ${
+                    darkMode ? "text-slate-300" : "text-slate-700"
+                  }`}
+                >
+                  Administrator Password
+                </label>
+
+                <input
+                  id="admin-delete-password"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => {
+                    setDeletePassword(event.target.value);
+                    setDeleteError("");
+                  }}
+                  placeholder="Enter your administrator password"
+                  className={`w-full px-3 py-2.5 rounded-lg border outline-none text-xs transition ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-red-500"
+                      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-red-500"
+                  }`}
+                />
+              </div>
+
+              {/* EMAIL CONFIRMATION */}
+
+              <div>
+                <label
+                  htmlFor="delete-confirmation"
+                  className={`block text-xs font-semibold mb-1.5 ${
+                    darkMode ? "text-slate-300" : "text-slate-700"
+                  }`}
+                >
+                  Type the user's email to confirm
+                </label>
+
+                <input
+                  id="delete-confirmation"
+                  type="email"
+                  value={deleteConfirmation}
+                  onChange={(event) => {
+                    setDeleteConfirmation(event.target.value);
+                    setDeleteError("");
+                  }}
+                  placeholder={userToDelete.email}
+                  className={`w-full px-3 py-2.5 rounded-lg border outline-none text-xs transition ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 focus:border-red-500"
+                      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-red-500"
+                  }`}
+                />
+              </div>
+
+              {/* ERROR */}
+
+              {deleteError && (
+                <p
+                  className={`text-[10px] ${
+                    darkMode ? "text-red-400" : "text-red-600"
+                  }`}
+                >
+                  {deleteError}
+                </p>
+              )}
+            </div>
+
+            {/* DELETE ACTIONS */}
+
+            <div
+              className={`px-5 py-4 border-t flex justify-end gap-2 ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={handleCloseDeleteModal}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                  darkMode
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  !deletePassword ||
+                  deleteConfirmation.trim() !== userToDelete.email
+                }
+                onClick={handleConfirmDelete}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                  deletePassword &&
+                  deleteConfirmation.trim() === userToDelete.email
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : darkMode
+                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                Delete User
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,83 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { STATUS, useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "evaluationTemplates": {
+    "Company Supervisor": {
+      "name": "Intern Performance Evaluation",
+      "description": "Used by company supervisors to evaluate intern performance.",
+      "status": "Finalized",
+      "sections": [],
+      "publishedAt": null,
+      "updatedAt": null
+    },
+    "Student": {
+      "name": "Company & Internship Experience Evaluation",
+      "description": "Used by students to evaluate their internship company and experience.",
+      "status": "Finalized",
+      "sections": [],
+      "publishedAt": null,
+      "updatedAt": null
+    }
+  },
+  "evaluations": [],
+  "currentUser": {
+    "id": "USR-002",
+    "role": "registrar",
+    "email": "registrar@gmail.com",
+    "password": "password",
+    "status": "Active",
+    "profileId": "FAC-001"
+  }
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 // =========================================================
 // DEFAULT TEMPLATES
@@ -110,7 +187,8 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const EvaluationManagement = () => {
   const { darkMode } = useOutletContext();
 
-  const { state, transact } = useMockStore();
+  const state = localState;
+  const transact = (...args) => { void args; };
 
   // =========================================================
   // ACTIVE DIRECTION
@@ -766,7 +844,7 @@ const EvaluationManagement = () => {
         </div>
 
         {/* =====================================================
-            FACULTY NOTICE
+            REGISTRAR NOTICE
         ===================================================== */}
 
         <div className={`mb-6 border rounded-lg p-3 ${cardClass}`}>
@@ -774,10 +852,10 @@ const EvaluationManagement = () => {
             <span className="text-sm">ℹ️</span>
 
             <div>
-              <p className="text-xs font-bold">Faculty Adviser access</p>
+              <p className="text-xs font-bold">Registrar Adviser access</p>
 
               <p className={`text-[10px] mt-1 ${mutedText}`}>
-                Faculty Advisers can view submitted evaluations for their
+                Registrar Advisers can view submitted evaluations for their
                 assigned interns. They cannot submit or modify evaluation
                 responses.
               </p>
@@ -1130,7 +1208,7 @@ const EvaluationManagement = () => {
                 darkMode ? "text-slate-500" : "text-slate-400"
               }`}
             >
-              Faculty: View Only
+              Registrar: View Only
             </span>
           </div>
 

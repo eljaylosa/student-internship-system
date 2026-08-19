@@ -16,7 +16,7 @@ const Services = () => {
     {
       title: "Digital Requirement Submission",
       description:
-        "Replaces traditional hard-copy submissions. Students can directly upload critical digital files like CBAR Titles, portfolios, and Personal Data Sheets (PDS).",
+        "Replaces traditional hard-copy submissions. Students can directly upload critical digital files like Resume/CVs, portfolios, and Personal Data Sheets (PDS).",
       details: {
         objectives: [
           "Upload, review, and manage documents digitally.",
@@ -45,10 +45,10 @@ const Services = () => {
     {
       title: "Automated Deployment Mapping",
       description:
-        "Assists department heads and clerks in cleanly tracking school assignments, establishing partner network rosters, and distributing students to faculty advisers.",
+        "Assists department heads and clerks in cleanly tracking school assignments, establishing partner network rosters, and distributing students to registrar advisers.",
       details: {
         objectives: [
-          "Efficiently assign students to appropriate faculty advisers.",
+          "Efficiently assign students to appropriate registrar advisers.",
           "Organize cooperating school locations relative to student residences.",
         ],
       },
@@ -80,7 +80,7 @@ const Services = () => {
           </h1>
           <p className="text-lg mb-12 font-mono text-gray-600 max-w-3xl mx-auto">
             InternLink eliminates standard administrative overhead by
-            modernizing document workflows and record keeping for BPSU students.
+            modernizing document workflows and record keeping for students.
           </p>
 
           {/* System Value Services Grid */}

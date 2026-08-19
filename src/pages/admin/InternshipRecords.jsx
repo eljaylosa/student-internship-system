@@ -1,10 +1,78 @@
 import React, { useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "assignments": [],
+  "students": [
+    {
+      "id": "STU-001",
+      "userId": "USR-001",
+      "fullName": "John Doe",
+      "email": "student@gmail.com",
+      "studentId": "STU-001",
+      "program": "BS Information Technology",
+      "yearLevel": "2nd Year",
+      "department": "College of Information and Communications Technology",
+      "facultyId": "FAC-001",
+      "phone": "+63 912 345 6789",
+      "address": "Limay, Bataan",
+      "gwa": "1.75"
+    }
+  ],
+  "companies": [
+    {
+      "id": "COM-001",
+      "name": "ABC Technologies",
+      "industry": "Information Technology",
+      "status": "Verified",
+      "address": "Balanga, Bataan",
+      "email": "hr@abctech.com",
+      "supervisorIds": [
+        "SUP-001"
+      ]
+    }
+  ],
+  "opportunities": [
+    {
+      "id": "OPP-001",
+      "companyId": "COM-001",
+      "supervisorId": "SUP-001",
+      "title": "Web Developer Intern",
+      "description": "Build and improve internal web experiences with the engineering team.",
+      "location": "Balanga, Bataan",
+      "positionType": "On-site",
+      "availability": "June - August 2026",
+      "requirements": [
+        "HTML/CSS",
+        "JavaScript",
+        "Git"
+      ],
+      "status": "Active",
+      "openings": 3
+    }
+  ],
+  "registrar": [
+    {
+      "id": "FAC-001",
+      "userId": "USR-002",
+      "fullName": "Maria Santos",
+      "email": "registrar@gmail.com",
+      "facultyId": "FAC-001",
+      "department": "College of Information and Communications Technology",
+      "position": "Registrar Adviser",
+      "phone": "+63 917 123 4567",
+      "address": "Balanga, Bataan",
+      "specialization": "Information Technology",
+      "employeeId": "FAC-2026-001"
+    }
+  ]
+};
 
 export default function InternshipRecords() {
   const { darkMode } = useOutletContext();
-  const { state, setAssignmentStatus } = useMockStore();
+  const state = localState;
+  const setAssignmentStatus = (...args) => { void args; };
 
   // =========================================================
   // STYLES
@@ -107,7 +175,7 @@ export default function InternshipRecords() {
     );
   };
 
-  const getFacultyName = (record) => {
+  const getRegistrarName = (record) => {
     return (
       record.faculty?.fullName ||
       record.faculty?.name ||
@@ -256,7 +324,7 @@ export default function InternshipRecords() {
             </h2>
 
             <p className={`text-[10px] mt-1 ${muted}`}>
-              Assignments created and managed through the Faculty Portal.
+              Assignments created and managed through the Registrar Portal.
             </p>
           </div>
 
@@ -279,7 +347,7 @@ export default function InternshipRecords() {
               const studentName = getStudentName(assignment);
               const companyName = getCompanyName(assignment);
               const opportunityTitle = getOpportunityTitle(assignment);
-              const facultyName = getFacultyName(assignment);
+              const facultyName = getRegistrarName(assignment);
 
               return (
                 <div
@@ -353,7 +421,7 @@ export default function InternshipRecords() {
                           <p
                             className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
                           >
-                            Faculty Adviser
+                            Registrar Adviser
                           </p>
 
                           <p className={`text-xs font-medium mt-1 ${heading}`}>
@@ -450,7 +518,7 @@ export default function InternshipRecords() {
             </p>
 
             <p className={`text-xs mt-1 ${muted}`}>
-              Approve an internship application in the Faculty Portal to create
+              Approve an internship application in the Registrar Portal to create
               an assignment.
             </p>
           </div>

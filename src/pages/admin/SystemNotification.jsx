@@ -1,6 +1,91 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { STATUS, useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "users": [
+    {
+      "id": "USR-001",
+      "role": "student",
+      "email": "student@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "STU-001"
+    },
+    {
+      "id": "USR-002",
+      "role": "registrar",
+      "email": "registrar@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "FAC-001"
+    },
+    {
+      "id": "USR-003",
+      "role": "company",
+      "email": "company@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "SUP-001"
+    },
+    {
+      "id": "USR-004",
+      "role": "admin",
+      "email": "admin@sims.local",
+      "password": "password",
+      "status": "Active",
+      "profileId": "ADM-001"
+    }
+  ],
+  "notifications": []
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 const TARGET_PORTALS = [
   {
@@ -10,10 +95,10 @@ const TARGET_PORTALS = [
     role: "student",
   },
   {
-    value: "Faculty Portal",
-    label: "Faculty Portal",
-    description: "All active faculty advisers",
-    role: "faculty",
+    value: "Registrar Portal",
+    label: "Registrar Portal",
+    description: "All active registrars",
+    role: "registrar",
   },
   {
     value: "Company Portal",
@@ -24,7 +109,7 @@ const TARGET_PORTALS = [
   {
     value: "All Portals",
     label: "All Portals",
-    description: "Students, faculty, and companies",
+    description: "Students, registrar, and companies",
     role: "all",
   },
 ];
@@ -59,7 +144,8 @@ const NOTIFICATION_TYPES = [
 const SystemNotification = () => {
   const { darkMode } = useOutletContext();
 
-  const { state, broadcastNotification } = useMockStore();
+  const state = localState;
+  const broadcastNotification = (...args) => { void args; };
 
   /* =========================================================
      FORM STATE
@@ -94,15 +180,15 @@ const SystemNotification = () => {
       case "Student Portal":
         return activeUsers.filter((user) => user.role === "student").length;
 
-      case "Faculty Portal":
-        return activeUsers.filter((user) => user.role === "faculty").length;
+      case "Registrar Portal":
+        return activeUsers.filter((user) => user.role === "registrar").length;
 
       case "Company Portal":
         return activeUsers.filter((user) => user.role === "company").length;
 
       case "All Portals":
         return activeUsers.filter((user) =>
-          ["student", "faculty", "company"].includes(user.role)
+          ["student", "registrar", "company"].includes(user.role)
         ).length;
 
       default:

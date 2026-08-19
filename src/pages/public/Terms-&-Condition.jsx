@@ -63,7 +63,7 @@ const TermsAndConditions = () => {
                 accurate documentation.
               </li>
               <li>
-                <strong className="text-slate-800">Faculty Advisers:</strong>{" "}
+                <strong className="text-slate-800">Registrar Advisers:</strong>{" "}
                 Responsible for reviewing, evaluating, and supervising student
                 submittals.
               </li>

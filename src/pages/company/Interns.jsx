@@ -1,10 +1,93 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "companies": [
+    {
+      "id": "COM-001",
+      "name": "ABC Technologies",
+      "industry": "Information Technology",
+      "status": "Verified",
+      "address": "Balanga, Bataan",
+      "email": "hr@abctech.com",
+      "supervisorIds": [
+        "SUP-001"
+      ]
+    }
+  ],
+  "assignments": [],
+  "students": [
+    {
+      "id": "STU-001",
+      "userId": "USR-001",
+      "fullName": "John Doe",
+      "email": "student@gmail.com",
+      "studentId": "STU-001",
+      "program": "BS Information Technology",
+      "yearLevel": "2nd Year",
+      "department": "College of Information and Communications Technology",
+      "facultyId": "FAC-001",
+      "phone": "+63 912 345 6789",
+      "address": "Limay, Bataan",
+      "gwa": "1.75"
+    }
+  ],
+  "attendance": []
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 export default function Interns() {
   const { darkMode } = useOutletContext();
-  const { state, recordAttendance, setAssignmentStatus } = useMockStore();
+  const state = localState;
+  const recordAttendance = (...args) => { void args; };
+  const setAssignmentStatus = (...args) => { void args; };
 
   const company = state.companies.find((item) => item.id === "COM-001");
 
@@ -118,7 +201,7 @@ export default function Interns() {
 
             <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
               Interns will appear here only after their required documents have
-              been approved by the faculty adviser and the student has been
+              been approved by the registrar and the student has been
               officially deployed.
             </p>
           </div>

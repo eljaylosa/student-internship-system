@@ -12,7 +12,7 @@ const Messages = () => {
     {
       id: 1,
       name: "Prof. Smith",
-      role: "Faculty Adviser",
+      role: "Registrar Adviser",
       unread: 3,
     },
     {
@@ -24,7 +24,7 @@ const Messages = () => {
     {
       id: 3,
       name: "Prof. Davis",
-      role: "Faculty Adviser",
+      role: "Registrar Adviser",
       unread: 0,
     },
     {
@@ -36,7 +36,7 @@ const Messages = () => {
     {
       id: 5,
       name: "Prof. Brown",
-      role: "Faculty Adviser",
+      role: "Registrar Adviser",
       unread: 0,
     },
   ];
@@ -286,7 +286,7 @@ const Messages = () => {
           </h1>
 
           <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
-            Communicate with your faculty adviser and company supervisor.
+            Communicate with your registrar and company supervisor.
           </p>
         </div>
 

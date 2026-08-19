@@ -1,10 +1,76 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "informationItems": [
+    {
+      "id": "INFO-001",
+      "title": "Internship Guidelines",
+      "category": "Guidelines",
+      "description": "Important guidelines and requirements that students should follow during their internship.",
+      "content": "Review the internship guidelines before beginning your internship. This includes requirements, responsibilities, and important procedures.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "INFO-002",
+      "title": "Internship Requirements",
+      "category": "Requirements",
+      "description": "Complete list of requirements that must be submitted before starting your internship.",
+      "content": "Students are required to complete and submit all necessary documents before their internship can officially begin.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "INFO-003",
+      "title": "Application Process",
+      "category": "Application",
+      "description": "Learn how to apply for an internship and track your application status.",
+      "content": "Choose a company, select your preferred position, provide your availability, and submit your internship application.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "INFO-004",
+      "title": "Document Submission",
+      "category": "Documents",
+      "description": "Information about the documents required for your internship application.",
+      "content": "Students must submit the required internship documents through the Document Submission section of the portal.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "INFO-005",
+      "title": "Internship Policies",
+      "category": "Policies",
+      "description": "Important policies and rules that students must observe during their internship.",
+      "content": "Students are expected to follow the policies of both the institution and their assigned internship company.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "INFO-006",
+      "title": "Frequently Asked Questions",
+      "category": "FAQ",
+      "description": "Answers to common questions about the internship process and requirements.",
+      "content": "Find answers to commonly asked questions regarding applications, documents, internship requirements, and other procedures.",
+      "status": "Published",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    }
+  ]
+};
+
 
 const Info = () => {
   const { darkMode } = useOutletContext();
-  const { state } = useMockStore();
+  const state = localState;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("All");

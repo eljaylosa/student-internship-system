@@ -78,68 +78,74 @@ const AdminPortalLayout = () => {
   const sidebarItems = [
     {
       name: "Dashboard",
-      number: "1.",
+
       icon: "▦",
       path: "/admin/dashboard",
     },
     {
-      name: "User Management",
-      number: "2.",
-      icon: "👥",
-      path: "/admin/users",
+      name: "Account Requests",
+
+      icon: "📩",
+      path: "/admin/requests",
     },
     {
       name: "Company Management",
-      number: "3.",
+
       icon: "▦",
       path: "/admin/companies",
     },
     {
+      name: "User Management",
+
+      icon: "👥",
+      path: "/admin/users",
+    },
+    {
       name: "Internship Records",
-      number: "4.",
+
       icon: "▣",
       path: "/admin/internships",
     },
     {
       name: "Document Management",
-      number: "5.",
+
       icon: "▰",
       path: "/admin/documents",
     },
     {
       name: "Information Management",
-      number: "6.",
+
       icon: "ⓘ",
       path: "/admin/information",
     },
     {
       name: "Evaluation Management",
-      number: "7.",
+
       icon: "★",
       path: "/admin/evaluations",
     },
     {
       name: "Reports",
-      number: "8.",
+
       icon: "▥",
       path: "/admin/reports",
     },
     {
       name: "System Notifications",
-      number: "9.",
+
       icon: "♟",
       path: "/admin/notifications",
       badge: true,
     },
     {
       name: "System Settings",
-      number: "10.",
+
       icon: "⚙",
       path: "/admin/settings",
     },
     {
       name: "Audit Logs",
-      number: "11.",
+
       icon: "▤",
       path: "/admin/audit-logs",
     },

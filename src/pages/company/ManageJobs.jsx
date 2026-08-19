@@ -1,12 +1,91 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { STATUS, useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "currentUser": {
+    "id": "USR-002",
+    "role": "registrar",
+    "email": "registrar@gmail.com",
+    "password": "password",
+    "status": "Active",
+    "profileId": "FAC-001"
+  },
+  "opportunities": [
+    {
+      "id": "OPP-001",
+      "companyId": "COM-001",
+      "supervisorId": "SUP-001",
+      "title": "Web Developer Intern",
+      "description": "Build and improve internal web experiences with the engineering team.",
+      "location": "Balanga, Bataan",
+      "positionType": "On-site",
+      "availability": "June - August 2026",
+      "requirements": [
+        "HTML/CSS",
+        "JavaScript",
+        "Git"
+      ],
+      "status": "Active",
+      "openings": 3
+    }
+  ]
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 export default function ManageJobs() {
   const { darkMode } = useOutletContext();
 
-  const { state, createOpportunity, updateOpportunity, deleteOpportunity } =
-    useMockStore();
+  const state = localState;
+  const createOpportunity = (...args) => { void args; };
+  const updateOpportunity = (...args) => { void args; };
+  const deleteOpportunity = (...args) => { void args; };
 
   const companyId = "COM-001";
   const supervisorId = state.currentUser?.profileId || "SUP-001";

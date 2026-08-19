@@ -13,38 +13,38 @@ export default function Notification() {
   const [notifications, setNotifications] = useState([
     {
       id: "NOT-001",
-      title: "Application Submitted",
+      title: "Internship Application Submitted",
       message:
-        "Your internship application has been successfully submitted and is awaiting review.",
+        "A student has successfully submitted an internship application and it is awaiting registrar review.",
       relatedEntityType: "InternshipApplication",
       relatedEntityId: "APP-001",
       createdAt: "2026-08-18T08:30:00.000Z",
       readAt: null,
-      actionPath: "/student/application",
+      actionPath: "/registrar/applications",
     },
 
     {
       id: "NOT-002",
-      title: "Document Review Update",
+      title: "Document Submission Received",
       message:
-        "Your submitted internship document is currently being reviewed.",
+        "A student has submitted internship documents that are ready for registrar review.",
       relatedEntityType: "DocumentSubmission",
       relatedEntityId: "DOC-001",
       createdAt: "2026-08-17T14:15:00.000Z",
       readAt: null,
-      actionPath: "/student/documents",
+      actionPath: "/registrar/documents",
     },
 
     {
       id: "NOT-003",
-      title: "Internship Information Updated",
+      title: "Student Record Updated",
       message:
-        "New internship guidelines and requirements are now available in the Internship Information section.",
-      relatedEntityType: "InformationItem",
-      relatedEntityId: "INFO-001",
+        "A student record has been updated and is available for review in the Student Records section.",
+      relatedEntityType: "StudentRecord",
+      relatedEntityId: "STU-001",
       createdAt: "2026-08-16T09:00:00.000Z",
       readAt: "2026-08-16T10:00:00.000Z",
-      actionPath: "/student/info",
+      actionPath: "/registrar/students",
     },
   ]);
 
@@ -91,7 +91,6 @@ export default function Notification() {
   // =========================================================
 
   const openNotification = (notification) => {
-    // Mark as read when opened
     setNotifications((previous) =>
       previous.map((item) =>
         item.id === notification.id
@@ -131,8 +130,8 @@ export default function Notification() {
       case "DocumentSubmission":
         return "Document";
 
-      case "InformationItem":
-        return "Information";
+      case "StudentRecord":
+        return "Student Record";
 
       default:
         return "Notification";
@@ -159,7 +158,7 @@ export default function Notification() {
 
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
-          Student Portal
+          Registrar Portal
         </p>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-1">
@@ -195,8 +194,8 @@ export default function Notification() {
         </div>
 
         <p className={`text-sm mt-2 ${secondaryText}`}>
-          Stay updated with your applications, documents, evaluations, and
-          internship activities.
+          Stay updated with student applications, document submissions, records,
+          and registrar activities.
         </p>
       </div>
 
@@ -208,10 +207,6 @@ export default function Notification() {
         className={`border rounded-2xl overflow-hidden shadow-sm ${card}`}
       >
         {notifications.length === 0 ? (
-          /* =================================================
-             EMPTY STATE
-          ================================================= */
-
           <div className="p-10 text-center">
             <div
               className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-3xl mb-4 ${
@@ -230,7 +225,7 @@ export default function Notification() {
             </p>
 
             <p className={`text-xs mt-1 ${secondaryText}`}>
-              You will see important updates here.
+              You will see important registrar updates here.
             </p>
           </div>
         ) : (
@@ -255,9 +250,7 @@ export default function Notification() {
                       : "bg-white"
                   }`}
                 >
-                  {/* =================================================
-                      MAIN ROW
-                  ================================================= */}
+                  {/* MAIN ROW */}
 
                   <div className="flex items-start gap-4">
                     {/* UNREAD INDICATOR */}
@@ -292,8 +285,6 @@ export default function Notification() {
                           >
                             {notification.title}
                           </h2>
-
-                          {/* TYPE BADGE */}
 
                           <span
                             className={`px-2 py-0.5 rounded-md text-[9px] uppercase tracking-wide font-bold ${
@@ -347,13 +338,9 @@ export default function Notification() {
                       </div>
                     </div>
 
-                    {/* =================================================
-                        CONTROLS — RIGHT SIDE
-                    ================================================= */}
+                    {/* CONTROLS */}
 
                     <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 flex-shrink-0">
-                      {/* OPEN */}
-
                       {notification.actionPath && (
                         <button
                           type="button"
@@ -367,8 +354,6 @@ export default function Notification() {
                           Open
                         </button>
                       )}
-
-                      {/* READ / UNREAD */}
 
                       <button
                         type="button"

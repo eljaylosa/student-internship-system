@@ -1,10 +1,74 @@
 import React from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "users": [
+    {
+      "id": "USR-001",
+      "role": "student",
+      "email": "student@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "STU-001"
+    },
+    {
+      "id": "USR-002",
+      "role": "registrar",
+      "email": "registrar@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "FAC-001"
+    },
+    {
+      "id": "USR-003",
+      "role": "company",
+      "email": "company@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "SUP-001"
+    },
+    {
+      "id": "USR-004",
+      "role": "admin",
+      "email": "admin@sims.local",
+      "password": "password",
+      "status": "Active",
+      "profileId": "ADM-001"
+    }
+  ],
+  "applications": [
+    {
+      "id": "APP-001",
+      "studentId": "STU-001",
+      "opportunityId": "OPP-001",
+      "submittedAt": "2026-05-01T09:00:00.000Z",
+      "status": "Submitted",
+      "coverLetter": "I am excited to contribute to the team and learn through this placement.",
+      "reviewerId": "FAC-001",
+      "notes": "Awaiting registrar review."
+    }
+  ],
+  "assignments": [],
+  "auditEvents": [
+    {
+      "id": "AUD-001",
+      "actorUserId": "USR-004",
+      "actorRole": "admin",
+      "action": "LOGIN",
+      "module": "Authentication",
+      "targetEntityType": "User",
+      "targetEntityId": "USR-004",
+      "timestamp": "2026-08-17T09:42:18.000Z",
+      "details": "Administrator logged into the mock system."
+    }
+  ]
+};
+
 
 const Dashboard = () => {
   const { darkMode } = useOutletContext();
-  const { state } = useMockStore();
+  const state = localState;
 
   // =========================================================
   // LIVE MOCK STORE DATA

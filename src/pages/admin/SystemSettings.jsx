@@ -1,6 +1,65 @@
 import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "settings": {
+    "systemName": "Student Internship Management System",
+    "academicYear": "2026 - 2027",
+    "internshipDuration": "480",
+    "maintenanceMode": false,
+    "emailNotifications": true,
+    "systemNotifications": true,
+    "applicationNotifications": true
+  }
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 // =========================================================
 // COMPONENT
@@ -9,7 +68,8 @@ import { useMockStore } from "../../data/mockStore";
 const SystemSettings = () => {
   const { darkMode } = useOutletContext();
 
-  const { state, updateSystemSettings } = useMockStore();
+  const state = localState;
+  const updateSystemSettings = (...args) => { void args; };
 
   // =========================================================
   // STORE SETTINGS

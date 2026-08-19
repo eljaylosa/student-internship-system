@@ -93,7 +93,7 @@ const Dashboard = () => {
     },
     {
       title: "New Message",
-      description: "You received a message from your faculty.",
+      description: "You received a message from your registrar.",
       time: "Yesterday",
       icon: "💬",
       iconClass: darkMode
@@ -516,7 +516,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* FACULTY */}
+            {/* REGISTRAR */}
 
             <div
               className={`p-4 rounded-xl border ${
@@ -525,7 +525,7 @@ const Dashboard = () => {
                   : "bg-slate-50 border-slate-100"
               }`}
             >
-              <p className={`text-xs ${mutedClass}`}>Faculty Adviser</p>
+              <p className={`text-xs ${mutedClass}`}>Registrar Adviser</p>
 
               <p className={`font-semibold text-sm mt-1 ${headingClass}`}>
                 Prof. Maria Santos

@@ -77,8 +77,8 @@ export const initialState = {
 
     {
       id: "USR-002",
-      role: "faculty",
-      email: "faculty@gmail.com",
+      role: "registrar",
+      email: "registrar@gmail.com",
       password: "password",
       status: STATUS.user.ACTIVE,
       profileId: "FAC-001",
@@ -133,7 +133,7 @@ export const initialState = {
       id: "FAC-001",
       userId: "USR-002",
       fullName: "Maria Santos",
-      email: "faculty@gmail.com",
+      email: "registrar@gmail.com",
       facultyId: "FAC-001",
       department: "College of Information and Communications Technology",
       position: "Faculty Adviser",
@@ -569,19 +569,18 @@ export function MockStoreProvider({ children }) {
          AUTHENTICATION
       ========================================================= */
 
-      login: (role, identifier, password) => {
+      login: (role, email, password) => {
         const user = state.users.find(
           (item) =>
             item.role === role &&
             item.status === STATUS.user.ACTIVE &&
-            (item.email.toLowerCase() === identifier.toLowerCase() ||
-              item.profileId === identifier)
+            item.email.toLowerCase() === email.trim().toLowerCase()
         );
 
         if (!user || user.password !== password) {
           return {
             ok: false,
-            message: "Invalid account ID or password.",
+            message: "Invalid email or password.",
           };
         }
 

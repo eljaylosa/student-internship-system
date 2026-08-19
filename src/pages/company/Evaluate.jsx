@@ -1,6 +1,58 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "supervisors": [
+    {
+      "id": "SUP-001",
+      "userId": "USR-003",
+      "companyId": "COM-001",
+      "fullName": "Mark Cruz",
+      "email": "company@gmail.com",
+      "position": "Company Supervisor"
+    }
+  ],
+  "currentUser": {
+    "id": "USR-002",
+    "role": "registrar",
+    "email": "registrar@gmail.com",
+    "password": "password",
+    "status": "Active",
+    "profileId": "FAC-001"
+  },
+  "companies": [
+    {
+      "id": "COM-001",
+      "name": "ABC Technologies",
+      "industry": "Information Technology",
+      "status": "Verified",
+      "address": "Balanga, Bataan",
+      "email": "hr@abctech.com",
+      "supervisorIds": [
+        "SUP-001"
+      ]
+    }
+  ],
+  "assignments": [],
+  "students": [
+    {
+      "id": "STU-001",
+      "userId": "USR-001",
+      "fullName": "John Doe",
+      "email": "student@gmail.com",
+      "studentId": "STU-001",
+      "program": "BS Information Technology",
+      "yearLevel": "2nd Year",
+      "department": "College of Information and Communications Technology",
+      "facultyId": "FAC-001",
+      "phone": "+63 912 345 6789",
+      "address": "Limay, Bataan",
+      "gwa": "1.75"
+    }
+  ],
+  "evaluations": []
+};
 
 const CRITERIA = [
   "Professionalism",
@@ -13,7 +65,8 @@ const CRITERIA = [
 
 export default function Evaluate() {
   const { darkMode } = useOutletContext();
-  const { state, submitEvaluation } = useMockStore();
+  const state = localState;
+  const submitEvaluation = (...args) => { void args; };
 
   // =========================================================
   // CURRENT COMPANY / SUPERVISOR

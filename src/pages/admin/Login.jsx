@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login } = useMockStore();
+  
+  const login = (...args) => { void args; };
 
   // =========================================================
   // STATE

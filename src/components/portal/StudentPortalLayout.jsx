@@ -1,32 +1,41 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
 
 // =========================================================
-// NOTIFICATIONS DATA
+// TEMPORARY FRONTEND NOTIFICATIONS
+// This is NOT connected to mockStore.
+// This will later be replaced with the real backend/database.
 // =========================================================
 
-const notifications = [
+const initialNotifications = [
   {
-    id: 1,
-    title: "Application Approved",
-    message: "Your internship application has been approved.",
-    time: "2 hrs ago",
-    unread: true,
+    id: "NOT-001",
+    title: "Application Submitted",
+    message:
+      "Your internship application has been successfully submitted and is awaiting review.",
+    relatedEntityType: "InternshipApplication",
+    relatedEntityId: "APP-001",
+    createdAt: "2026-08-18T08:30:00.000Z",
+    readAt: null,
   },
   {
-    id: 2,
-    title: "Document Reviewed",
-    message: "Your submitted document has been reviewed.",
-    time: "1 day ago",
-    unread: true,
+    id: "NOT-002",
+    title: "Document Review Update",
+    message: "Your submitted internship document is currently being reviewed.",
+    relatedEntityType: "DocumentSubmission",
+    relatedEntityId: "DOC-001",
+    createdAt: "2026-08-17T14:15:00.000Z",
+    readAt: null,
   },
   {
-    id: 3,
-    title: "New Message",
-    message: "You have received a new message.",
-    time: "2 days ago",
-    unread: false,
+    id: "NOT-003",
+    title: "Internship Information Updated",
+    message:
+      "New internship guidelines and requirements are now available in the Internship Information section.",
+    relatedEntityType: "InformationItem",
+    relatedEntityId: "INFO-001",
+    createdAt: "2026-08-16T09:00:00.000Z",
+    readAt: "2026-08-16T10:00:00.000Z",
   },
 ];
 
@@ -37,7 +46,14 @@ const notifications = [
 const StudentPortalLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useMockStore();
+
+  // =========================================================
+  // LOGOUT PLACEHOLDER
+  // =========================================================
+
+  const logout = (...args) => {
+    void args;
+  };
 
   // =========================================================
   // SIDEBAR
@@ -67,6 +83,69 @@ const StudentPortalLayout = () => {
   const notificationRef = useRef(null);
 
   // =========================================================
+  // NOTIFICATION STATE
+  // =========================================================
+
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const [selectedNotification, setSelectedNotification] = useState(null);
+
+  // =========================================================
+  // NOTIFICATION CONTROLS
+  // =========================================================
+
+  const unreadCount = notifications.filter(
+    (notification) => !notification.readAt
+  ).length;
+
+  const markNotificationRead = (notificationId) => {
+    setNotifications((previous) =>
+      previous.map((notification) =>
+        notification.id === notificationId
+          ? {
+              ...notification,
+              readAt: notification.readAt || new Date().toISOString(),
+            }
+          : notification
+      )
+    );
+  };
+
+  const markAllNotificationsRead = () => {
+    const now = new Date().toISOString();
+
+    setNotifications((previous) =>
+      previous.map((notification) => ({
+        ...notification,
+        readAt: notification.readAt || now,
+      }))
+    );
+  };
+
+  const deleteNotification = (notificationId) => {
+    setNotifications((previous) =>
+      previous.filter((notification) => notification.id !== notificationId)
+    );
+
+    setSelectedNotification((current) =>
+      current?.id === notificationId ? null : current
+    );
+  };
+
+  const openNotification = (notification) => {
+    markNotificationRead(notification.id);
+    setSelectedNotification({
+      ...notification,
+      readAt: notification.readAt || new Date().toISOString(),
+    });
+    setIsNotificationOpen(false);
+  };
+
+  const closeNotificationModal = () => {
+    setSelectedNotification(null);
+  };
+
+  // =========================================================
   // DARK MODE
   // =========================================================
 
@@ -89,7 +168,6 @@ const StudentPortalLayout = () => {
   // =========================================================
 
   useEffect(() => {
-    // Close mobile sidebar whenever the route changes
     setIsMobileSidebarOpen(false);
   }, [location.pathname]);
 
@@ -97,6 +175,9 @@ const StudentPortalLayout = () => {
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         setIsMobileSidebarOpen(false);
+        setIsNotificationOpen(false);
+        setIsProfileOpen(false);
+        setSelectedNotification(null);
       }
     };
 
@@ -108,7 +189,6 @@ const StudentPortalLayout = () => {
   }, []);
 
   useEffect(() => {
-    // Prevent background scrolling while mobile sidebar is open
     if (isMobileSidebarOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -174,24 +254,25 @@ const StudentPortalLayout = () => {
       path: "/student/documents",
     },
     {
+      name: "Evaluations",
+      icon: "📋",
+      path: "/student/evaluation",
+    },
+    {
       name: "Document Template",
       icon: "📁",
-      path: "/student/templates"
+      path: "/student/templates",
     },
     {
       name: "Notifications",
       icon: "🔔",
       path: "/student/notifications",
+      badge: unreadCount > 0,
     },
     {
       name: "Info",
       icon: "ⓘ",
       path: "/student/info",
-    },
-    {
-      name: "Evaluations",
-      icon: "📋",
-      path: "/student/evaluation",
     },
     {
       name: "Messages",
@@ -304,14 +385,16 @@ const StudentPortalLayout = () => {
 
   const handleLogout = () => {
     logout();
+
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
+    setSelectedNotification(null);
 
-    navigate("/", { replace: true });
+    navigate("/login", { replace: true });
   };
 
   // =========================================================
-  // DARK MODE
+  // DARK MODE TOGGLE
   // =========================================================
 
   const toggleDarkMode = () => {
@@ -330,7 +413,7 @@ const StudentPortalLayout = () => {
     >
       <div className="flex min-h-screen">
         {/* =====================================================
-            SIDEBAR
+            DESKTOP SIDEBAR
         ===================================================== */}
 
         <aside
@@ -341,10 +424,10 @@ const StudentPortalLayout = () => {
               : "bg-white border-slate-200"
           } ${isResizing ? "select-none" : ""}`}
         >
-          {/* LOGO */}
+          {/* SIDEBAR HEADER */}
 
           <div
-            className={`h-20 px-6 flex items-center border-b transition-colors ${
+            className={`h-20 px-6 flex items-center border-b ${
               darkMode ? "border-slate-700" : "border-slate-100"
             }`}
           >
@@ -359,30 +442,19 @@ const StudentPortalLayout = () => {
             <div className="ml-3">
               <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
 
-              <p className="text-xs text-slate-400">Student Environment</p>
+              <p
+                className={`text-xs ${
+                  darkMode ? "text-slate-400" : "text-slate-400"
+                }`}
+              >
+                Student Environment
+              </p>
             </div>
           </div>
 
-          {/* NAVIGATION */}
+          {/* SIDEBAR NAVIGATION */}
 
           <div className="flex-1 overflow-y-auto px-3 py-4">
-            <div
-              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
-                darkMode
-                  ? "bg-red-950/40 border-red-900 text-red-300"
-                  : "bg-red-50 border-red-200 text-red-700"
-              }`}
-            >
-              <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-              <p>
-                All data on this page are dummy data. No real data are used in
-                this project.
-              </p>
-
-              <p className="mt-1">No database is implemented yet.</p>
-            </div>
-
             <nav className="space-y-1">
               {sidebarItems.map((item) => {
                 const hasChildren = item.children?.length > 0;
@@ -451,8 +523,6 @@ const StudentPortalLayout = () => {
                       </div>
                     </button>
 
-                    {/* SUBMENU */}
-
                     {hasChildren && isExpanded && (
                       <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
                         <div
@@ -469,7 +539,7 @@ const StudentPortalLayout = () => {
                               key={child.name}
                               type="button"
                               onClick={() => navigateTo(child.path)}
-                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all duration-200 ${
+                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left ${
                                 childActive
                                   ? darkMode
                                     ? "bg-white text-slate-900"
@@ -479,12 +549,6 @@ const StudentPortalLayout = () => {
                                   : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                               }`}
                             >
-                              <span
-                                className={`absolute -left-3 top-1/2 w-3 h-px ${
-                                  darkMode ? "bg-slate-700" : "bg-slate-200"
-                                }`}
-                              />
-
                               <span
                                 className={`w-6 h-6 flex items-center justify-center rounded-md ${
                                   childActive
@@ -521,7 +585,7 @@ const StudentPortalLayout = () => {
             <button
               type="button"
               onClick={handleLogout}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${
                 darkMode
                   ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
                   : "text-slate-500 hover:bg-red-50 hover:text-red-600"
@@ -546,247 +610,10 @@ const StudentPortalLayout = () => {
               isResizing
                 ? "bg-blue-500"
                 : darkMode
-                ? "bg-transparent hover:bg-slate-700"
-                : "bg-transparent hover:bg-slate-300"
+                ? "hover:bg-slate-700"
+                : "hover:bg-slate-300"
             }`}
           />
-        </aside>
-
-        {/* =====================================================
-    MOBILE SIDEBAR OVERLAY
-===================================================== */}
-
-        {isMobileSidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-        )}
-
-        {/* =====================================================
-    MOBILE SIDEBAR
-===================================================== */}
-
-        <aside
-          className={`fixed top-0 left-0 z-50 h-full w-[280px] max-w-[85vw] flex flex-col border-r transition-transform duration-300 lg:hidden ${
-            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } ${
-            darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-200"
-          }`}
-        >
-          {/* MOBILE SIDEBAR HEADER */}
-
-          <div
-            className={`h-20 px-5 flex items-center justify-between border-b ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
-            <div className="flex items-center">
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
-                  darkMode
-                    ? "bg-white text-slate-900"
-                    : "bg-slate-900 text-white"
-                }`}
-              >
-                S
-              </div>
-
-              <div className="ml-3">
-                <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
-
-                <p className="text-xs text-slate-400">Student Environment</p>
-              </div>
-            </div>
-
-            {/* CLOSE BUTTON */}
-
-            <button
-              type="button"
-              onClick={() => setIsMobileSidebarOpen(false)}
-              aria-label="Close navigation menu"
-              className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition ${
-                darkMode
-                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-              }`}
-            >
-              ×
-            </button>
-          </div>
-
-          {/* MOBILE NAVIGATION */}
-
-          <div className="flex-1 overflow-y-auto px-3 py-4">
-            {/* DUMMY DATA NOTICE */}
-
-            <div
-              className={`mb-4 p-3 rounded-xl text-xs leading-relaxed border ${
-                darkMode
-                  ? "bg-red-950/40 border-red-900 text-red-300"
-                  : "bg-red-50 border-red-200 text-red-700"
-              }`}
-            >
-              <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-              <p>
-                All data on this page are dummy data. No real data are used in
-                this project.
-              </p>
-
-              <p className="mt-1">No database is implemented yet.</p>
-            </div>
-
-            <nav className="space-y-1">
-              {sidebarItems.map((item) => {
-                const hasChildren = item.children?.length > 0;
-                const isExpanded = expandedMenus[item.name];
-
-                const active =
-                  isPathActive(item.path) || isChildActive(item.children);
-
-                return (
-                  <div key={item.name}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (hasChildren) {
-                          toggleSubmenu(item.name);
-                        } else if (item.path) {
-                          navigateTo(item.path);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        active
-                          ? darkMode
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "bg-slate-900 text-white shadow-sm"
-                          : darkMode
-                          ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
-                            active
-                              ? darkMode
-                                ? "bg-slate-900/10"
-                                : "bg-white/10"
-                              : darkMode
-                              ? "bg-slate-800"
-                              : "bg-slate-100"
-                          }`}
-                        >
-                          {item.icon}
-                        </span>
-
-                        <span className="truncate">{item.name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              active ? "bg-current" : "bg-blue-500"
-                            }`}
-                          />
-                        )}
-
-                        {hasChildren && (
-                          <span
-                            className={`text-xs transition-transform duration-200 ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
-                          >
-                            ▼
-                          </span>
-                        )}
-                      </div>
-                    </button>
-
-                    {/* MOBILE SUBMENU */}
-
-                    {hasChildren && isExpanded && (
-                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
-                        <div
-                          className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode ? "bg-slate-700" : "bg-slate-200"
-                          }`}
-                        />
-
-                        {item.children.map((child) => {
-                          const childActive = isPathActive(child.path);
-
-                          return (
-                            <button
-                              key={child.name}
-                              type="button"
-                              onClick={() => navigateTo(child.path)}
-                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left transition-all duration-200 ${
-                                childActive
-                                  ? darkMode
-                                    ? "bg-white text-slate-900"
-                                    : "bg-slate-900 text-white"
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                              }`}
-                            >
-                              <span
-                                className={`absolute -left-3 top-1/2 w-3 h-px ${
-                                  darkMode ? "bg-slate-700" : "bg-slate-200"
-                                }`}
-                              />
-
-                              <span
-                                className={`w-6 h-6 flex items-center justify-center rounded-md ${
-                                  childActive
-                                    ? darkMode
-                                      ? "bg-slate-900/10"
-                                      : "bg-white/10"
-                                    : darkMode
-                                    ? "bg-slate-800"
-                                    : "bg-slate-50"
-                                }`}
-                              >
-                                {child.icon}
-                              </span>
-
-                              <span className="truncate">{child.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* MOBILE LOGOUT */}
-
-          <div
-            className={`p-4 border-t ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={handleLogout}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${
-                darkMode
-                  ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
-                  : "text-slate-500 hover:bg-red-50 hover:text-red-600"
-              }`}
-            >
-              <span>🚪</span>
-              <span>Logout</span>
-            </button>
-          </div>
         </aside>
 
         {/* =====================================================
@@ -799,31 +626,15 @@ const StudentPortalLayout = () => {
           =================================================== */}
 
           <header
-            className={`h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 relative transition-colors duration-300 ${
+            className={`h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 relative ${
               darkMode
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-white border-slate-200 text-slate-900"
             }`}
           >
+            {/* LEFT */}
+
             <div className="flex items-center min-w-0">
-              {/*  MOBILE MENU BUTTON */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileSidebarOpen(true);
-                  setIsProfileOpen(false);
-                  setIsNotificationOpen(false);
-                }}
-                aria-label="Open navigation menu"
-                className={`lg:hidden w-10 h-10 mr-3 rounded-xl flex items-center justify-center text-xl flex-shrink-0 transition ${
-                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
-                }`}
-              >
-                ☰
-              </button>
-
-              {/* PAGE TITLE */}
-
               <div className="min-w-0">
                 <p
                   className={`text-sm ${
@@ -839,12 +650,10 @@ const StudentPortalLayout = () => {
               </div>
             </div>
 
-            {/* RIGHT SIDE */}
+            {/* RIGHT SIDE CONTROLS */}
 
-            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-              {/* =================================================
-                  NOTIFICATION BELL
-              ================================================= */}
+            <div className="flex items-center gap-1 sm:gap-3 ml-auto">
+              {/* NOTIFICATIONS */}
 
               <div className="relative" ref={notificationRef}>
                 <button
@@ -859,14 +668,16 @@ const StudentPortalLayout = () => {
                 >
                   <span className="text-lg">🔔</span>
 
-                  {/* RED NOTIFICATION DOT */}
-
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                  {unreadCount > 0 && (
+                    <span
+                      className={`absolute top-1 right-1 min-w-4 h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full border-2 ${
+                        darkMode ? "border-slate-900" : "border-white"
+                      }`}
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
                 </button>
-
-                {/* =================================================
-                    NOTIFICATION CARD
-                ================================================= */}
 
                 {isNotificationOpen && (
                   <div
@@ -891,84 +702,104 @@ const StudentPortalLayout = () => {
                             darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
-                          Recent updates
+                          {unreadCount > 0
+                            ? `${unreadCount} unread`
+                            : "All caught up"}
                         </p>
                       </div>
 
-                      <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full">
-                        2 New
-                      </span>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          className="text-[10px] font-bold text-blue-500 hover:underline"
+                        >
+                          Mark all read
+                        </button>
+                      )}
                     </div>
 
-                    {/* NOTIFICATION LIST */}
+                    {/* LIST */}
 
                     <div className="max-h-80 overflow-y-auto">
-                      {notifications.map((notification) => (
-                        <button
-                          key={notification.id}
-                          type="button"
-                          onClick={() => {
-                            setIsNotificationOpen(false);
-                            navigateTo("/student/notifications");
-                          }}
-                          className={`w-full text-left px-4 py-3 border-b transition ${
-                            darkMode
-                              ? "border-slate-700 hover:bg-slate-700"
-                              : "border-slate-100 hover:bg-slate-50"
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            {/* UNREAD DOT */}
+                      {notifications.length === 0 ? (
+                        <div className="p-6 text-center">
+                          <div className="text-2xl mb-2">🔔</div>
 
-                            <div className="pt-1.5">
-                              <span
-                                className={`block w-2 h-2 rounded-full ${
-                                  notification.unread
-                                    ? "bg-blue-500"
-                                    : "bg-slate-300"
-                                }`}
-                              />
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-bold truncate">
-                                  {notification.title}
-                                </p>
-
+                          <p
+                            className={`text-xs ${
+                              darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
+                            No notifications
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => openNotification(notification)}
+                            className={`w-full text-left px-4 py-3 border-b transition ${
+                              darkMode
+                                ? "border-slate-700 hover:bg-slate-700"
+                                : "border-slate-100 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              <div className="pt-1.5">
                                 <span
-                                  className={`text-[10px] whitespace-nowrap ${
-                                    darkMode
-                                      ? "text-slate-500"
-                                      : "text-slate-400"
+                                  className={`block w-2 h-2 rounded-full ${
+                                    notification.readAt
+                                      ? darkMode
+                                        ? "bg-slate-600"
+                                        : "bg-slate-300"
+                                      : "bg-blue-500"
                                   }`}
-                                >
-                                  {notification.time}
-                                </span>
+                                />
                               </div>
 
-                              <p
-                                className={`text-xs mt-1 line-clamp-2 ${
-                                  darkMode ? "text-slate-400" : "text-slate-500"
-                                }`}
-                              >
-                                {notification.message}
-                              </p>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-bold truncate">
+                                    {notification.title}
+                                  </p>
+
+                                  <span
+                                    className={`text-[10px] whitespace-nowrap ${
+                                      darkMode
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {new Date(
+                                      notification.createdAt
+                                    ).toLocaleDateString()}
+                                  </span>
+                                </div>
+
+                                <p
+                                  className={`text-xs mt-1 line-clamp-2 ${
+                                    darkMode
+                                      ? "text-slate-400"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  {notification.message}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        ))
+                      )}
                     </div>
 
                     {/* VIEW ALL */}
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsNotificationOpen(false);
-                        navigateTo("/student/notifications");
-                      }}
-                      className={`w-full py-3 text-xs font-bold transition ${
+                      onClick={() => navigateTo("/student/notifications")}
+                      className={`w-full py-3 text-xs font-bold ${
                         darkMode
                           ? "text-blue-400 hover:bg-slate-700"
                           : "text-slate-700 hover:bg-slate-50"
@@ -980,9 +811,7 @@ const StudentPortalLayout = () => {
                 )}
               </div>
 
-              {/* =================================================
-                  PROFILE DROPDOWN
-              ================================================= */}
+              {/* PROFILE */}
 
               <div className="relative" ref={profileMenuRef}>
                 <button
@@ -991,12 +820,10 @@ const StudentPortalLayout = () => {
                     setIsProfileOpen((prev) => !prev);
                     setIsNotificationOpen(false);
                   }}
-                  className={`flex items-center gap-3 px-2 py-1.5 rounded-xl transition ${
+                  className={`flex items-center gap-3 px-2 py-1.5 rounded-xl ${
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
-                  {/* AVATAR */}
-
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
                       darkMode
@@ -1006,8 +833,6 @@ const StudentPortalLayout = () => {
                   >
                     JD
                   </div>
-
-                  {/* USER INFO */}
 
                   <div className="hidden sm:block text-left">
                     <p className="text-sm font-semibold">John Doe</p>
@@ -1021,8 +846,6 @@ const StudentPortalLayout = () => {
                     </p>
                   </div>
 
-                  {/* ARROW */}
-
                   <span
                     className={`text-xs transition-transform ${
                       isProfileOpen ? "rotate-180" : ""
@@ -1032,10 +855,6 @@ const StudentPortalLayout = () => {
                   </span>
                 </button>
 
-                {/* =================================================
-                    PROFILE MENU
-                ================================================= */}
-
                 {isProfileOpen && (
                   <div
                     className={`absolute right-0 top-14 w-60 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
@@ -1044,7 +863,7 @@ const StudentPortalLayout = () => {
                         : "bg-white border-slate-200"
                     }`}
                   >
-                    {/* USER HEADER */}
+                    {/* PROFILE INFO */}
 
                     <div
                       className={`px-4 py-4 border-b ${
@@ -1062,12 +881,12 @@ const StudentPortalLayout = () => {
                       </p>
                     </div>
 
-                    {/* MY PROFILE */}
+                    {/* PROFILE */}
 
                     <button
                       type="button"
                       onClick={() => navigateTo("/student/profile")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
                     >
@@ -1080,7 +899,7 @@ const StudentPortalLayout = () => {
                     <button
                       type="button"
                       onClick={() => navigateTo("/student/settings")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                         darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
                     >
@@ -1098,20 +917,20 @@ const StudentPortalLayout = () => {
                       <button
                         type="button"
                         onClick={toggleDarkMode}
-                        className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition ${
+                        className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left ${
                           darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                         }`}
                       >
-                        <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-3">
                           <span>{darkMode ? "☀️" : "🌙"}</span>
 
                           <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
                         </div>
 
-                        {/* TOGGLE */}
+                        {/* CONTROL ON RIGHT */}
 
                         <div
-                          className={`w-9 h-5 rounded-full p-0.5 transition ${
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
                             darkMode ? "bg-blue-600" : "bg-slate-300"
                           }`}
                         >
@@ -1134,7 +953,7 @@ const StudentPortalLayout = () => {
                       <button
                         type="button"
                         onClick={handleLogout}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                           darkMode
                             ? "text-red-400 hover:bg-red-950"
                             : "text-red-500 hover:bg-red-50"
@@ -1159,10 +978,229 @@ const StudentPortalLayout = () => {
               darkMode ? "bg-slate-950" : "bg-slate-50"
             }`}
           >
-            <Outlet context={{ darkMode }} />
+            <Outlet
+              context={{
+                darkMode,
+
+                notifications,
+                unreadCount,
+
+                markNotificationRead,
+                markAllNotificationsRead,
+                deleteNotification,
+
+                selectedNotification,
+                openNotification,
+                closeNotificationModal,
+              }}
+            />
           </main>
         </div>
       </div>
+
+      {/* =====================================================
+          NOTIFICATION MODAL
+      ===================================================== */}
+
+      {selectedNotification && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={closeNotificationModal}
+        >
+          <div
+            className={`w-full max-w-lg rounded-2xl shadow-2xl border overflow-hidden transition-colors ${
+              darkMode
+                ? "bg-slate-900 border-slate-700 text-white"
+                : "bg-white border-slate-200 text-slate-900"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+
+            <div
+              className={`px-6 py-5 border-b flex items-start justify-between ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <div className="flex gap-3">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center ${
+                    darkMode
+                      ? "bg-blue-950 text-blue-400"
+                      : "bg-blue-100 text-blue-600"
+                  }`}
+                >
+                  🔔
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-wider font-bold text-slate-400">
+                    Notification
+                  </p>
+
+                  <h2 className="text-lg font-black">
+                    {selectedNotification.title}
+                  </h2>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeNotificationModal}
+                className={`w-8 h-8 rounded-lg text-xl text-slate-400 ${
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                }`}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* MODAL CONTENT */}
+
+            <div className="px-6 py-6">
+              <p
+                className={`text-sm leading-relaxed ${
+                  darkMode ? "text-slate-300" : "text-slate-600"
+                }`}
+              >
+                {selectedNotification.message}
+              </p>
+
+              {/* RELATED RECORD */}
+
+              <div
+                className={`mt-5 p-4 rounded-xl border ${
+                  darkMode
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-100"
+                }`}
+              >
+                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  Related Record
+                </p>
+
+                <p className="text-sm font-semibold mt-1">
+                  {selectedNotification.relatedEntityType}
+                </p>
+
+                <p
+                  className={`text-xs mt-1 ${
+                    darkMode ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  ID: {selectedNotification.relatedEntityId}
+                </p>
+
+                <p
+                  className={`text-xs mt-2 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
+                  {new Date(selectedNotification.createdAt).toLocaleString()}
+                </p>
+              </div>
+
+              {/* =================================================
+                  CONTROLS
+                  RIGHT ALIGNED
+              ================================================= */}
+
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                {/* APPLICATION */}
+
+                {selectedNotification.relatedEntityType ===
+                  "InternshipApplication" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeNotificationModal();
+                      navigateTo("/student/application");
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+                  >
+                    View Application
+                  </button>
+                )}
+
+                {/* DOCUMENTS */}
+
+                {selectedNotification.relatedEntityType ===
+                  "DocumentSubmission" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeNotificationModal();
+                      navigateTo("/student/documents");
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
+                  >
+                    View Documents
+                  </button>
+                )}
+
+                {/* INFORMATION */}
+
+                {selectedNotification.relatedEntityType ===
+                  "InformationItem" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeNotificationModal();
+                      navigateTo("/student/info");
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition"
+                  >
+                    View Information
+                  </button>
+                )}
+
+                {/* MARK AS READ */}
+
+                {!selectedNotification.readAt && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markNotificationRead(selectedNotification.id);
+
+                      setSelectedNotification((previous) =>
+                        previous
+                          ? {
+                              ...previous,
+                              readAt: new Date().toISOString(),
+                            }
+                          : previous
+                      );
+                    }}
+                    className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
+                      darkMode
+                        ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                        : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    Mark as Read
+                  </button>
+                )}
+
+                {/* DELETE */}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteNotification(selectedNotification.id);
+                  }}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
+                    darkMode
+                      ? "border-red-900 text-red-400 hover:bg-red-950"
+                      : "border-red-200 text-red-500 hover:bg-red-50"
+                  }`}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

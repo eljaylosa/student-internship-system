@@ -1,10 +1,131 @@
 import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { STATUS, useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "students": [
+    {
+      "id": "STU-001",
+      "userId": "USR-001",
+      "fullName": "John Doe",
+      "email": "student@gmail.com",
+      "studentId": "STU-001",
+      "program": "BS Information Technology",
+      "yearLevel": "2nd Year",
+      "department": "College of Information and Communications Technology",
+      "facultyId": "FAC-001",
+      "phone": "+63 912 345 6789",
+      "address": "Limay, Bataan",
+      "gwa": "1.75"
+    }
+  ],
+  "currentUser": {
+    "id": "USR-002",
+    "role": "registrar",
+    "email": "registrar@gmail.com",
+    "password": "password",
+    "status": "Active",
+    "profileId": "FAC-001"
+  },
+  "opportunities": [
+    {
+      "id": "OPP-001",
+      "companyId": "COM-001",
+      "supervisorId": "SUP-001",
+      "title": "Web Developer Intern",
+      "description": "Build and improve internal web experiences with the engineering team.",
+      "location": "Balanga, Bataan",
+      "positionType": "On-site",
+      "availability": "June - August 2026",
+      "requirements": [
+        "HTML/CSS",
+        "JavaScript",
+        "Git"
+      ],
+      "status": "Active",
+      "openings": 3
+    }
+  ],
+  "applications": [
+    {
+      "id": "APP-001",
+      "studentId": "STU-001",
+      "opportunityId": "OPP-001",
+      "submittedAt": "2026-05-01T09:00:00.000Z",
+      "status": "Submitted",
+      "coverLetter": "I am excited to contribute to the team and learn through this placement.",
+      "reviewerId": "FAC-001",
+      "notes": "Awaiting registrar review."
+    }
+  ],
+  "assignments": [],
+  "companies": [
+    {
+      "id": "COM-001",
+      "name": "ABC Technologies",
+      "industry": "Information Technology",
+      "status": "Verified",
+      "address": "Balanga, Bataan",
+      "email": "hr@abctech.com",
+      "supervisorIds": [
+        "SUP-001"
+      ]
+    }
+  ]
+};
+const STATUS = {
+  "user": {
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive",
+    "PENDING": "Pending"
+  },
+  "company": {
+    "PENDING": "Pending",
+    "VERIFIED": "Verified",
+    "ACTIVE": "Active",
+    "INACTIVE": "Inactive"
+  },
+  "opportunity": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "CLOSED": "Closed"
+  },
+  "application": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "UNDER_REVIEW": "Under Review",
+    "INFO_REQUESTED": "Information Requested",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "assignment": {
+    "PENDING": "Pending",
+    "ACTIVE": "Active",
+    "COMPLETED": "Completed",
+    "SUSPENDED": "Suspended",
+    "TERMINATED": "Terminated"
+  },
+  "document": {
+    "NOT_SUBMITTED": "Not Submitted",
+    "SUBMITTED": "Submitted",
+    "PENDING_REVIEW": "Pending Review",
+    "APPROVED": "Approved",
+    "NEEDS_REVISION": "Needs Revision"
+  },
+  "evaluation": {
+    "DRAFT": "Draft",
+    "SUBMITTED": "Submitted",
+    "RETURNED": "Returned",
+    "FINALIZED": "Finalized"
+  }
+};
 
 export default function Application() {
   const { darkMode } = useOutletContext();
-  const { state, submitApplication, saveApplicationDraft } = useMockStore();
+  const state = localState;
+  const submitApplication = (...args) => { void args; };
+  const saveApplicationDraft = (...args) => { void args; };
   const student = state.students.find(
     (item) => item.id === state.currentUser?.profileId
   );
@@ -65,7 +186,7 @@ export default function Application() {
         <h1 className="text-2xl font-black">Internship Application</h1>
         <p className="text-sm mt-1 text-slate-500">
           Apply to a shared company opportunity and track the same application
-          faculty reviews.
+          registrar reviews.
         </p>
       </div>
       <div

@@ -1,10 +1,102 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "users": [
+    {
+      "id": "USR-001",
+      "role": "student",
+      "email": "student@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "STU-001"
+    },
+    {
+      "id": "USR-002",
+      "role": "registrar",
+      "email": "registrar@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "FAC-001"
+    },
+    {
+      "id": "USR-003",
+      "role": "company",
+      "email": "company@gmail.com",
+      "password": "password",
+      "status": "Active",
+      "profileId": "SUP-001"
+    },
+    {
+      "id": "USR-004",
+      "role": "admin",
+      "email": "admin@sims.local",
+      "password": "password",
+      "status": "Active",
+      "profileId": "ADM-001"
+    }
+  ],
+  "students": [
+    {
+      "id": "STU-001",
+      "userId": "USR-001",
+      "fullName": "John Doe",
+      "email": "student@gmail.com",
+      "studentId": "STU-001",
+      "program": "BS Information Technology",
+      "yearLevel": "2nd Year",
+      "department": "College of Information and Communications Technology",
+      "facultyId": "FAC-001",
+      "phone": "+63 912 345 6789",
+      "address": "Limay, Bataan",
+      "gwa": "1.75"
+    }
+  ],
+  "registrar": [
+    {
+      "id": "FAC-001",
+      "userId": "USR-002",
+      "fullName": "Maria Santos",
+      "email": "registrar@gmail.com",
+      "facultyId": "FAC-001",
+      "department": "College of Information and Communications Technology",
+      "position": "Registrar Adviser",
+      "phone": "+63 917 123 4567",
+      "address": "Balanga, Bataan",
+      "specialization": "Information Technology",
+      "employeeId": "FAC-2026-001"
+    }
+  ],
+  "supervisors": [
+    {
+      "id": "SUP-001",
+      "userId": "USR-003",
+      "companyId": "COM-001",
+      "fullName": "Mark Cruz",
+      "email": "company@gmail.com",
+      "position": "Company Supervisor"
+    }
+  ],
+  "auditEvents": [
+    {
+      "id": "AUD-001",
+      "actorUserId": "USR-004",
+      "actorRole": "admin",
+      "action": "LOGIN",
+      "module": "Authentication",
+      "targetEntityType": "User",
+      "targetEntityId": "USR-004",
+      "timestamp": "2026-08-17T09:42:18.000Z",
+      "details": "Administrator logged into the mock system."
+    }
+  ]
+};
+
 
 export default function AuditLogs() {
   const { darkMode } = useOutletContext();
-  const { state } = useMockStore();
+  const state = localState;
 
   // =========================================================
   // FILTER STATE
@@ -38,8 +130,8 @@ export default function AuditLogs() {
       case "student":
         return "Student";
 
-      case "faculty":
-        return "Faculty Adviser";
+      case "registrar":
+        return "Registrar Adviser";
 
       case "company":
         return "Company Supervisor";

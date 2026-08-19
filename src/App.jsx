@@ -38,42 +38,43 @@ import StudentDashboard from "./pages/student/Dashboard.jsx";
 import StudentProfile from "./pages/student/Profile.jsx";
 import StudentApplication from "./pages/student/Application.jsx";
 import StudentDocuments from "./pages/student/Documents.jsx";
-import StudentDocumentTemplate from "./pages/student/DocumentTemplate.jsx"
+import StudentDocumentTemplate from "./pages/student/DocumentTemplate.jsx";
 import StudentNotification from "./pages/student/Notification.jsx";
 import StudentInfo from "./pages/student/Info.jsx";
 import StudentMessages from "./pages/student/Messages.jsx";
 import StudentSettings from "./pages/student/Settings.jsx";
 import StudentEvaluation from "./pages/student/Evaluation.jsx";
 
-
 // =========================================================
-// FACULTY PORTAL
+// REGISTRAR PORTAL
 // =========================================================
 
-import FacultyDashboard from "./pages/faculty/Dashboard.jsx";
-import FacultyProfile from "./pages/faculty/Profile.jsx";
-import FacultyStudentLists from "./pages/faculty/StudentLists.jsx";
-import FacultyReviewApplications from "./pages/faculty/ReviewApplications.jsx";
-import FacultyDocuments from "./pages/faculty/Documents.jsx";
-import FacultyEvaluations from "./pages/faculty/Evaluations.jsx";
-import FacultyReports from "./pages/faculty/Reports.jsx";
-import FacultyNotification from "./pages/faculty/Notification.jsx";
-import FacultyMessages from "./pages/faculty/Messages.jsx";
-import FacultySettings from "./pages/faculty/Settings.jsx";
+import RegistrarDashboard from "./pages/registrar/Dashboard.jsx";
+import RegistrarProfile from "./pages/registrar/Profile.jsx";
+import RegistrarStudentLists from "./pages/registrar/StudentLists.jsx";
+import RegistrarReviewApplications from "./pages/registrar/ReviewApplications.jsx";
+import RegistrarDocuments from "./pages/registrar/Documents.jsx";
+import RegistrarManageDeployments from "./pages/registrar/ManageDeployments.jsx";
+import RegistrarEvaluations from "./pages/registrar/Evaluations.jsx";
+import RegistrarReports from "./pages/registrar/Reports.jsx";
+import RegistrarNotification from "./pages/registrar/Notification.jsx";
+import RegistrarMessages from "./pages/registrar/Messages.jsx";
+import RegistrarSettings from "./pages/registrar/Settings.jsx";
 
 // =========================================================
 // COMPANY PORTAL
 // =========================================================
 
 import CompanyDashboard from "./pages/company/Dashboard.jsx";
-import CompanyProfile from "./pages/company/Profile.jsx";
 import CompanyManageJobs from "./pages/company/ManageJobs.jsx";
+import CompanyManageApplication from "./pages/company/ManageApplications.jsx"
 import CompanyInterns from "./pages/company/Interns.jsx";
 import CompanyEvaluate from "./pages/company/Evaluate.jsx";
 import CompanyFeedback from "./pages/company/Feedback.jsx";
 import CompanyNotification from "./pages/company/Notification.jsx";
 import CompanyMessages from "./pages/company/Messages.jsx";
 import CompanySettings from "./pages/company/Settings.jsx";
+
 
 // =========================================================
 // ADMIN PORTAL
@@ -83,6 +84,7 @@ import AdminLogin from "./pages/admin/Login.jsx";
 import AdminDashboard from "./pages/admin/Dashboard.jsx";
 import AdminProfile from "./pages/admin/Profile.jsx";
 import AdminUserManagement from "./pages/admin/UserManagement.jsx";
+import AdminReviewCreateRequests from "./pages/admin/ReviewCreateRequests.jsx";
 import AdminCompanyManagement from "./pages/admin/CompanyManagement.jsx";
 import AdminInternshipRecords from "./pages/admin/InternshipRecords.jsx";
 import AdminDocumentManagement from "./pages/admin/DocumentManagement.jsx";
@@ -98,19 +100,52 @@ import AdminAuditLogs from "./pages/admin/AuditLogs.jsx";
 // =========================================================
 
 import StudentPortalLayout from "./components/portal/StudentPortalLayout.jsx";
-import FacultyPortalLayout from "./components/portal/FacultyPortalLayout.jsx";
+import RegistrarPortalLayout from "./components/portal/RegistrarPortalLayout.jsx";
 import CompanyPortalLayout from "./components/portal/CompanyPortalLayout.jsx";
 import AdminPortalLayout from "./components/portal/AdminPortalLayout.jsx";
-import { MockStoreProvider, useMockStore } from "./data/mockStore.jsx";
+import ReviewCreateRequests from "./pages/admin/ReviewCreateRequests.jsx";
+
+// Temporary frontend-only demo users.
+// Authentication is intentionally not implemented yet.
+const demoUsers = {
+  student: {
+    id: "USR-001",
+    role: "student",
+    email: "student@gmail.com",
+    profileId: "STU-001",
+  },
+
+  registrar: {
+    id: "USR-002",
+    role: "registrar",
+    email: "registrar@gmail.com",
+    profileId: "FAC-001",
+  },
+
+  company: {
+    id: "USR-003",
+    role: "company",
+    email: "company@gmail.com",
+    profileId: "SUP-001",
+  },
+
+  admin: {
+    id: "USR-004",
+    role: "admin",
+    email: "admin@sims.local",
+    profileId: "ADM-001",
+  },
+};
 
 // =========================================================
-// APP CONTENT
+// ROLE GUARD
 // =========================================================
 
 function RoleGuard({ role, children }) {
-  const { state } = useMockStore();
   const pathname = useLocation().pathname;
-  if (!state.currentUser)
+  const currentUser = demoUsers[role];
+
+  if (!currentUser) {
     return (
       <Navigate
         to={role === "admin" ? "/admin/login" : "/login"}
@@ -118,12 +153,18 @@ function RoleGuard({ role, children }) {
         state={{ from: pathname }}
       />
     );
-  if (state.currentUser.role !== role && state.currentUser.role !== "admin")
-    return (
-      <Navigate to={"/" + state.currentUser.role + "/dashboard"} replace />
-    );
+  }
+
+  if (currentUser.role !== role && currentUser.role !== "admin") {
+    return <Navigate to={"/" + currentUser.role + "/dashboard"} replace />;
+  }
+
   return children;
 }
+
+// =========================================================
+// APP CONTENT
+// =========================================================
 
 function AppContent() {
   const location = useLocation();
@@ -133,12 +174,12 @@ function AppContent() {
   // =========================================================
 
   const isStudentPortal = location.pathname.startsWith("/student");
-  const isFacultyPortal = location.pathname.startsWith("/faculty");
+  const isRegistrarPortal = location.pathname.startsWith("/registrar");
   const isCompanyPortal = location.pathname.startsWith("/company");
   const isAdminPortal = location.pathname.startsWith("/admin");
 
   const isPortal =
-    isStudentPortal || isFacultyPortal || isCompanyPortal || isAdminPortal;
+    isStudentPortal || isRegistrarPortal || isCompanyPortal || isAdminPortal;
 
   return (
     <>
@@ -151,21 +192,26 @@ function AppContent() {
         {/* =====================================================
             PUBLIC ROUTES
         ===================================================== */}
+
         <Route path="/" element={<Home />} />
         <Route path="/home" element={<Home />} />
         <Route path="/about" element={<About />} />
         <Route path="/services" element={<Services />} />
         <Route path="/contact" element={<Contact />} />
+
         {/* =====================================================
             AUTH ROUTES
         ===================================================== */}
+
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+
         {/* =====================================================
             STUDENT PORTAL
         ===================================================== */}
+
         <Route
           path="/student"
           element={
@@ -175,6 +221,7 @@ function AppContent() {
           }
         >
           <Route index element={<Navigate to="dashboard" replace />} />
+
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="application" element={<StudentApplication />} />
@@ -186,32 +233,41 @@ function AppContent() {
           <Route path="messages" element={<StudentMessages />} />
           <Route path="settings" element={<StudentSettings />} />
         </Route>
+
         {/* =====================================================
-            FACULTY PORTAL
+            REGISTRAR PORTAL
         ===================================================== */}
+
         <Route
-          path="/faculty"
+          path="/registrar"
           element={
-            <RoleGuard role="faculty">
-              <FacultyPortalLayout />
+            <RoleGuard role="registrar">
+              <RegistrarPortalLayout />
             </RoleGuard>
           }
         >
           <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<FacultyDashboard />} />
-          <Route path="profile" element={<FacultyProfile />} />
-          <Route path="students" element={<FacultyStudentLists />} />
-          <Route path="applications" element={<FacultyReviewApplications />} />
-          <Route path="documents" element={<FacultyDocuments />} />
-          <Route path="evaluations" element={<FacultyEvaluations />} />
-          <Route path="reports" element={<FacultyReports />} />
-          <Route path="notifications" element={<FacultyNotification />} />
-          <Route path="messages" element={<FacultyMessages />} />
-          <Route path="settings" element={<FacultySettings />} />
+
+          <Route path="dashboard" element={<RegistrarDashboard />} />
+          <Route path="profile" element={<RegistrarProfile />} />
+          <Route path="students" element={<RegistrarStudentLists />} />
+          <Route
+            path="applications"
+            element={<RegistrarReviewApplications />}
+          />
+          <Route path="documents" element={<RegistrarDocuments />} />
+          <Route path="deployment" element={<RegistrarManageDeployments />} />
+          <Route path="evaluations" element={<RegistrarEvaluations />} />
+          <Route path="reports" element={<RegistrarReports />} />
+          <Route path="notifications" element={<RegistrarNotification />} />
+          <Route path="messages" element={<RegistrarMessages />} />
+          <Route path="settings" element={<RegistrarSettings />} />
         </Route>
+
         {/* =====================================================
             COMPANY PORTAL
         ===================================================== */}
+
         <Route
           path="/company"
           element={
@@ -221,14 +277,17 @@ function AppContent() {
           }
         >
           <Route index element={<Navigate to="dashboard" replace />} />
+
           <Route path="dashboard" element={<CompanyDashboard />} />
-          <Route path="profile" element={<CompanyProfile />} />
           <Route path="jobs" element={<CompanyManageJobs />} />
+          <Route path="applications" element={<CompanyManageApplication />} />
           <Route path="interns" element={<CompanyInterns />} />
           <Route path="evaluate" element={<CompanyEvaluate />} />
           <Route path="feedback" element={<CompanyFeedback />} />
           <Route path="notifications" element={<CompanyNotification />} />
           <Route path="messages" element={<CompanyMessages />} />
+
+          {/* Company information is now managed through Settings */}
           <Route path="settings" element={<CompanySettings />} />
         </Route>
 
@@ -237,9 +296,11 @@ function AppContent() {
         ===================================================== */}
 
         {/* ADMIN LOGIN */}
+
         <Route path="/admin/login" element={<AdminLogin />} />
 
         {/* ADMIN ENVIRONMENT */}
+
         <Route
           path="/admin"
           element={
@@ -249,9 +310,11 @@ function AppContent() {
           }
         >
           <Route index element={<Navigate to="dashboard" replace />} />
+
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="profile" element={<AdminProfile />} />
           <Route path="users" element={<AdminUserManagement />} />
+          <Route path="requests" element={<ReviewCreateRequests />} />
           <Route path="companies" element={<AdminCompanyManagement />} />
           <Route path="internships" element={<AdminInternshipRecords />} />
           <Route path="documents" element={<AdminDocumentManagement />} />
@@ -276,11 +339,9 @@ function AppContent() {
 
 function App() {
   return (
-    <MockStoreProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </MockStoreProvider>
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

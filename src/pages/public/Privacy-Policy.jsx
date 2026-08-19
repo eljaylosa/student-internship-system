@@ -79,7 +79,7 @@ const PrivacyPolicy = () => {
               Your data parameters are never distributed or commercialized to
               outside marketing brokers. Structural records are shared
               exclusively inside your mapped system environment between the
-              student, assigned faculty advisers, and the specific host company
+              student, assigned registrars, and the specific host company
               supervisor.
             </p>
           </div>

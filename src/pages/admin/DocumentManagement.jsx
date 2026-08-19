@@ -1,11 +1,54 @@
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { useMockStore } from "../../data/mockStore.jsx";
+
+// Temporary page-local demo data. This page intentionally has no mockStore dependency.
+const localState = {
+  "documentTemplates": [
+    {
+      "id": "TPL-001",
+      "name": "Internship Application Form",
+      "description": "Official internship application form.",
+      "fileName": "internship-application-form.pdf"
+    },
+    {
+      "id": "TPL-002",
+      "name": "Internship Agreement",
+      "description": "Internship agreement template.",
+      "fileName": "internship-agreement.pdf"
+    },
+    {
+      "id": "TPL-003",
+      "name": "Evaluation Form",
+      "description": "Student internship evaluation form.",
+      "fileName": "evaluation-form.pdf"
+    },
+    {
+      "id": "TPL-004",
+      "name": "Student Endorsement",
+      "description": "Student endorsement document.",
+      "fileName": "student-endorsement.pdf"
+    },
+    {
+      "id": "TPL-005",
+      "name": "Company Evaluation",
+      "description": "Company evaluation template.",
+      "fileName": "company-evaluation.pdf"
+    },
+    {
+      "id": "TPL-006",
+      "name": "Completion Certificate",
+      "description": "Internship completion certificate.",
+      "fileName": "completion-certificate.pdf"
+    }
+  ]
+};
 
 const DocumentManagement = () => {
   const { darkMode } = useOutletContext();
 
-  const { state, addDocumentTemplate, deleteDocumentTemplate } = useMockStore();
+  const state = localState;
+  const addDocumentTemplate = (...args) => { void args; };
+  const deleteDocumentTemplate = (...args) => { void args; };
 
   const [searchTerm, setSearchTerm] = useState("");
 
