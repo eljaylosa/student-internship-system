@@ -3,50 +3,47 @@ import { useNavigate } from "react-router-dom";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  
-  const login = (...args) => { void args; };
+
+  // =========================================================
+  // MOCK AUTH SERVICE
+  // =========================================================
+  const login = (role, email, password) => {
+    // Return ok: true so result.ok evaluates correctly in handleSubmit
+    return { ok: true };
+  };
 
   // =========================================================
   // STATE
   // =========================================================
-
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
-
   const [errorMessage, setErrorMessage] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
-
   const [isLoading, setIsLoading] = useState(false);
 
   // =========================================================
   // DEMO ADMIN ACCOUNT
   // =========================================================
-
-  const adminAccount = { email: "admin@sims.local", password: "password" };
+  const adminAccount = { email: "admin@gmail.com", password: "password" };
 
   // =========================================================
   // HANDLE INPUT
   // =========================================================
-
   const handleChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
-
     setErrorMessage("");
   };
 
   // =========================================================
   // HANDLE LOGIN
   // =========================================================
-
   const handleSubmit = (e) => {
     e.preventDefault();
-
     setErrorMessage("");
 
     if (!formData.email || !formData.password) {
@@ -54,15 +51,25 @@ const AdminLogin = () => {
       return;
     }
 
-    setIsLoading(true);
+    if (
+      formData.email === adminAccount.email &&
+      formData.password === adminAccount.password
+    ) {
+      setIsLoading(true);
 
-    setTimeout(() => {
-      const result = login("admin", formData.email.trim(), formData.password);
-      if (result.ok) navigate("/admin/dashboard", { replace: true });
-      else setErrorMessage("Invalid administrator credentials.");
+      setTimeout(() => {
+        const result = login("admin", formData.email.trim(), formData.password);
 
-      setIsLoading(false);
-    }, 500);
+        if (result?.ok) {
+          navigate("/admin/dashboard", { replace: true });
+        } else {
+          setErrorMessage("Invalid administrator credentials.");
+        }
+        setIsLoading(false);
+      }, 500);
+    } else {
+      setErrorMessage("Invalid administrator credentials.");
+    }
   };
 
   // =========================================================
@@ -112,17 +119,12 @@ const AdminLogin = () => {
               FORM
           =================================================== */}
 
-          <form
-            onSubmit={handleSubmit}
-            className="px-6 sm:px-8 pb-8"
-          >
+          <form onSubmit={handleSubmit} className="px-6 sm:px-8 pb-8">
             {/* ERROR MESSAGE */}
 
             {errorMessage && (
               <div className="mb-5 px-4 py-3 rounded-lg border bg-red-50 border-red-200 text-red-700">
-                <p className="text-xs font-medium">
-                  {errorMessage}
-                </p>
+                <p className="text-xs font-medium">{errorMessage}</p>
               </div>
             )}
 
@@ -140,9 +142,7 @@ const AdminLogin = () => {
                 id="admin-email"
                 type="email"
                 value={formData.email}
-                onChange={(e) =>
-                  handleChange("email", e.target.value)
-                }
+                onChange={(e) => handleChange("email", e.target.value)}
                 placeholder="Enter administrator email"
                 autoComplete="email"
                 className="
@@ -179,9 +179,7 @@ const AdminLogin = () => {
                   id="admin-password"
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
-                  onChange={(e) =>
-                    handleChange("password", e.target.value)
-                  }
+                  onChange={(e) => handleChange("password", e.target.value)}
                   placeholder="Enter administrator password"
                   autoComplete="current-password"
                   className="
@@ -252,8 +250,8 @@ const AdminLogin = () => {
                 <span className="text-sm">🔒</span>
 
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  This area is restricted to authorized system
-                  administrators. Unauthorized access is prohibited.
+                  This area is restricted to authorized system administrators.
+                  Unauthorized access is prohibited.
                 </p>
               </div>
             </div>
@@ -294,4 +292,3 @@ const AdminLogin = () => {
 };
 
 export default AdminLogin;
-
