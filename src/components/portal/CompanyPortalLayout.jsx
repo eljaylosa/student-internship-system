@@ -263,6 +263,11 @@ const CompanyPortalLayout = () => {
       path: "/company/feedback",
     },
     {
+      name: "Notifications",
+      icon: "🔔",
+      path: "/company/notifications",
+    },
+    {
       name: "Messages",
       icon: "💬",
       path: "/company/messages",

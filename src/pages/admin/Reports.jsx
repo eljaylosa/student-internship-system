@@ -3,199 +3,194 @@ import { useOutletContext } from "react-router-dom";
 
 // Temporary page-local demo data. This page intentionally has no mockStore dependency.
 const localState = {
-  "applications": [
+  applications: [
     {
-      "id": "APP-001",
-      "studentId": "STU-001",
-      "opportunityId": "OPP-001",
-      "submittedAt": "2026-05-01T09:00:00.000Z",
-      "status": "Submitted",
-      "coverLetter": "I am excited to contribute to the team and learn through this placement.",
-      "reviewerId": "FAC-001",
-      "notes": "Awaiting registrar review."
-    }
+      id: "APP-001",
+      studentId: "STU-001",
+      opportunityId: "OPP-001",
+      submittedAt: "2026-05-01T09:00:00.000Z",
+      status: "Submitted",
+      coverLetter:
+        "I am excited to contribute to the team and learn through this placement.",
+      reviewerId: "FAC-001",
+      notes: "Awaiting registrar review.",
+    },
   ],
-  "assignments": [],
-  "evaluations": [],
-  "documents": [],
-  "users": [
+  assignments: [],
+  evaluations: [],
+  documents: [],
+  users: [
     {
-      "id": "USR-001",
-      "role": "student",
-      "email": "student@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "STU-001"
+      id: "USR-001",
+      role: "student",
+      email: "student@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "STU-001",
     },
     {
-      "id": "USR-002",
-      "role": "registrar",
-      "email": "registrar@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "FAC-001"
+      id: "USR-002",
+      role: "registrar",
+      email: "registrar@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "FAC-001",
     },
     {
-      "id": "USR-003",
-      "role": "company",
-      "email": "company@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "SUP-001"
+      id: "USR-003",
+      role: "company",
+      email: "company@gmail.com",
+      password: "password",
+      status: "Active",
+      profileId: "SUP-001",
     },
     {
-      "id": "USR-004",
-      "role": "admin",
-      "email": "admin@sims.local",
-      "password": "password",
-      "status": "Active",
-      "profileId": "ADM-001"
-    }
+      id: "USR-004",
+      role: "admin",
+      email: "admin@sims.local",
+      password: "password",
+      status: "Active",
+      profileId: "ADM-001",
+    },
   ],
-  "students": [
+  students: [
     {
-      "id": "STU-001",
-      "userId": "USR-001",
-      "fullName": "John Doe",
-      "email": "student@gmail.com",
-      "studentId": "STU-001",
-      "program": "BS Information Technology",
-      "yearLevel": "2nd Year",
-      "department": "College of Information and Communications Technology",
-      "facultyId": "FAC-001",
-      "phone": "+63 912 345 6789",
-      "address": "Limay, Bataan",
-      "gwa": "1.75"
-    }
+      id: "STU-001",
+      userId: "USR-001",
+      fullName: "John Doe",
+      email: "student@gmail.com",
+      studentId: "STU-001",
+      program: "BS Information Technology",
+      yearLevel: "2nd Year",
+      department: "College of Information and Communications Technology",
+      facultyId: "FAC-001",
+      phone: "+63 912 345 6789",
+      address: "Limay, Bataan",
+      gwa: "1.75",
+    },
   ],
-  "registrar": [
+  registrar: [
     {
-      "id": "FAC-001",
-      "userId": "USR-002",
-      "fullName": "Maria Santos",
-      "email": "registrar@gmail.com",
-      "facultyId": "FAC-001",
-      "department": "College of Information and Communications Technology",
-      "position": "Registrar Adviser",
-      "phone": "+63 917 123 4567",
-      "address": "Balanga, Bataan",
-      "specialization": "Information Technology",
-      "employeeId": "FAC-2026-001"
-    }
+      id: "FAC-001",
+      userId: "USR-002",
+      fullName: "Maria Santos",
+      email: "registrar@gmail.com",
+      facultyId: "FAC-001",
+      department: "College of Information and Communications Technology",
+      position: "Registrar Adviser",
+      phone: "+63 917 123 4567",
+      address: "Balanga, Bataan",
+      specialization: "Information Technology",
+      employeeId: "FAC-2026-001",
+    },
   ],
-  "companies": [
+  companies: [
     {
-      "id": "COM-001",
-      "name": "ABC Technologies",
-      "industry": "Information Technology",
-      "status": "Verified",
-      "address": "Balanga, Bataan",
-      "email": "hr@abctech.com",
-      "supervisorIds": [
-        "SUP-001"
-      ]
-    }
+      id: "COM-001",
+      name: "ABC Technologies",
+      industry: "Information Technology",
+      status: "Verified",
+      address: "Balanga, Bataan",
+      email: "hr@abctech.com",
+      supervisorIds: ["SUP-001"],
+    },
   ],
-  "opportunities": [
+  opportunities: [
     {
-      "id": "OPP-001",
-      "companyId": "COM-001",
-      "supervisorId": "SUP-001",
-      "title": "Web Developer Intern",
-      "description": "Build and improve internal web experiences with the engineering team.",
-      "location": "Balanga, Bataan",
-      "positionType": "On-site",
-      "availability": "June - August 2026",
-      "requirements": [
-        "HTML/CSS",
-        "JavaScript",
-        "Git"
-      ],
-      "status": "Active",
-      "openings": 3
-    }
+      id: "OPP-001",
+      companyId: "COM-001",
+      supervisorId: "SUP-001",
+      title: "Web Developer Intern",
+      description:
+        "Build and improve internal web experiences with the engineering team.",
+      location: "Balanga, Bataan",
+      positionType: "On-site",
+      availability: "June - August 2026",
+      requirements: ["HTML/CSS", "JavaScript", "Git"],
+      status: "Active",
+      openings: 3,
+    },
   ],
-  "documentTypes": [
+  documentTypes: [
     {
-      "id": "DT-001",
-      "name": "Resume/CV",
-      "required": true
+      id: "DT-001",
+      name: "Resume/CV",
+      required: true,
     },
     {
-      "id": "DT-002",
-      "name": "Acceptance Letter",
-      "required": true
+      id: "DT-002",
+      name: "Acceptance Letter",
+      required: true,
     },
     {
-      "id": "DT-003",
-      "name": "Internship Agreement",
-      "required": true
+      id: "DT-003",
+      name: "Internship Agreement",
+      required: true,
     },
     {
-      "id": "DT-004",
-      "name": "Medical Certificate",
-      "required": true
+      id: "DT-004",
+      name: "Medical Certificate",
+      required: true,
     },
     {
-      "id": "DT-005",
-      "name": "Parent Consent",
-      "required": true
+      id: "DT-005",
+      name: "Parent Consent",
+      required: true,
     },
     {
-      "id": "DT-006",
-      "name": "Insurance Form",
-      "required": false
-    }
-  ]
+      id: "DT-006",
+      name: "Insurance Form",
+      required: false,
+    },
+  ],
 };
 const STATUS = {
-  "user": {
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive",
-    "PENDING": "Pending"
+  user: {
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
+    PENDING: "Pending",
   },
-  "company": {
-    "PENDING": "Pending",
-    "VERIFIED": "Verified",
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive"
+  company: {
+    PENDING: "Pending",
+    VERIFIED: "Verified",
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
   },
-  "opportunity": {
-    "DRAFT": "Draft",
-    "ACTIVE": "Active",
-    "CLOSED": "Closed"
+  opportunity: {
+    DRAFT: "Draft",
+    ACTIVE: "Active",
+    CLOSED: "Closed",
   },
-  "application": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "UNDER_REVIEW": "Under Review",
-    "INFO_REQUESTED": "Information Requested",
-    "APPROVED": "Approved",
-    "REJECTED": "Rejected",
-    "WITHDRAWN": "Withdrawn"
+  application: {
+    DRAFT: "Draft",
+    SUBMITTED: "Submitted",
+    UNDER_REVIEW: "Under Review",
+    INFO_REQUESTED: "Information Requested",
+    APPROVED: "Approved",
+    REJECTED: "Rejected",
+    WITHDRAWN: "Withdrawn",
   },
-  "assignment": {
-    "PENDING": "Pending",
-    "ACTIVE": "Active",
-    "COMPLETED": "Completed",
-    "SUSPENDED": "Suspended",
-    "TERMINATED": "Terminated"
+  assignment: {
+    PENDING: "Pending",
+    ACTIVE: "Active",
+    COMPLETED: "Completed",
+    SUSPENDED: "Suspended",
+    TERMINATED: "Terminated",
   },
-  "document": {
-    "NOT_SUBMITTED": "Not Submitted",
-    "SUBMITTED": "Submitted",
-    "PENDING_REVIEW": "Pending Review",
-    "APPROVED": "Approved",
-    "NEEDS_REVISION": "Needs Revision"
+  document: {
+    NOT_SUBMITTED: "Not Submitted",
+    SUBMITTED: "Submitted",
+    PENDING_REVIEW: "Pending Review",
+    APPROVED: "Approved",
+    NEEDS_REVISION: "Needs Revision",
   },
-  "evaluation": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "RETURNED": "Returned",
-    "FINALIZED": "Finalized"
-  }
+  evaluation: {
+    DRAFT: "Draft",
+    SUBMITTED: "Submitted",
+    RETURNED: "Returned",
+    FINALIZED: "Finalized",
+  },
 };
-
 
 export default function Reports() {
   const { darkMode } = useOutletContext();
@@ -604,7 +599,7 @@ export default function Reports() {
 
                 <SummaryItem
                   label="Registrar"
-                  value={state.faculty.length}
+                  value={state.registrar.length}
                   darkMode={darkMode}
                 />
 

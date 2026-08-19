@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 
 const STORAGE_KEY = "sims_create_requests";
 
 const ReviewCreateRequests = () => {
+  const { darkMode } = useOutletContext();
+
   const [requests, setRequests] = useState([]);
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -12,9 +15,9 @@ const ReviewCreateRequests = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [notification, setNotification] = useState(null);
 
-  // --------------------------------------------------
+  // =========================================================
   // LOAD REQUESTS
-  // --------------------------------------------------
+  // =========================================================
 
   useEffect(() => {
     loadRequests();
@@ -42,18 +45,18 @@ const ReviewCreateRequests = () => {
     }
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // SAVE REQUESTS
-  // --------------------------------------------------
+  // =========================================================
 
   const saveRequests = (updatedRequests) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRequests));
     setRequests(updatedRequests);
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // NOTIFICATION
-  // --------------------------------------------------
+  // =========================================================
 
   const showNotification = (message, type = "success") => {
     setNotification({
@@ -66,9 +69,9 @@ const ReviewCreateRequests = () => {
     }, 3500);
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // FILTER REQUESTS
-  // --------------------------------------------------
+  // =========================================================
 
   const filteredRequests = useMemo(() => {
     return requests.filter((request) => {
@@ -112,9 +115,9 @@ const ReviewCreateRequests = () => {
     });
   }, [requests, activeFilter, searchTerm]);
 
-  // --------------------------------------------------
+  // =========================================================
   // STATISTICS
-  // --------------------------------------------------
+  // =========================================================
 
   const statistics = useMemo(() => {
     const studentRequests = requests.filter(
@@ -137,28 +140,30 @@ const ReviewCreateRequests = () => {
     };
   }, [requests]);
 
-  // --------------------------------------------------
+  // =========================================================
   // REVIEW REQUEST
-  // --------------------------------------------------
+  // =========================================================
 
   const handleReview = (request) => {
     setSelectedRequest(request);
     setShowReviewModal(true);
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // APPROVE
-  // --------------------------------------------------
+  // =========================================================
 
   const handleApprove = () => {
     if (!selectedRequest) return;
+
+    const reviewedAt = new Date().toISOString();
 
     const updatedRequests = requests.map((request) =>
       request.id === selectedRequest.id
         ? {
             ...request,
             status: "approved",
-            reviewedAt: new Date().toISOString(),
+            reviewedAt,
             rejectionReason: null,
           }
         : request
@@ -169,7 +174,7 @@ const ReviewCreateRequests = () => {
     setSelectedRequest({
       ...selectedRequest,
       status: "approved",
-      reviewedAt: new Date().toISOString(),
+      reviewedAt,
       rejectionReason: null,
     });
 
@@ -180,18 +185,18 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // OPEN REJECT MODAL
-  // --------------------------------------------------
+  // =========================================================
 
   const handleOpenReject = () => {
     setRejectionReason("");
     setShowRejectModal(true);
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // REJECT
-  // --------------------------------------------------
+  // =========================================================
 
   const handleReject = () => {
     const reason = rejectionReason.trim();
@@ -202,13 +207,15 @@ const ReviewCreateRequests = () => {
 
     if (!selectedRequest) return;
 
+    const reviewedAt = new Date().toISOString();
+
     const updatedRequests = requests.map((request) =>
       request.id === selectedRequest.id
         ? {
             ...request,
             status: "rejected",
             rejectionReason: reason,
-            reviewedAt: new Date().toISOString(),
+            reviewedAt,
           }
         : request
     );
@@ -219,7 +226,7 @@ const ReviewCreateRequests = () => {
       ...selectedRequest,
       status: "rejected",
       rejectionReason: reason,
-      reviewedAt: new Date().toISOString(),
+      reviewedAt,
     });
 
     setShowRejectModal(false);
@@ -231,9 +238,9 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // HELPERS
-  // --------------------------------------------------
+  // =========================================================
 
   const getFullName = (request) => {
     return [request.firstName, request.middleInitial, request.lastName]
@@ -259,25 +266,37 @@ const ReviewCreateRequests = () => {
   const getStatusClasses = (status) => {
     switch (status) {
       case "pending":
-        return "bg-amber-50 text-amber-700 border-amber-200";
+        return darkMode
+          ? "bg-amber-950/50 text-amber-300 border-amber-800"
+          : "bg-amber-50 text-amber-700 border-amber-200";
 
       case "approved":
-        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+        return darkMode
+          ? "bg-emerald-950/50 text-emerald-300 border-emerald-800"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
       case "rejected":
-        return "bg-red-50 text-red-700 border-red-200";
+        return darkMode
+          ? "bg-red-950/50 text-red-300 border-red-800"
+          : "bg-red-50 text-red-700 border-red-200";
 
       default:
-        return "bg-slate-50 text-slate-600 border-slate-200";
+        return darkMode
+          ? "bg-slate-800 text-slate-300 border-slate-700"
+          : "bg-slate-50 text-slate-600 border-slate-200";
     }
   };
 
   const getRoleClasses = (role) => {
     if (role === "student") {
-      return "bg-blue-50 text-blue-700";
+      return darkMode
+        ? "bg-blue-950/50 text-blue-300"
+        : "bg-blue-50 text-blue-700";
     }
 
-    return "bg-emerald-50 text-emerald-700";
+    return darkMode
+      ? "bg-emerald-950/50 text-emerald-300"
+      : "bg-emerald-50 text-emerald-700";
   };
 
   const formatDate = (date) => {
@@ -314,16 +333,6 @@ const ReviewCreateRequests = () => {
     });
   };
 
-  const getFileName = (file) => {
-    if (!file) return null;
-
-    if (typeof file === "string") {
-      return file;
-    }
-
-    return file.name || "Uploaded Document";
-  };
-
   const getDocumentData = (request, documentKey) => {
     const document = request.documents?.[documentKey];
 
@@ -345,9 +354,9 @@ const ReviewCreateRequests = () => {
     };
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // DOCUMENT VIEW
-  // --------------------------------------------------
+  // =========================================================
 
   const handleViewDocument = (document) => {
     if (!document) return;
@@ -363,15 +372,21 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // EMPTY STATE
-  // --------------------------------------------------
+  // =========================================================
 
   const renderEmptyState = () => (
     <div className="py-20 text-center">
-      <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-slate-100 flex items-center justify-center">
+      <div
+        className={`w-16 h-16 mx-auto mb-5 rounded-2xl flex items-center justify-center ${
+          darkMode ? "bg-slate-800" : "bg-slate-100"
+        }`}
+      >
         <svg
-          className="w-7 h-7 text-slate-400"
+          className={`w-7 h-7 ${
+            darkMode ? "text-slate-500" : "text-slate-400"
+          }`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -386,28 +401,50 @@ const ReviewCreateRequests = () => {
         </svg>
       </div>
 
-      <h3 className="text-sm font-bold text-slate-800">
+      <h3
+        className={`text-sm font-bold ${
+          darkMode ? "text-slate-200" : "text-slate-800"
+        }`}
+      >
         No registration requests found
       </h3>
 
-      <p className="text-xs text-slate-400 mt-2 max-w-sm mx-auto">
+      <p
+        className={`text-xs mt-2 max-w-sm mx-auto ${
+          darkMode ? "text-slate-500" : "text-slate-400"
+        }`}
+      >
         New Student and Registrar account creation requests will appear here
         after they submit the registration form.
       </p>
     </div>
   );
 
-  // --------------------------------------------------
+  // =========================================================
   // DOCUMENT ROW
-  // --------------------------------------------------
+  // =========================================================
 
   const renderDocumentRow = (label, document) => {
     return (
-      <div className="flex items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-100 rounded-xl">
+      <div
+        className={`flex items-center justify-between gap-4 p-4 rounded-xl border ${
+          darkMode
+            ? "bg-slate-800 border-slate-700"
+            : "bg-slate-50 border-slate-100"
+        }`}
+      >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+          <div
+            className={`w-10 h-10 rounded-lg border flex items-center justify-center flex-shrink-0 ${
+              darkMode
+                ? "bg-slate-900 border-slate-700"
+                : "bg-white border-slate-200"
+            }`}
+          >
             <svg
-              className="w-5 h-5 text-slate-500"
+              className={`w-5 h-5 ${
+                darkMode ? "text-slate-400" : "text-slate-500"
+              }`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -427,9 +464,19 @@ const ReviewCreateRequests = () => {
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-bold text-slate-700">{label}</p>
+            <p
+              className={`text-xs font-bold ${
+                darkMode ? "text-slate-200" : "text-slate-700"
+              }`}
+            >
+              {label}
+            </p>
 
-            <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+            <p
+              className={`text-[10px] mt-0.5 truncate ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
               {document?.name || "No document submitted"}
             </p>
           </div>
@@ -439,7 +486,11 @@ const ReviewCreateRequests = () => {
           <button
             type="button"
             onClick={() => handleViewDocument(document)}
-            className="flex-shrink-0 px-3 py-2 rounded-lg bg-white border border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition"
+            className={`flex-shrink-0 px-3 py-2 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition ${
+              darkMode
+                ? "bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700"
+                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+            }`}
           >
             View
           </button>
@@ -448,9 +499,9 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // REVIEW MODAL
-  // --------------------------------------------------
+  // =========================================================
 
   const renderReviewModal = () => {
     if (!showReviewModal || !selectedRequest) {
@@ -476,13 +527,22 @@ const ReviewCreateRequests = () => {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+          className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
           onClick={() => setShowReviewModal(false)}
         />
 
-        <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden bg-white rounded-2xl shadow-2xl">
+        <div
+          className={`relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl transition-colors ${
+            darkMode ? "bg-slate-900 text-slate-100" : "bg-white text-slate-900"
+          }`}
+        >
           {/* MODAL HEADER */}
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+
+          <div
+            className={`px-6 py-5 border-b flex items-center justify-between ${
+              darkMode ? "border-slate-700" : "border-slate-100"
+            }`}
+          >
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span
@@ -502,7 +562,11 @@ const ReviewCreateRequests = () => {
                 </span>
               </div>
 
-              <h3 className="text-lg font-black text-slate-900">
+              <h3
+                className={`text-lg font-black ${
+                  darkMode ? "text-white" : "text-slate-900"
+                }`}
+              >
                 Review Account Request
               </h3>
             </div>
@@ -510,7 +574,11 @@ const ReviewCreateRequests = () => {
             <button
               type="button"
               onClick={() => setShowReviewModal(false)}
-              className="w-9 h-9 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition"
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
+                darkMode
+                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              }`}
             >
               <svg
                 className="w-5 h-5"
@@ -529,15 +597,29 @@ const ReviewCreateRequests = () => {
           </div>
 
           {/* MODAL BODY */}
-          <div className="overflow-y-auto max-h-[calc(90vh-150px)] p-6 space-y-6">
+
+          <div
+            className={`overflow-y-auto max-h-[calc(90vh-150px)] p-6 space-y-6 ${
+              darkMode ? "bg-slate-900" : "bg-white"
+            }`}
+          >
             {/* PERSONAL INFORMATION */}
+
             <section>
               <div className="mb-4">
-                <h4 className="text-sm font-bold text-slate-800">
+                <h4
+                  className={`text-sm font-bold ${
+                    darkMode ? "text-slate-200" : "text-slate-800"
+                  }`}
+                >
                   Personal Information
                 </h4>
 
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p
+                  className={`text-[11px] mt-1 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
                   Information submitted during account registration.
                 </p>
               </div>
@@ -546,28 +628,51 @@ const ReviewCreateRequests = () => {
                 <InfoItem
                   label="Full Name"
                   value={getFullName(selectedRequest)}
+                  darkMode={darkMode}
                 />
 
-                <InfoItem label="Email Address" value={selectedRequest.email} />
+                <InfoItem
+                  label="Email Address"
+                  value={selectedRequest.email}
+                  darkMode={darkMode}
+                />
 
-                <InfoItem label="Mobile Number" value={selectedRequest.phone} />
+                <InfoItem
+                  label="Mobile Number"
+                  value={selectedRequest.phone}
+                  darkMode={darkMode}
+                />
 
                 <InfoItem
                   label="Submitted"
                   value={formatDateTime(selectedRequest.createdAt)}
+                  darkMode={darkMode}
                 />
               </div>
             </section>
 
             {/* STUDENT INFORMATION */}
+
             {isStudent && (
-              <section className="border-t border-slate-100 pt-6">
+              <section
+                className={`border-t pt-6 ${
+                  darkMode ? "border-slate-700" : "border-slate-100"
+                }`}
+              >
                 <div className="mb-4">
-                  <h4 className="text-sm font-bold text-slate-800">
+                  <h4
+                    className={`text-sm font-bold ${
+                      darkMode ? "text-slate-200" : "text-slate-800"
+                    }`}
+                  >
                     Student Information
                   </h4>
 
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p
+                    className={`text-[11px] mt-1 ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
                     Official university information provided by the student.
                   </p>
                 </div>
@@ -576,32 +681,52 @@ const ReviewCreateRequests = () => {
                   <InfoItem
                     label="Student ID"
                     value={selectedRequest.studentId}
+                    darkMode={darkMode}
                   />
 
                   <InfoItem
                     label="Year Level"
                     value={selectedRequest.yearLevel}
+                    darkMode={darkMode}
                   />
 
-                  <InfoItem label="Program" value={selectedRequest.program} />
+                  <InfoItem
+                    label="Program"
+                    value={selectedRequest.program}
+                    darkMode={darkMode}
+                  />
 
                   <InfoItem
                     label="College / Department"
                     value={selectedRequest.department}
+                    darkMode={darkMode}
                   />
                 </div>
               </section>
             )}
 
             {/* REGISTRAR INFORMATION */}
+
             {!isStudent && (
-              <section className="border-t border-slate-100 pt-6">
+              <section
+                className={`border-t pt-6 ${
+                  darkMode ? "border-slate-700" : "border-slate-100"
+                }`}
+              >
                 <div className="mb-4">
-                  <h4 className="text-sm font-bold text-slate-800">
+                  <h4
+                    className={`text-sm font-bold ${
+                      darkMode ? "text-slate-200" : "text-slate-800"
+                    }`}
+                  >
                     Registrar Information
                   </h4>
 
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p
+                    className={`text-[11px] mt-1 ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
                     Official university employment information provided by the
                     Registrar Adviser.
                   </p>
@@ -611,29 +736,45 @@ const ReviewCreateRequests = () => {
                   <InfoItem
                     label="Employee ID"
                     value={selectedRequest.employeeId}
+                    darkMode={darkMode}
                   />
 
                   <InfoItem
                     label="Position / Designation"
                     value={selectedRequest.position}
+                    darkMode={darkMode}
                   />
 
                   <InfoItem
                     label="College / Department"
                     value={selectedRequest.department}
+                    darkMode={darkMode}
                   />
                 </div>
               </section>
             )}
 
             {/* DOCUMENTS */}
-            <section className="border-t border-slate-100 pt-6">
+
+            <section
+              className={`border-t pt-6 ${
+                darkMode ? "border-slate-700" : "border-slate-100"
+              }`}
+            >
               <div className="mb-4">
-                <h4 className="text-sm font-bold text-slate-800">
+                <h4
+                  className={`text-sm font-bold ${
+                    darkMode ? "text-slate-200" : "text-slate-800"
+                  }`}
+                >
                   Verification Documents
                 </h4>
 
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p
+                  className={`text-[11px] mt-1 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
+                >
                   Review the submitted documents before approving the account.
                 </p>
               </div>
@@ -668,34 +809,65 @@ const ReviewCreateRequests = () => {
             </section>
 
             {/* REJECTION REASON */}
+
             {selectedRequest.status === "rejected" &&
               selectedRequest.rejectionReason && (
-                <section className="border border-red-100 bg-red-50 rounded-xl p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-red-600">
+                <section
+                  className={`border rounded-xl p-4 ${
+                    darkMode
+                      ? "border-red-900 bg-red-950/40"
+                      : "border-red-100 bg-red-50"
+                  }`}
+                >
+                  <p
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      darkMode ? "text-red-400" : "text-red-600"
+                    }`}
+                  >
                     Rejection Reason
                   </p>
 
-                  <p className="text-xs text-red-800 leading-relaxed mt-2">
+                  <p
+                    className={`text-xs leading-relaxed mt-2 ${
+                      darkMode ? "text-red-300" : "text-red-800"
+                    }`}
+                  >
                     {selectedRequest.rejectionReason}
                   </p>
                 </section>
               )}
 
             {/* REVIEWED INFO */}
+
             {selectedRequest.reviewedAt && (
-              <div className="text-[10px] text-slate-400">
+              <div
+                className={`text-[10px] ${
+                  darkMode ? "text-slate-500" : "text-slate-400"
+                }`}
+              >
                 Reviewed on {formatDateTime(selectedRequest.reviewedAt)}
               </div>
             )}
           </div>
 
           {/* MODAL FOOTER */}
+
           {isPending && (
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3 justify-end">
+            <div
+              className={`px-6 py-4 border-t flex flex-col sm:flex-row gap-3 justify-end ${
+                darkMode
+                  ? "border-slate-700 bg-slate-800"
+                  : "border-slate-100 bg-slate-50"
+              }`}
+            >
               <button
                 type="button"
                 onClick={handleOpenReject}
-                className="px-5 py-2.5 rounded-xl border border-red-200 bg-white text-red-600 text-xs font-bold hover:bg-red-50 transition"
+                className={`px-5 py-2.5 rounded-xl border text-xs font-bold transition ${
+                  darkMode
+                    ? "border-red-900 bg-slate-900 text-red-400 hover:bg-red-950"
+                    : "border-red-200 bg-white text-red-600 hover:bg-red-50"
+                }`}
               >
                 Reject Request
               </button>
@@ -714,9 +886,9 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // REJECTION MODAL
-  // --------------------------------------------------
+  // =========================================================
 
   const renderRejectModal = () => {
     if (!showRejectModal || !selectedRequest) {
@@ -725,13 +897,24 @@ const ReviewCreateRequests = () => {
 
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
+        <div
+          className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+          onClick={() => setShowRejectModal(false)}
+        />
 
-        <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+        <div
+          className={`relative w-full max-w-md rounded-2xl shadow-2xl p-6 transition-colors ${
+            darkMode ? "bg-slate-900 text-slate-100" : "bg-white text-slate-900"
+          }`}
+        >
           <div className="flex items-start gap-4">
-            <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                darkMode ? "bg-red-950/60" : "bg-red-50"
+              }`}
+            >
               <svg
-                className="w-5 h-5 text-red-600"
+                className="w-5 h-5 text-red-500"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -746,13 +929,25 @@ const ReviewCreateRequests = () => {
             </div>
 
             <div>
-              <h3 className="text-base font-black text-slate-900">
+              <h3
+                className={`text-base font-black ${
+                  darkMode ? "text-white" : "text-slate-900"
+                }`}
+              >
                 Reject Registration
               </h3>
 
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              <p
+                className={`text-xs mt-1 leading-relaxed ${
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
                 Please provide a reason for rejecting{" "}
-                <span className="font-bold text-slate-700">
+                <span
+                  className={`font-bold ${
+                    darkMode ? "text-slate-200" : "text-slate-700"
+                  }`}
+                >
                   {getFullName(selectedRequest)}
                 </span>
                 's registration.
@@ -761,7 +956,11 @@ const ReviewCreateRequests = () => {
           </div>
 
           <div className="mt-5">
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+            <label
+              className={`block text-[10px] font-bold uppercase tracking-wider mb-2 ${
+                darkMode ? "text-slate-400" : "text-slate-500"
+              }`}
+            >
               Rejection Reason
             </label>
 
@@ -770,10 +969,18 @@ const ReviewCreateRequests = () => {
               onChange={(event) => setRejectionReason(event.target.value)}
               rows={5}
               placeholder="Example: Please upload a clearer copy of your Student ID."
-              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 focus:bg-white transition"
+              className={`w-full resize-none rounded-xl border px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500 focus:bg-slate-800"
+                  : "bg-slate-50 border-slate-200 text-slate-700 focus:bg-white"
+              }`}
             />
 
-            <p className="text-[10px] text-slate-400 mt-2">
+            <p
+              className={`text-[10px] mt-2 ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
               This reason should clearly explain what the applicant needs to
               correct before resubmitting.
             </p>
@@ -783,7 +990,11 @@ const ReviewCreateRequests = () => {
             <button
               type="button"
               onClick={() => setShowRejectModal(false)}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+              className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
+                darkMode
+                  ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
             >
               Cancel
             </button>
@@ -802,18 +1013,29 @@ const ReviewCreateRequests = () => {
     );
   };
 
-  // --------------------------------------------------
+  // =========================================================
   // MAIN UI
-  // --------------------------------------------------
+  // =========================================================
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* NOTIFICATION */}
+    <div
+      className={`min-h-screen transition-colors duration-300 ${
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+      }`}
+    >
+      {/* =====================================================
+          NOTIFICATION
+      ===================================================== */}
+
       {notification && (
         <div
           className={`fixed top-5 right-5 z-[100] max-w-sm px-4 py-3 rounded-xl shadow-xl border ${
             notification.type === "error"
-              ? "bg-red-50 border-red-200 text-red-700"
+              ? darkMode
+                ? "bg-red-950 border-red-900 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+              : darkMode
+              ? "bg-emerald-950 border-emerald-900 text-emerald-300"
               : "bg-emerald-50 border-emerald-200 text-emerald-700"
           }`}
         >
@@ -829,22 +1051,47 @@ const ReviewCreateRequests = () => {
         </div>
       )}
 
-      {/* PAGE HEADER */}
-      <div className="bg-white border-b border-slate-200">
+      {/* =====================================================
+          PAGE HEADER
+      ===================================================== */}
+
+      <div
+        className={`border-b transition-colors duration-300 ${
+          darkMode
+            ? "bg-slate-900 border-slate-700"
+            : "bg-white border-slate-200"
+        }`}
+      >
         <div className="px-6 md:px-8 py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
             <div>
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              <div
+                className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest mb-2 ${
+                  darkMode ? "text-slate-500" : "text-slate-400"
+                }`}
+              >
                 <span>Administration</span>
                 <span>/</span>
-                <span className="text-slate-600">Account Requests</span>
+                <span
+                  className={darkMode ? "text-slate-300" : "text-slate-600"}
+                >
+                  Account Requests
+                </span>
               </div>
 
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+              <h1
+                className={`text-2xl md:text-3xl font-black tracking-tight ${
+                  darkMode ? "text-white" : "text-slate-900"
+                }`}
+              >
                 Review Create Requests
               </h1>
 
-              <p className="text-xs md:text-sm text-slate-500 mt-2 max-w-2xl">
+              <p
+                className={`text-xs md:text-sm mt-2 max-w-2xl ${
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
                 Review and verify Student and Registrar Adviser account
                 registrations before activating their SIMS accounts.
               </p>
@@ -853,7 +1100,11 @@ const ReviewCreateRequests = () => {
             <button
               type="button"
               onClick={loadRequests}
-              className="self-start lg:self-center flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+              className={`self-start lg:self-center flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
+                darkMode
+                  ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
             >
               <svg
                 className="w-4 h-4"
@@ -874,87 +1125,137 @@ const ReviewCreateRequests = () => {
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
+
       <main className="p-6 md:p-8">
-        {/* STATISTICS */}
+        {/* ===================================================
+            STATISTICS
+        =================================================== */}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Total Requests"
             value={statistics.total}
             icon="▤"
-            iconClass="bg-slate-100 text-slate-600"
+            iconClass={
+              darkMode
+                ? "bg-slate-800 text-slate-300"
+                : "bg-slate-100 text-slate-600"
+            }
+            darkMode={darkMode}
           />
 
           <StatCard
             label="Students"
             value={statistics.students}
             icon="🎓"
-            iconClass="bg-blue-50 text-blue-600"
+            iconClass={
+              darkMode
+                ? "bg-blue-950/50 text-blue-300"
+                : "bg-blue-50 text-blue-600"
+            }
+            darkMode={darkMode}
           />
 
           <StatCard
             label="Registrar"
             value={statistics.registrars}
             icon="🏛️"
-            iconClass="bg-emerald-50 text-emerald-600"
+            iconClass={
+              darkMode
+                ? "bg-emerald-950/50 text-emerald-300"
+                : "bg-emerald-50 text-emerald-600"
+            }
+            darkMode={darkMode}
           />
 
           <StatCard
             label="Pending Review"
             value={statistics.pending}
             icon="⏳"
-            iconClass="bg-amber-50 text-amber-600"
+            iconClass={
+              darkMode
+                ? "bg-amber-950/50 text-amber-300"
+                : "bg-amber-50 text-amber-600"
+            }
+            darkMode={darkMode}
           />
         </div>
 
-        {/* TABLE CARD */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* ===================================================
+            TABLE CARD
+        =================================================== */}
+
+        <div
+          className={`rounded-2xl shadow-sm overflow-hidden border transition-colors ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
           {/* FILTER BAR */}
-          <div className="p-5 border-b border-slate-100">
+
+          <div
+            className={`p-5 border-b ${
+              darkMode ? "border-slate-700" : "border-slate-100"
+            }`}
+          >
             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
               {/* FILTERS */}
+
               <div className="flex flex-wrap gap-2">
                 <FilterButton
                   label="All"
                   active={activeFilter === "all"}
                   onClick={() => setActiveFilter("all")}
+                  darkMode={darkMode}
                 />
 
                 <FilterButton
                   label="Students"
                   active={activeFilter === "students"}
                   onClick={() => setActiveFilter("students")}
+                  darkMode={darkMode}
                 />
 
                 <FilterButton
                   label="Registrar"
                   active={activeFilter === "registrar"}
                   onClick={() => setActiveFilter("registrar")}
+                  darkMode={darkMode}
                 />
 
                 <FilterButton
                   label="Pending"
                   active={activeFilter === "pending"}
                   onClick={() => setActiveFilter("pending")}
+                  darkMode={darkMode}
                 />
 
                 <FilterButton
                   label="Approved"
                   active={activeFilter === "approved"}
                   onClick={() => setActiveFilter("approved")}
+                  darkMode={darkMode}
                 />
 
                 <FilterButton
                   label="Rejected"
                   active={activeFilter === "rejected"}
                   onClick={() => setActiveFilter("rejected")}
+                  darkMode={darkMode}
                 />
               </div>
 
               {/* SEARCH */}
+
               <div className="relative w-full xl:w-72">
                 <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                    darkMode ? "text-slate-500" : "text-slate-400"
+                  }`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -972,53 +1273,101 @@ const ReviewCreateRequests = () => {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search name, email, or ID..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:bg-white transition"
+                  className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs transition ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500 focus:bg-slate-800 focus:ring-slate-600"
+                      : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-slate-200"
+                  } focus:outline-none focus:ring-2`}
                 />
               </div>
             </div>
           </div>
 
-          {/* TABLE */}
+          {/* =================================================
+              TABLE
+          ================================================= */}
+
           {filteredRequests.length === 0 ? (
             renderEmptyState()
           ) : (
             <>
               {/* DESKTOP TABLE */}
+
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="text-left px-6 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <tr
+                      className={`border-b ${
+                        darkMode
+                          ? "bg-slate-800 border-slate-700"
+                          : "bg-slate-50 border-slate-100"
+                      }`}
+                    >
+                      <th
+                        className={`text-left px-6 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         Requester
                       </th>
 
-                      <th className="text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th
+                        className={`text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         Role
                       </th>
 
-                      <th className="text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th
+                        className={`text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         ID
                       </th>
 
-                      <th className="text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th
+                        className={`text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         Submitted
                       </th>
 
-                      <th className="text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th
+                        className={`text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         Status
                       </th>
 
-                      <th className="text-right px-6 py-3.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <th
+                        className={`text-right px-6 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
                         Action
                       </th>
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody
+                    className={
+                      darkMode
+                        ? "divide-y divide-slate-700"
+                        : "divide-y divide-slate-100"
+                    }
+                  >
                     {filteredRequests.map((request) => (
                       <tr
                         key={request.id}
-                        className="hover:bg-slate-50/70 transition"
+                        className={`transition ${
+                          darkMode
+                            ? "hover:bg-slate-800/70"
+                            : "hover:bg-slate-50/70"
+                        }`}
                       >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -1032,11 +1381,19 @@ const ReviewCreateRequests = () => {
                             </div>
 
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-800 truncate">
+                              <p
+                                className={`text-xs font-bold truncate ${
+                                  darkMode ? "text-slate-200" : "text-slate-800"
+                                }`}
+                              >
                                 {getFullName(request)}
                               </p>
 
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                              <p
+                                className={`text-[10px] truncate mt-0.5 ${
+                                  darkMode ? "text-slate-500" : "text-slate-400"
+                                }`}
+                              >
                                 {request.email || "No email"}
                               </p>
                             </div>
@@ -1054,13 +1411,21 @@ const ReviewCreateRequests = () => {
                         </td>
 
                         <td className="px-4 py-4">
-                          <span className="text-xs font-semibold text-slate-600">
+                          <span
+                            className={`text-xs font-semibold ${
+                              darkMode ? "text-slate-300" : "text-slate-600"
+                            }`}
+                          >
                             {getIdentifier(request)}
                           </span>
                         </td>
 
                         <td className="px-4 py-4">
-                          <span className="text-xs text-slate-500">
+                          <span
+                            className={`text-xs ${
+                              darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
                             {formatDate(request.createdAt)}
                           </span>
                         </td>
@@ -1079,7 +1444,11 @@ const ReviewCreateRequests = () => {
                           <button
                             type="button"
                             onClick={() => handleReview(request)}
-                            className="px-3.5 py-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition"
+                            className={`px-3.5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition ${
+                              darkMode
+                                ? "bg-white text-slate-900 hover:bg-slate-200"
+                                : "bg-slate-900 text-white hover:bg-slate-800"
+                            }`}
                           >
                             Review
                           </button>
@@ -1090,8 +1459,17 @@ const ReviewCreateRequests = () => {
                 </table>
               </div>
 
-              {/* MOBILE CARDS */}
-              <div className="md:hidden divide-y divide-slate-100">
+              {/* =================================================
+                  MOBILE CARDS
+              ================================================= */}
+
+              <div
+                className={`md:hidden ${
+                  darkMode
+                    ? "divide-y divide-slate-700"
+                    : "divide-y divide-slate-100"
+                }`}
+              >
                 {filteredRequests.map((request) => (
                   <div key={request.id} className="p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -1105,11 +1483,19 @@ const ReviewCreateRequests = () => {
                         </div>
 
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">
+                          <p
+                            className={`text-xs font-bold truncate ${
+                              darkMode ? "text-slate-200" : "text-slate-800"
+                            }`}
+                          >
                             {getFullName(request)}
                           </p>
 
-                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                          <p
+                            className={`text-[10px] truncate mt-0.5 ${
+                              darkMode ? "text-slate-500" : "text-slate-400"
+                            }`}
+                          >
                             {request.email || "No email"}
                           </p>
                         </div>
@@ -1125,41 +1511,33 @@ const ReviewCreateRequests = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 mt-4">
-                      <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Role
-                        </p>
+                      <MobileInfo
+                        label="Role"
+                        value={getRoleLabel(request.role)}
+                        darkMode={darkMode}
+                      />
 
-                        <p className="text-xs text-slate-600 font-semibold mt-1">
-                          {getRoleLabel(request.role)}
-                        </p>
-                      </div>
+                      <MobileInfo
+                        label="ID"
+                        value={getIdentifier(request)}
+                        darkMode={darkMode}
+                      />
 
-                      <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          ID
-                        </p>
-
-                        <p className="text-xs text-slate-600 font-semibold mt-1">
-                          {getIdentifier(request)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                          Submitted
-                        </p>
-
-                        <p className="text-xs text-slate-600 font-semibold mt-1">
-                          {formatDate(request.createdAt)}
-                        </p>
-                      </div>
+                      <MobileInfo
+                        label="Submitted"
+                        value={formatDate(request.createdAt)}
+                        darkMode={darkMode}
+                      />
                     </div>
 
                     <button
                       type="button"
                       onClick={() => handleReview(request)}
-                      className="w-full mt-4 py-2.5 rounded-xl bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition"
+                      className={`w-full mt-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition ${
+                        darkMode
+                          ? "bg-white text-slate-900 hover:bg-slate-200"
+                          : "bg-slate-900 text-white hover:bg-slate-800"
+                      }`}
                     >
                       Review Request
                     </button>
@@ -1177,38 +1555,92 @@ const ReviewCreateRequests = () => {
   );
 };
 
-// --------------------------------------------------
+// =========================================================
 // INFO ITEM
-// --------------------------------------------------
+// =========================================================
 
-const InfoItem = ({ label, value }) => {
+const InfoItem = ({ label, value, darkMode }) => {
   return (
-    <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
-      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+    <div
+      className={`rounded-xl px-4 py-3 border ${
+        darkMode
+          ? "bg-slate-800 border-slate-700"
+          : "bg-slate-50 border-slate-100"
+      }`}
+    >
+      <p
+        className={`text-[9px] font-bold uppercase tracking-wider ${
+          darkMode ? "text-slate-500" : "text-slate-400"
+        }`}
+      >
         {label}
       </p>
 
-      <p className="text-xs font-semibold text-slate-700 mt-1.5 break-words">
+      <p
+        className={`text-xs font-semibold mt-1.5 break-words ${
+          darkMode ? "text-slate-200" : "text-slate-700"
+        }`}
+      >
         {value || "—"}
       </p>
     </div>
   );
 };
 
-// --------------------------------------------------
-// STAT CARD
-// --------------------------------------------------
+// =========================================================
+// MOBILE INFO
+// =========================================================
 
-const StatCard = ({ label, value, icon, iconClass }) => {
+const MobileInfo = ({ label, value, darkMode }) => {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+    <div>
+      <p
+        className={`text-[9px] font-bold uppercase tracking-wider ${
+          darkMode ? "text-slate-500" : "text-slate-400"
+        }`}
+      >
+        {label}
+      </p>
+
+      <p
+        className={`text-xs font-semibold mt-1 ${
+          darkMode ? "text-slate-300" : "text-slate-600"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+};
+
+// =========================================================
+// STAT CARD
+// =========================================================
+
+const StatCard = ({ label, value, icon, iconClass, darkMode }) => {
+  return (
+    <div
+      className={`rounded-2xl p-5 shadow-sm border transition-colors ${
+        darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <p
+            className={`text-[10px] font-bold uppercase tracking-wider ${
+              darkMode ? "text-slate-500" : "text-slate-400"
+            }`}
+          >
             {label}
           </p>
 
-          <p className="text-2xl font-black text-slate-900 mt-1">{value}</p>
+          <p
+            className={`text-2xl font-black mt-1 ${
+              darkMode ? "text-white" : "text-slate-900"
+            }`}
+          >
+            {value}
+          </p>
         </div>
 
         <div
@@ -1221,18 +1653,22 @@ const StatCard = ({ label, value, icon, iconClass }) => {
   );
 };
 
-// --------------------------------------------------
+// =========================================================
 // FILTER BUTTON
-// --------------------------------------------------
+// =========================================================
 
-const FilterButton = ({ label, active, onClick }) => {
+const FilterButton = ({ label, active, onClick, darkMode }) => {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`px-3.5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition ${
         active
-          ? "bg-slate-900 text-white shadow-sm"
+          ? darkMode
+            ? "bg-white text-slate-900 shadow-sm"
+            : "bg-slate-900 text-white shadow-sm"
+          : darkMode
+          ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
           : "bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
       }`}
     >

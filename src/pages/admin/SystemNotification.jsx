@@ -1,601 +1,765 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  "users": [
-    {
-      "id": "USR-001",
-      "role": "student",
-      "email": "student@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "STU-001"
-    },
-    {
-      "id": "USR-002",
-      "role": "registrar",
-      "email": "registrar@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "FAC-001"
-    },
-    {
-      "id": "USR-003",
-      "role": "company",
-      "email": "company@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "SUP-001"
-    },
-    {
-      "id": "USR-004",
-      "role": "admin",
-      "email": "admin@sims.local",
-      "password": "password",
-      "status": "Active",
-      "profileId": "ADM-001"
-    }
-  ],
-  "notifications": []
-};
-const STATUS = {
-  "user": {
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive",
-    "PENDING": "Pending"
-  },
-  "company": {
-    "PENDING": "Pending",
-    "VERIFIED": "Verified",
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive"
-  },
-  "opportunity": {
-    "DRAFT": "Draft",
-    "ACTIVE": "Active",
-    "CLOSED": "Closed"
-  },
-  "application": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "UNDER_REVIEW": "Under Review",
-    "INFO_REQUESTED": "Information Requested",
-    "APPROVED": "Approved",
-    "REJECTED": "Rejected",
-    "WITHDRAWN": "Withdrawn"
-  },
-  "assignment": {
-    "PENDING": "Pending",
-    "ACTIVE": "Active",
-    "COMPLETED": "Completed",
-    "SUSPENDED": "Suspended",
-    "TERMINATED": "Terminated"
-  },
-  "document": {
-    "NOT_SUBMITTED": "Not Submitted",
-    "SUBMITTED": "Submitted",
-    "PENDING_REVIEW": "Pending Review",
-    "APPROVED": "Approved",
-    "NEEDS_REVISION": "Needs Revision"
-  },
-  "evaluation": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "RETURNED": "Returned",
-    "FINALIZED": "Finalized"
-  }
-};
+// =========================================================
+// DEMO ADMIN NOTIFICATIONS
+// =========================================================
 
-const TARGET_PORTALS = [
+const initialNotifications = [
   {
-    value: "Student Portal",
-    label: "Student Portal",
-    description: "All active students",
-    role: "student",
+    id: 1,
+    type: "account-request",
+    category: "Account Requests",
+    title: "New Student Account Request",
+    message:
+      "A new student account has been submitted and is waiting for administrator review.",
+    recipient: "Administrator",
+    time: "10 minutes ago",
+    unread: true,
+    icon: "🎓",
   },
   {
-    value: "Registrar Portal",
-    label: "Registrar Portal",
-    description: "All active registrars",
-    role: "registrar",
+    id: 2,
+    type: "account-request",
+    category: "Account Requests",
+    title: "New Registrar Account Request",
+    message:
+      "A new registrar account request is waiting for administrator review.",
+    recipient: "Administrator",
+    time: "35 minutes ago",
+    unread: true,
+    icon: "👨‍💼",
   },
   {
-    value: "Company Portal",
-    label: "Company Portal",
-    description: "All active company supervisors",
-    role: "company",
+    id: 3,
+    type: "company-registration",
+    category: "Account Requests",
+    title: "New Company Registration",
+    message:
+      "A company has submitted a registration request and is waiting for approval.",
+    recipient: "Administrator",
+    time: "1 hour ago",
+    unread: true,
+    icon: "🏢",
   },
   {
-    value: "All Portals",
-    label: "All Portals",
-    description: "Students, registrar, and companies",
-    role: "all",
+    id: 4,
+    type: "system",
+    category: "System",
+    title: "System Update",
+    message: "The internship management system has been successfully updated.",
+    recipient: "Administrator",
+    time: "Yesterday",
+    unread: false,
+    icon: "⚙️",
+  },
+  {
+    id: 5,
+    type: "system",
+    category: "System",
+    title: "Document Management Update",
+    message:
+      "The document management module is now available to administrators.",
+    recipient: "Administrator",
+    time: "2 days ago",
+    unread: false,
+    icon: "📄",
   },
 ];
 
-const NOTIFICATION_TYPES = [
-  {
-    value: "announcement",
-    label: "Announcement",
-  },
-  {
-    value: "reminder",
-    label: "Reminder",
-  },
-  {
-    value: "system_update",
-    label: "System Update",
-  },
-  {
-    value: "internship_update",
-    label: "Internship Update",
-  },
-  {
-    value: "document_notice",
-    label: "Document Notice",
-  },
-  {
-    value: "evaluation_notice",
-    label: "Evaluation Notice",
-  },
-];
+// =========================================================
+// COMPONENT
+// =========================================================
 
 const SystemNotification = () => {
-  const { darkMode } = useOutletContext();
+  const { darkMode } = useOutletContext() || {};
 
-  const state = localState;
-  const broadcastNotification = (...args) => { void args; };
+  // =========================================================
+  // TABS
+  // =========================================================
 
-  /* =========================================================
-     FORM STATE
-  ========================================================= */
+  const [activeTab, setActiveTab] = useState("notifications");
 
-  const [targetPortal, setTargetPortal] = useState("Student Portal");
+  // =========================================================
+  // NOTIFICATIONS
+  // =========================================================
 
-  const [notificationType, setNotificationType] = useState("announcement");
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const [notificationFilter, setNotificationFilter] = useState("All");
+
+  // =========================================================
+  // SEND NOTIFICATION FORM
+  // =========================================================
+
+  const [recipient, setRecipient] = useState("all");
 
   const [subject, setSubject] = useState("");
 
   const [message, setMessage] = useState("");
 
-  /* =========================================================
-     UI STATE
-  ========================================================= */
+  const [sentNotifications, setSentNotifications] = useState([]);
 
-  const [showPreview, setShowPreview] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
 
-  const [feedback, setFeedback] = useState(null);
+  // =========================================================
+  // FILTERED NOTIFICATIONS
+  // =========================================================
 
-  /* =========================================================
-     TARGET COUNTS
-  ========================================================= */
-
-  const recipientCount = useMemo(() => {
-    const activeUsers = state.users.filter(
-      (user) => user.status === STATUS.user.ACTIVE
-    );
-
-    switch (targetPortal) {
-      case "Student Portal":
-        return activeUsers.filter((user) => user.role === "student").length;
-
-      case "Registrar Portal":
-        return activeUsers.filter((user) => user.role === "registrar").length;
-
-      case "Company Portal":
-        return activeUsers.filter((user) => user.role === "company").length;
-
-      case "All Portals":
-        return activeUsers.filter((user) =>
-          ["student", "registrar", "company"].includes(user.role)
-        ).length;
-
-      default:
-        return 0;
-    }
-  }, [state.users, targetPortal]);
-
-  /* =========================================================
-     SYSTEM NOTIFICATION HISTORY
-  ========================================================= */
-
-  const notificationHistory = useMemo(() => {
-    const systemNotifications = state.notifications.filter(
-      (notification) => notification.relatedEntityType === "SystemNotification"
-    );
-
-    /*
-      A broadcast creates one notification per recipient.
-
-      Group them together so the Admin sees one broadcast
-      instead of seeing the same message 50 times.
-    */
-
-    const grouped = {};
-
-    systemNotifications.forEach((notification) => {
-      const key = notification.relatedEntityId || notification.id;
-
-      if (!grouped[key]) {
-        grouped[key] = {
-          id: key,
-          type: notification.type,
-          subject: notification.title,
-          message: notification.message,
-          createdAt: notification.createdAt,
-          recipientCount: 0,
-          readCount: 0,
-        };
-      }
-
-      grouped[key].recipientCount += 1;
-
-      if (notification.readAt) {
-        grouped[key].readCount += 1;
-      }
-    });
-
-    return Object.values(grouped).sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
-  }, [state.notifications]);
-
-  /* =========================================================
-     HELPERS
-  ========================================================= */
-
-  const getTypeLabel = (type) => {
-    const found = NOTIFICATION_TYPES.find((item) => item.value === type);
-
-    return (
-      found?.label ||
-      type
-        ?.replaceAll("_", " ")
-        .replace(/\b\w/g, (char) => char.toUpperCase()) ||
-      "Announcement"
-    );
-  };
-
-  const formatDate = (date) => {
-    if (!date) return "—";
-
-    return new Date(date).toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const showFeedback = (type, message) => {
-    setFeedback({
-      type,
-      message,
-    });
-
-    window.setTimeout(() => {
-      setFeedback(null);
-    }, 3500);
-  };
-
-  /* =========================================================
-     VALIDATION
-  ========================================================= */
-
-  const validateForm = () => {
-    if (!subject.trim()) {
-      showFeedback("error", "Please enter a notification subject.");
-
-      return false;
+  const filteredNotifications = notifications.filter((notification) => {
+    if (notificationFilter === "All") {
+      return true;
     }
 
-    if (!message.trim()) {
-      showFeedback("error", "Please enter a notification message.");
-
-      return false;
+    if (notificationFilter === "Account Requests") {
+      return notification.category === "Account Requests";
     }
 
-    if (recipientCount === 0) {
-      showFeedback(
-        "error",
-        "There are no active users in the selected portal."
-      );
-
-      return false;
+    if (notificationFilter === "System") {
+      return notification.category === "System";
     }
 
     return true;
+  });
+
+  // =========================================================
+  // UNREAD COUNT
+  // =========================================================
+
+  const unreadCount = notifications.filter(
+    (notification) => notification.unread
+  ).length;
+
+  // =========================================================
+  // MARK AS READ
+  // =========================================================
+
+  const markAsRead = (id) => {
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.id === id
+          ? { ...notification, unread: false }
+          : notification
+      )
+    );
   };
 
-  /* =========================================================
-     PREVIEW
-  ========================================================= */
+  // =========================================================
+  // MARK ALL AS READ
+  // =========================================================
 
-  const handlePreview = () => {
+  const markAllAsRead = () => {
+    setNotifications((prev) =>
+      prev.map((notification) => ({
+        ...notification,
+        unread: false,
+      }))
+    );
+  };
+
+  // =========================================================
+  // CLEAR READ NOTIFICATIONS
+  // =========================================================
+
+  const clearReadNotifications = () => {
+    setNotifications((prev) =>
+      prev.filter((notification) => notification.unread)
+    );
+  };
+
+  // =========================================================
+  // SEND NOTIFICATION
+  // =========================================================
+
+  const handleSendNotification = (event) => {
+    event.preventDefault();
+
     if (!subject.trim() || !message.trim()) {
-      showFeedback("error", "Enter a subject and message before previewing.");
-
       return;
     }
 
-    setShowPreview(true);
-  };
+    const recipientLabels = {
+      all: "All Users",
+      students: "All Students",
+      registrars: "All Registrars",
+      companies: "All Companies",
+    };
 
-  /* =========================================================
-     SEND
-  ========================================================= */
+    const newNotification = {
+      id: Date.now(),
+      recipient: recipientLabels[recipient],
+      subject: subject.trim(),
+      message: message.trim(),
+      time: "Just now",
+    };
 
-  const handleSend = () => {
-    if (!validateForm()) return;
-
-    const result = broadcastNotification({
-      targetPortal,
-      notificationType,
-      subject,
-      message,
-    });
-
-    if (!result?.ok) {
-      showFeedback("error", result?.message || "Unable to send notification.");
-
-      return;
-    }
-
-    showFeedback("success", result.message);
+    setSentNotifications((prev) => [newNotification, ...prev]);
 
     setSubject("");
     setMessage("");
-    setShowPreview(false);
+    setRecipient("all");
+
+    setSendSuccess(true);
+
+    setTimeout(() => {
+      setSendSuccess(false);
+    }, 3500);
   };
 
-  /* =========================================================
-     CLEAR FORM
-  ========================================================= */
+  // =========================================================
+  // RECIPIENT LABEL
+  // =========================================================
 
-  const handleClear = () => {
-    setSubject("");
-    setMessage("");
-    setNotificationType("announcement");
-    setTargetPortal("Student Portal");
-    setShowPreview(false);
-    setFeedback(null);
+  const recipientDescription = {
+    all: "Students, registrars, and company users",
+    students: "All registered student users",
+    registrars: "All registered registrar users",
+    companies: "All registered company users",
   };
 
-  /* =========================================================
-     STYLES
-  ========================================================= */
-
-  const cardClass = darkMode
-    ? "bg-slate-900 border-slate-700"
-    : "bg-white border-slate-200";
-
-  const inputClass = darkMode
-    ? "bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-slate-500"
-    : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-slate-500";
-
-  /* =========================================================
-     RETURN
-  ========================================================= */
+  // =========================================================
+  // RETURN
+  // =========================================================
 
   return (
     <div
-      className={`min-h-[calc(100vh-5rem)] px-4 py-6 sm:px-6 lg:px-8 transition-colors duration-300 ${
+      className={`min-h-screen p-4 sm:p-6 lg:p-8 ${
         darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
-      <div className="max-w-[1200px] mx-auto">
-        {/* ===================================================
-            HEADER
-        =================================================== */}
+      <div className="max-w-7xl mx-auto">
+        {/* =================================================
+            PAGE HEADER
+        ================================================= */}
 
         <div className="mb-6">
-          <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-slate-400">
-            Administrator Portal
-          </p>
-
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-1">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-black tracking-tight">
+              <p
+                className={`text-xs font-semibold uppercase tracking-wider ${
+                  darkMode ? "text-blue-400" : "text-blue-600"
+                }`}
+              >
+                Administration
+              </p>
+
+              <h1 className="text-2xl sm:text-3xl font-bold mt-1">
                 System Notifications
               </h1>
 
               <p
-                className={`text-xs mt-1 ${
+                className={`text-sm mt-2 max-w-2xl ${
                   darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Send announcements and important system updates across the
-                internship management portals.
+                Monitor administrator alerts and send important announcements to
+                system users.
               </p>
             </div>
 
-            {/* ACTIVE USERS */}
+            {/* UNREAD SUMMARY */}
 
             <div
-              className={`border rounded-xl px-4 py-3 ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
                 darkMode
                   ? "bg-slate-900 border-slate-700"
                   : "bg-white border-slate-200"
               }`}
             >
-              <p className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
-                Active Users
-              </p>
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  unreadCount > 0
+                    ? darkMode
+                      ? "bg-red-950 text-red-300"
+                      : "bg-red-100 text-red-600"
+                    : darkMode
+                    ? "bg-slate-800 text-slate-400"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                🔔
+              </div>
 
-              <p className="text-xl font-black mt-0.5">
-                {
-                  state.users.filter(
-                    (user) =>
-                      user.status === STATUS.user.ACTIVE &&
-                      user.role !== "admin"
-                  ).length
-                }
-              </p>
-            </div>
-          </div>
-        </div>
+              <div>
+                <p className="text-lg font-bold leading-none">{unreadCount}</p>
 
-        {/* ===================================================
-            DEMO NOTICE
-        =================================================== */}
-
-        <div
-          className={`mb-5 border rounded-xl px-4 py-3 ${
-            darkMode
-              ? "bg-amber-950/30 border-amber-900/60 text-amber-300"
-              : "bg-amber-50 border-amber-200 text-amber-800"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <span className="text-sm">⚠️</span>
-
-            <div>
-              <p className="text-[10px] font-bold">Demo Project</p>
-
-              <p className="text-[10px] mt-0.5 leading-relaxed opacity-80">
-                Notifications are stored in the shared frontend mock store. No
-                real email, SMS, or external notification service is connected.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* ===================================================
-            BROADCAST CARD
-        =================================================== */}
-
-        <section className={`border rounded-2xl overflow-hidden ${cardClass}`}>
-          {/* SECTION HEADER */}
-
-          <div
-            className={`px-5 py-4 border-b ${
-              darkMode ? "border-slate-700" : "border-slate-200"
-            }`}
-          >
-            <h2 className="text-sm font-bold">Broadcast Notification</h2>
-
-            <p
-              className={`text-[10px] mt-1 ${
-                darkMode ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
-              Compose a message and select which portal should receive it.
-            </p>
-          </div>
-
-          <div className="p-5">
-            {/* =================================================
-                TARGET PORTAL
-            ================================================= */}
-
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-bold uppercase tracking-wide">
-                  Target Portal
-                </label>
-
-                <span
-                  className={`text-[9px] ${
+                <p
+                  className={`text-[11px] mt-1 ${
                     darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
-                  {recipientCount} active{" "}
-                  {recipientCount === 1 ? "recipient" : "recipients"}
-                </span>
+                  Unread notifications
+                </p>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {TARGET_PORTALS.map((portal) => {
-                  const active = targetPortal === portal.value;
+        {/* =================================================
+            TABS
+        ================================================= */}
 
-                  return (
-                    <button
-                      key={portal.value}
-                      type="button"
-                      onClick={() => setTargetPortal(portal.value)}
-                      className={`text-left border rounded-xl p-3 transition ${
-                        active
-                          ? darkMode
-                            ? "bg-slate-700 border-slate-400"
-                            : "bg-slate-100 border-slate-500"
-                          : darkMode
-                          ? "bg-slate-800/50 border-slate-700 hover:bg-slate-800"
-                          : "bg-white border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold">
-                          {portal.label}
-                        </span>
+        <div
+          className={`rounded-xl border p-1.5 flex flex-col sm:flex-row gap-1 mb-6 ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
+          {/* NOTIFICATIONS TAB */}
 
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            active
-                              ? "bg-emerald-500"
-                              : darkMode
-                              ? "bg-slate-600"
-                              : "bg-slate-300"
-                          }`}
-                        />
-                      </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notifications")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition ${
+              activeTab === "notifications"
+                ? darkMode
+                  ? "bg-white text-slate-900"
+                  : "bg-slate-800 text-white"
+                : darkMode
+                ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <span>🔔</span>
 
-                      <p
-                        className={`text-[9px] mt-1 ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
+            <span>Notifications</span>
+
+            {unreadCount > 0 && (
+              <span
+                className={`min-w-5 h-5 px-1 rounded-full text-[10px] flex items-center justify-center ${
+                  activeTab === "notifications"
+                    ? "bg-red-500 text-white"
+                    : "bg-red-500 text-white"
+                }`}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* SEND NOTIFICATION TAB */}
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("send")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition ${
+              activeTab === "send"
+                ? darkMode
+                  ? "bg-white text-slate-900"
+                  : "bg-slate-800 text-white"
+                : darkMode
+                ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <span>📢</span>
+
+            <span>Send Notification</span>
+          </button>
+        </div>
+
+        {/* =================================================
+            NOTIFICATIONS TAB
+        ================================================= */}
+
+        {activeTab === "notifications" && (
+          <div className="space-y-5">
+            {/* FILTER + ACTIONS */}
+
+            <div
+              className={`rounded-xl border p-4 ${
+                darkMode
+                  ? "bg-slate-900 border-slate-700"
+                  : "bg-white border-slate-200"
+              }`}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                {/* FILTERS */}
+
+                <div>
+                  <p className="text-xs font-bold mb-2">Notification Type</p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {["All", "Account Requests", "System"].map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setNotificationFilter(filter)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                          notificationFilter === filter
+                            ? darkMode
+                              ? "bg-white text-slate-900"
+                              : "bg-slate-800 text-white"
+                            : darkMode
+                            ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                         }`}
                       >
-                        {portal.description}
-                      </p>
-                    </button>
-                  );
-                })}
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ACTIONS */}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={markAllAsRead}
+                    disabled={unreadCount === 0}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                      unreadCount === 0
+                        ? darkMode
+                          ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                          : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : darkMode
+                        ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    Mark All as Read
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={clearReadNotifications}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                      darkMode
+                        ? "text-red-400 hover:bg-red-950"
+                        : "text-red-600 hover:bg-red-50"
+                    }`}
+                  >
+                    Clear Read
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* =================================================
-                FORM
-            ================================================= */}
+            {/* NOTIFICATION LIST */}
 
-            <div className="grid lg:grid-cols-2 gap-5">
-              {/* LEFT */}
-
-              <div>
-                {/* TYPE */}
-
-                <div className="mb-5">
-                  <label
-                    htmlFor="notification-type"
-                    className="block text-[10px] font-bold mb-2"
+            <div className="space-y-3">
+              {filteredNotifications.length > 0 ? (
+                filteredNotifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`rounded-xl border p-4 sm:p-5 transition ${
+                      notification.unread
+                        ? darkMode
+                          ? "bg-slate-900 border-blue-800"
+                          : "bg-white border-blue-200"
+                        : darkMode
+                        ? "bg-slate-900 border-slate-700"
+                        : "bg-white border-slate-200"
+                    }`}
                   >
-                    Notification Type
+                    <div className="flex gap-4">
+                      {/* ICON */}
+
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
+                          notification.type === "account-request"
+                            ? darkMode
+                              ? "bg-blue-950 text-blue-300"
+                              : "bg-blue-100 text-blue-700"
+                            : notification.type === "company-registration"
+                            ? darkMode
+                              ? "bg-emerald-950 text-emerald-300"
+                              : "bg-emerald-100 text-emerald-700"
+                            : darkMode
+                            ? "bg-slate-800"
+                            : "bg-slate-100"
+                        }`}
+                      >
+                        {notification.icon}
+                      </div>
+
+                      {/* CONTENT */}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold">
+                                {notification.title}
+                              </h3>
+
+                              {notification.unread && (
+                                <span className="w-2 h-2 bg-blue-500 rounded-full" />
+                              )}
+                            </div>
+
+                            <p
+                              className={`text-[11px] mt-1 ${
+                                darkMode ? "text-slate-500" : "text-slate-400"
+                              }`}
+                            >
+                              {notification.time}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`self-start px-2 py-1 rounded-full text-[10px] font-semibold ${
+                              notification.category === "Account Requests"
+                                ? darkMode
+                                  ? "bg-blue-950 text-blue-300"
+                                  : "bg-blue-100 text-blue-700"
+                                : darkMode
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {notification.category}
+                          </span>
+                        </div>
+
+                        <p
+                          className={`text-sm leading-relaxed mt-3 ${
+                            darkMode ? "text-slate-300" : "text-slate-600"
+                          }`}
+                        >
+                          {notification.message}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-4">
+                          <span
+                            className={`text-[11px] ${
+                              darkMode ? "text-slate-500" : "text-slate-400"
+                            }`}
+                          >
+                            Recipient:{" "}
+                            <span className="font-semibold">
+                              {notification.recipient}
+                            </span>
+                          </span>
+
+                          {notification.unread && (
+                            <button
+                              type="button"
+                              onClick={() => markAsRead(notification.id)}
+                              className={`text-[11px] font-semibold ${
+                                darkMode
+                                  ? "text-blue-400 hover:text-blue-300"
+                                  : "text-blue-600 hover:text-blue-700"
+                              }`}
+                            >
+                              Mark as read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div
+                  className={`rounded-xl border p-12 text-center ${
+                    darkMode
+                      ? "bg-slate-900 border-slate-700"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="text-4xl mb-3">🔕</div>
+
+                  <h3 className="font-bold text-sm">No notifications found</h3>
+
+                  <p
+                    className={`text-xs mt-1 ${
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
+                    There are no notifications in this category.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* INFORMATION BOX */}
+
+            <div
+              className={`rounded-xl border p-4 ${
+                darkMode
+                  ? "bg-blue-950/30 border-blue-900 text-blue-300"
+                  : "bg-blue-50 border-blue-200 text-blue-700"
+              }`}
+            >
+              <div className="flex gap-3">
+                <span className="text-lg">💡</span>
+
+                <div>
+                  <p className="text-xs font-bold">
+                    Administrator Notifications
+                  </p>
+
+                  <p className="text-[11px] mt-1 leading-relaxed">
+                    These notifications are intended for the administrator and
+                    include account registration requests, company
+                    registrations, and important system events.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================
+            SEND NOTIFICATION TAB
+        ================================================= */}
+
+        {activeTab === "send" && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            {/* SEND FORM */}
+
+            <div
+              className={`xl:col-span-2 rounded-xl border p-5 sm:p-6 ${
+                darkMode
+                  ? "bg-slate-900 border-slate-700"
+                  : "bg-white border-slate-200"
+              }`}
+            >
+              <div className="mb-6">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      darkMode
+                        ? "bg-blue-950 text-blue-300"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    📢
+                  </div>
+
+                  <div>
+                    <h2 className="font-bold text-base">
+                      Send System Notification
+                    </h2>
+
+                    <p
+                      className={`text-xs mt-0.5 ${
+                        darkMode ? "text-slate-400" : "text-slate-500"
+                      }`}
+                    >
+                      Send an announcement to selected users.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {sendSuccess && (
+                <div
+                  className={`mb-5 rounded-lg border px-4 py-3 text-xs ${
+                    darkMode
+                      ? "bg-emerald-950/40 border-emerald-900 text-emerald-300"
+                      : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>✓</span>
+
+                    <span className="font-semibold">
+                      Notification sent successfully.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSendNotification} className="space-y-5">
+                {/* RECIPIENT */}
+
+                <div>
+                  <label className="block text-xs font-bold mb-2">
+                    Send To
                   </label>
 
-                  <select
-                    id="notification-type"
-                    value={notificationType}
-                    onChange={(event) =>
-                      setNotificationType(event.target.value)
-                    }
-                    className={`w-full h-10 border rounded-lg px-3 text-[11px] outline-none transition ${inputClass}`}
-                  >
-                    {NOTIFICATION_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      {
+                        value: "all",
+                        label: "All Users",
+                        icon: "👥",
+                        description: "Students, registrars, and companies",
+                      },
+                      {
+                        value: "students",
+                        label: "Students",
+                        icon: "🎓",
+                        description: "All registered students",
+                      },
+                      {
+                        value: "registrars",
+                        label: "Registrars",
+                        icon: "👨‍💼",
+                        description: "All registered registrars",
+                      },
+                      {
+                        value: "companies",
+                        label: "Companies",
+                        icon: "🏢",
+                        description: "All registered companies",
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setRecipient(option.value)}
+                        className={`text-left rounded-xl border p-4 transition ${
+                          recipient === option.value
+                            ? darkMode
+                              ? "bg-blue-950/40 border-blue-600"
+                              : "bg-blue-50 border-blue-500"
+                            : darkMode
+                            ? "bg-slate-800 border-slate-700 hover:border-slate-600"
+                            : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-xl">{option.icon}</div>
+
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-bold">
+                                {option.label}
+                              </p>
+
+                              {recipient === option.value && (
+                                <span className="text-blue-500">✓</span>
+                              )}
+                            </div>
+
+                            <p
+                              className={`text-[10px] mt-1 ${
+                                darkMode ? "text-slate-400" : "text-slate-500"
+                              }`}
+                            >
+                              {option.description}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
                     ))}
-                  </select>
+                  </div>
+
+                  <p
+                    className={`text-[11px] mt-2 ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
+                    Selected recipients:{" "}
+                    <span className="font-semibold">
+                      {recipientDescription[recipient]}
+                    </span>
+                  </p>
                 </div>
 
                 {/* SUBJECT */}
 
-                <div className="mb-5">
+                <div>
                   <label
                     htmlFor="notification-subject"
-                    className="block text-[10px] font-bold mb-2"
+                    className="block text-xs font-bold mb-2"
                   >
-                    Subject
+                    Notification Title
                   </label>
 
                   <input
@@ -603,17 +767,21 @@ const SystemNotification = () => {
                     type="text"
                     value={subject}
                     onChange={(event) => setSubject(event.target.value)}
-                    placeholder="Enter notification subject..."
-                    maxLength={120}
-                    className={`w-full h-10 border rounded-lg px-3 text-[11px] outline-none transition ${inputClass}`}
+                    placeholder="Enter notification title"
+                    maxLength={100}
+                    className={`w-full px-3 py-3 rounded-lg border text-sm outline-none transition ${
+                      darkMode
+                        ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500"
+                        : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-500"
+                    }`}
                   />
 
                   <p
-                    className={`text-[9px] mt-1 text-right ${
+                    className={`text-[10px] text-right mt-1 ${
                       darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
-                    {subject.length}/120
+                    {subject.length}/100
                   </p>
                 </div>
 
@@ -622,7 +790,7 @@ const SystemNotification = () => {
                 <div>
                   <label
                     htmlFor="notification-message"
-                    className="block text-[10px] font-bold mb-2"
+                    className="block text-xs font-bold mb-2"
                   >
                     Message
                   </label>
@@ -632,425 +800,152 @@ const SystemNotification = () => {
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
                     placeholder="Write your notification message..."
-                    rows={8}
+                    rows={7}
                     maxLength={1000}
-                    className={`w-full border rounded-lg px-3 py-2.5 text-[11px] outline-none resize-y transition ${inputClass}`}
+                    className={`w-full px-3 py-3 rounded-lg border text-sm outline-none resize-y transition ${
+                      darkMode
+                        ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500"
+                        : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-500"
+                    }`}
                   />
 
                   <p
-                    className={`text-[9px] mt-1 text-right ${
+                    className={`text-[10px] text-right mt-1 ${
                       darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
                     {message.length}/1000
                   </p>
                 </div>
-              </div>
 
-              {/* RIGHT — PREVIEW */}
+                {/* SEND */}
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-bold">Preview</label>
-
-                  <span
-                    className={`text-[9px] ${
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                  <p
+                    className={`text-[11px] ${
                       darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
-                    Recipient view
-                  </span>
-                </div>
-
-                <div
-                  className={`border rounded-xl min-h-[260px] overflow-hidden ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-700"
-                      : "bg-slate-50 border-slate-200"
-                  }`}
-                >
-                  {/* PREVIEW HEADER */}
-
-                  <div
-                    className={`px-4 py-3 border-b ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
-                        {getTypeLabel(notificationType)}
-                      </span>
-
-                      <span className="text-[9px] text-slate-400">Now</span>
-                    </div>
-                  </div>
-
-                  {/* PREVIEW BODY */}
-
-                  <div className="p-4">
-                    <p className="text-sm font-bold">
-                      {subject.trim() || "Notification subject"}
-                    </p>
-
-                    <p
-                      className={`text-[10px] mt-3 leading-relaxed whitespace-pre-wrap ${
-                        darkMode ? "text-slate-300" : "text-slate-600"
-                      }`}
-                    >
-                      {message.trim() ||
-                        "Your notification message will appear here."}
-                    </p>
-                  </div>
-
-                  {/* PREVIEW FOOTER */}
-
-                  <div
-                    className={`px-4 py-3 border-t ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] ${
-                        darkMode ? "text-slate-500" : "text-slate-400"
-                      }`}
-                    >
-                      Sent to:{" "}
-                      <span className="font-semibold">{targetPortal}</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* =================================================
-                FEEDBACK
-            ================================================= */}
-
-            {feedback && (
-              <div
-                className={`mt-5 border rounded-lg px-4 py-3 text-[10px] ${
-                  feedback.type === "success"
-                    ? darkMode
-                      ? "bg-emerald-950/40 border-emerald-800 text-emerald-300"
-                      : "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : darkMode
-                    ? "bg-red-950/40 border-red-800 text-red-300"
-                    : "bg-red-50 border-red-200 text-red-700"
-                }`}
-              >
-                {feedback.message}
-              </div>
-            )}
-
-            {/* =================================================
-                ACTIONS
-            ================================================= */}
-
-            <div
-              className={`flex flex-wrap items-center justify-between gap-3 mt-5 pt-5 border-t ${
-                darkMode ? "border-slate-700" : "border-slate-200"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={handleClear}
-                className={`h-9 px-4 border rounded-lg text-[10px] font-semibold transition ${
-                  darkMode
-                    ? "border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                Clear
-              </button>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handlePreview}
-                  className={`h-9 px-5 border rounded-lg text-[10px] font-semibold transition ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700"
-                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  Preview
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  className="h-9 px-6 rounded-lg text-[10px] font-bold bg-slate-900 text-white hover:bg-slate-800 transition"
-                >
-                  Send Notification
-                </button>
-              </div>
-            </div>
-
-            {/* =================================================
-                PREVIEW DETAILS
-            ================================================= */}
-
-            {showPreview && (
-              <div
-                className={`mt-5 border rounded-xl p-4 ${
-                  darkMode
-                    ? "bg-slate-800/60 border-slate-700"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-[10px] font-bold">
-                    Notification Details
-                  </h3>
+                    ⚠️ Demo only — no real notification will be delivered yet.
+                  </p>
 
                   <button
-                    type="button"
-                    onClick={() => setShowPreview(false)}
-                    className={`text-lg leading-none ${
-                      darkMode
-                        ? "text-slate-500 hover:text-slate-200"
-                        : "text-slate-400 hover:text-slate-800"
+                    type="submit"
+                    disabled={!subject.trim() || !message.trim()}
+                    className={`px-5 py-2.5 rounded-lg text-xs font-bold transition ${
+                      !subject.trim() || !message.trim()
+                        ? darkMode
+                          ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                          : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : darkMode
+                        ? "bg-white text-slate-900 hover:bg-slate-200"
+                        : "bg-slate-800 text-white hover:bg-slate-700"
                     }`}
                   >
-                    ×
+                    📢 Send Notification
                   </button>
                 </div>
-
-                <div className="grid sm:grid-cols-3 gap-3 text-[10px]">
-                  <div>
-                    <p className="text-slate-400">Target</p>
-
-                    <p className="font-semibold mt-1">{targetPortal}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-400">Type</p>
-
-                    <p className="font-semibold mt-1">
-                      {getTypeLabel(notificationType)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-400">Recipients</p>
-
-                    <p className="font-semibold mt-1">{recipientCount}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* ===================================================
-            HISTORY
-        =================================================== */}
-
-        <section
-          className={`mt-6 border rounded-2xl overflow-hidden ${cardClass}`}
-        >
-          <div
-            className={`px-5 py-4 border-b ${
-              darkMode ? "border-slate-700" : "border-slate-200"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-bold">Notification History</h2>
-
-                <p
-                  className={`text-[10px] mt-1 ${
-                    darkMode ? "text-slate-400" : "text-slate-500"
-                  }`}
-                >
-                  Previously broadcast system notifications.
-                </p>
-              </div>
-
-              <span
-                className={`px-2 py-1 rounded-md text-[9px] font-bold ${
-                  darkMode
-                    ? "bg-slate-800 text-slate-300"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {notificationHistory.length}{" "}
-                {notificationHistory.length === 1 ? "broadcast" : "broadcasts"}
-              </span>
+              </form>
             </div>
-          </div>
 
-          {/* DESKTOP */}
+            {/* SENT HISTORY */}
 
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-[10px]">
-              <thead>
-                <tr className={darkMode ? "bg-slate-800/70" : "bg-slate-50"}>
-                  <th className="px-5 py-3 text-left font-bold">Subject</th>
-
-                  <th className="px-4 py-3 text-left font-bold">Type</th>
-
-                  <th className="px-4 py-3 text-left font-bold">Recipients</th>
-
-                  <th className="px-4 py-3 text-left font-bold">Read</th>
-
-                  <th className="px-4 py-3 text-left font-bold">Date</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {notificationHistory.map((item) => (
-                  <tr
-                    key={item.id}
-                    className={`border-t ${
-                      darkMode
-                        ? "border-slate-800 hover:bg-slate-800/50"
-                        : "border-slate-100 hover:bg-slate-50"
-                    }`}
-                  >
-                    <td className="px-5 py-3">
-                      <p className="font-semibold">{item.subject}</p>
-
-                      <p
-                        className={`text-[9px] mt-1 max-w-md truncate ${
-                          darkMode ? "text-slate-500" : "text-slate-400"
-                        }`}
-                      >
-                        {item.message}
-                      </p>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-1 rounded-md text-[9px] font-semibold ${
-                          darkMode
-                            ? "bg-slate-800 text-slate-300"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {getTypeLabel(item.type)}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3 font-semibold">
-                      {item.recipientCount}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {item.readCount}/{item.recipientCount}
-                    </td>
-
-                    <td
-                      className={`px-4 py-3 whitespace-nowrap ${
-                        darkMode ? "text-slate-400" : "text-slate-500"
-                      }`}
-                    >
-                      {formatDate(item.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* MOBILE */}
-
-          <div className="md:hidden">
-            {notificationHistory.map((item) => (
-              <div
-                key={item.id}
-                className={`p-4 border-b last:border-b-0 ${
-                  darkMode ? "border-slate-800" : "border-slate-100"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold">{item.subject}</p>
-
-                    <p
-                      className={`text-[9px] mt-1 leading-relaxed ${
-                        darkMode ? "text-slate-400" : "text-slate-500"
-                      }`}
-                    >
-                      {item.message}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`flex-shrink-0 px-2 py-1 rounded-md text-[9px] font-semibold ${
-                      darkMode
-                        ? "bg-slate-800 text-slate-300"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {getTypeLabel(item.type)}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-3 text-[9px]">
-                  <div>
-                    <p className="text-slate-400">Recipients</p>
-
-                    <p className="font-semibold mt-0.5">
-                      {item.recipientCount}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-400">Read</p>
-
-                    <p className="font-semibold mt-0.5">
-                      {item.readCount}/{item.recipientCount}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-400">Sent</p>
-
-                    <p className="font-semibold mt-0.5">
-                      {formatDate(item.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {notificationHistory.length === 0 && (
-              <div
-                className={`p-8 text-center text-[10px] ${
-                  darkMode ? "text-slate-500" : "text-slate-400"
-                }`}
-              >
-                No system notifications have been sent yet.
-              </div>
-            )}
-          </div>
-
-          {/* EMPTY DESKTOP */}
-
-          {notificationHistory.length === 0 && (
             <div
-              className={`hidden md:block p-10 text-center text-[10px] ${
-                darkMode ? "text-slate-500" : "text-slate-400"
+              className={`rounded-xl border p-5 ${
+                darkMode
+                  ? "bg-slate-900 border-slate-700"
+                  : "bg-white border-slate-200"
               }`}
             >
-              No system notifications have been sent yet.
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="font-bold text-sm">Sent Notifications</h2>
+
+                  <p
+                    className={`text-[11px] mt-1 ${
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
+                    Recent announcements
+                  </p>
+                </div>
+
+                <span
+                  className={`text-[10px] px-2 py-1 rounded-full ${
+                    darkMode
+                      ? "bg-slate-800 text-slate-400"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {sentNotifications.length}
+                </span>
+              </div>
+
+              {sentNotifications.length > 0 ? (
+                <div className="space-y-3">
+                  {sentNotifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`rounded-lg border p-3 ${
+                        darkMode
+                          ? "bg-slate-800 border-slate-700"
+                          : "bg-slate-50 border-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-bold">
+                          {notification.subject}
+                        </p>
+
+                        <span
+                          className={`text-[9px] whitespace-nowrap ${
+                            darkMode ? "text-slate-500" : "text-slate-400"
+                          }`}
+                        >
+                          {notification.time}
+                        </span>
+                      </div>
+
+                      <p
+                        className={`text-[10px] mt-1 ${
+                          darkMode ? "text-blue-400" : "text-blue-600"
+                        }`}
+                      >
+                        To: {notification.recipient}
+                      </p>
+
+                      <p
+                        className={`text-[11px] mt-2 line-clamp-3 ${
+                          darkMode ? "text-slate-400" : "text-slate-500"
+                        }`}
+                      >
+                        {notification.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className={`rounded-lg border border-dashed p-8 text-center ${
+                    darkMode ? "border-slate-700" : "border-slate-200"
+                  }`}
+                >
+                  <div className="text-2xl mb-2">📭</div>
+
+                  <p className="text-xs font-semibold">No sent notifications</p>
+
+                  <p
+                    className={`text-[10px] mt-1 ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
+                    Notifications you send will appear here.
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </section>
-
-        {/* ===================================================
-            FOOTER INFO
-        =================================================== */}
-
-        <div
-          className={`mt-4 text-[9px] ${
-            darkMode ? "text-slate-600" : "text-slate-400"
-          }`}
-        >
-          System broadcasts are recorded in the shared mock store and included
-          in the administrator audit trail.
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

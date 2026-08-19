@@ -44,7 +44,7 @@ export default function Notification() {
       relatedEntityId: "INFO-001",
       createdAt: "2026-08-16T09:00:00.000Z",
       readAt: "2026-08-16T10:00:00.000Z",
-      actionPath: "/company/info",
+      actionPath: "/company",
     },
   ]);
 

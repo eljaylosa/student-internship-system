@@ -233,6 +233,8 @@ const CompanyManagement = () => {
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState("");
 
   // =========================================================
   // EMAIL PLACEHOLDER
@@ -419,6 +421,133 @@ const CompanyManagement = () => {
     );
 
     setSelectedCompanies([]);
+  };
+
+  // =========================================================
+  // OPEN BULK REJECT MODAL
+  // =========================================================
+
+  const openBulkRejectModal = () => {
+    const pendingSelected = selectedCompanies.filter((id) => {
+      const company = companies.find((item) => item.id === id);
+      return company?.status === "Pending Review";
+    });
+
+    if (pendingSelected.length === 0) {
+      alert("Please select at least one company with Pending Review status.");
+      return;
+    }
+
+    setSelectedCompanies(pendingSelected);
+    setBulkRejectReason("");
+    setShowBulkRejectModal(true);
+  };
+
+  // =========================================================
+  // REJECT SELECTED
+  // =========================================================
+
+  const rejectSelected = async () => {
+    const reason = bulkRejectReason.trim();
+
+    if (!reason) {
+      alert(
+        "Please provide a reason for rejecting the selected registrations."
+      );
+      return;
+    }
+
+    const pendingSelectedCompanies = companies.filter(
+      (company) =>
+        selectedCompanies.includes(company.id) &&
+        company.status === "Pending Review"
+    );
+
+    if (pendingSelectedCompanies.length === 0) {
+      alert("No pending companies are selected.");
+      setShowBulkRejectModal(false);
+      setBulkRejectReason("");
+      setSelectedCompanies([]);
+      return;
+    }
+
+    try {
+      const rejectedAt = getCurrentDate();
+
+      // Prepare the notification for every selected company.
+      await Promise.all(
+        pendingSelectedCompanies.map((company) =>
+          sendCompanyEmail({
+            type: "registration_rejected",
+            companyName: company.company,
+            contactName: company.contact,
+            recipientEmail: company.email,
+            reason,
+          })
+        )
+      );
+
+      const updatedIds = new Set(
+        pendingSelectedCompanies.map((company) => company.id)
+      );
+
+      setCompanies((prev) =>
+        prev.map((company) => {
+          if (!updatedIds.has(company.id)) return company;
+
+          return {
+            ...company,
+            status: "Rejected",
+            emailVerified: false,
+            rejectionReason: reason,
+            rejectionEmailSent: true,
+            rejectionEmailSentAt: rejectedAt,
+            rejectionHistory: [
+              ...(company.rejectionHistory || []),
+              {
+                reason,
+                rejectedAt,
+              },
+            ],
+          };
+        })
+      );
+
+      setSelectedCompanies([]);
+      setShowBulkRejectModal(false);
+      setBulkRejectReason("");
+
+      // Keep an open company review modal in sync if its company was part of
+      // the bulk rejection.
+      setSelectedCompany((current) => {
+        if (!current || !updatedIds.has(current.id)) return current;
+
+        return {
+          ...current,
+          status: "Rejected",
+          emailVerified: false,
+          rejectionReason: reason,
+          rejectionEmailSent: true,
+          rejectionEmailSentAt: rejectedAt,
+          rejectionHistory: [
+            ...(current.rejectionHistory || []),
+            {
+              reason,
+              rejectedAt,
+            },
+          ],
+        };
+      });
+
+      alert(
+        `${pendingSelectedCompanies.length} registration${
+          pendingSelectedCompanies.length === 1 ? "" : "s"
+        } rejected successfully.\n\nA rejection notification has been prepared for each selected company.`
+      );
+    } catch (error) {
+      console.error("Bulk rejection failed:", error);
+      alert("The selected companies could not be rejected. Please try again.");
+    }
   };
 
   // =========================================================
@@ -755,6 +884,22 @@ const CompanyManagement = () => {
             }`}
           >
             Approve Selected
+            {selectedCompanies.length > 0 && ` (${selectedCompanies.length})`}
+          </button>
+
+          <button
+            type="button"
+            onClick={openBulkRejectModal}
+            disabled={selectedCompanies.length === 0}
+            className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
+              selectedCompanies.length === 0
+                ? darkMode
+                  ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-red-600 text-white hover:bg-red-700"
+            }`}
+          >
+            Reject Selected
             {selectedCompanies.length > 0 && ` (${selectedCompanies.length})`}
           </button>
         </div>
@@ -1415,6 +1560,149 @@ const CompanyManagement = () => {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          BULK REJECT MODAL
+      ===================================================== */}
+
+      {showBulkRejectModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setShowBulkRejectModal(false);
+              setBulkRejectReason("");
+            }}
+          />
+
+          <div
+            className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${panel}`}
+          >
+            <div className={`p-5 border-b ${border}`}>
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                    darkMode ? "bg-red-950/50" : "bg-red-50"
+                  }`}
+                >
+                  ⚠️
+                </div>
+
+                <div>
+                  <h2 className={`text-lg font-bold ${heading}`}>
+                    Reject Selected Companies
+                  </h2>
+
+                  <p className={`text-xs mt-1 ${muted}`}>
+                    You are about to reject {selectedCompanies.length} selected
+                    registration{selectedCompanies.length === 1 ? "" : "s"}.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div
+                className={`rounded-xl border p-4 ${
+                  darkMode
+                    ? "bg-red-950/20 border-red-900/50"
+                    : "bg-red-50 border-red-200"
+                }`}
+              >
+                <p className={`text-xs font-semibold ${heading}`}>
+                  Selected registrations
+                </p>
+                <p className={`text-[10px] mt-1 ${muted}`}>
+                  All selected companies with Pending Review status will be
+                  rejected using the same reason.
+                </p>
+              </div>
+
+              <div>
+                <label
+                  className={`block text-xs font-semibold mb-2 ${heading}`}
+                >
+                  Rejection Reason
+                </label>
+
+                <textarea
+                  rows="5"
+                  maxLength={500}
+                  value={bulkRejectReason}
+                  onChange={(e) => setBulkRejectReason(e.target.value)}
+                  placeholder="Example: The submitted business documents could not be verified. Please submit valid and readable copies."
+                  className={`w-full border rounded-xl px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"
+                  }`}
+                />
+
+                <div className="flex justify-between mt-1">
+                  <p className={`text-[10px] ${muted}`}>
+                    This reason will be included in the rejection notification.
+                  </p>
+
+                  <p className={`text-[10px] ${muted}`}>
+                    {bulkRejectReason.length}/500
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`flex items-start gap-3 rounded-xl border p-3 ${
+                  darkMode
+                    ? "bg-slate-800/50 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
+                <span className="text-sm">📧</span>
+                <div>
+                  <p className={`text-xs font-semibold ${heading}`}>
+                    Companies will be notified
+                  </p>
+                  <p className={`text-[10px] mt-0.5 ${muted}`}>
+                    Each selected company representative will receive the
+                    rejection notification using this reason.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className={`p-5 border-t ${border}`}>
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBulkRejectModal(false);
+                    setBulkRejectReason("");
+                  }}
+                  className={`px-4 py-2.5 rounded-lg border text-xs font-semibold ${
+                    darkMode
+                      ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={rejectSelected}
+                  disabled={!bulkRejectReason.trim()}
+                  className={`px-4 py-2.5 rounded-lg text-xs font-semibold text-white transition ${
+                    !bulkRejectReason.trim()
+                      ? "bg-red-300 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  Reject Selected & Notify
+                </button>
+              </div>
             </div>
           </div>
         </div>
