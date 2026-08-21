@@ -20,14 +20,10 @@ const CompanyManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
 
-  const [selectedCompanies, setSelectedCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-
-  const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
-  const [bulkRejectReason, setBulkRejectReason] = useState("");
 
   // =========================================================
   // STATUS HELPERS
@@ -276,40 +272,6 @@ const CompanyManagement = () => {
   }, [companies, searchTerm, filterStatus]);
 
   // =========================================================
-  // SELECT COMPANY
-  // =========================================================
-
-  const toggleCompanySelection = (id) => {
-    setSelectedCompanies((prev) =>
-      prev.includes(id)
-        ? prev.filter((companyId) => companyId !== id)
-        : [...prev, id]
-    );
-  };
-
-  // =========================================================
-  // SELECT ALL PENDING
-  // =========================================================
-
-  const toggleSelectAll = () => {
-    const pendingIds = filteredCompanies
-      .filter((company) => company.status === "Pending Review")
-      .map((company) => company.id);
-
-    const allSelected =
-      pendingIds.length > 0 &&
-      pendingIds.every((id) => selectedCompanies.includes(id));
-
-    if (allSelected) {
-      setSelectedCompanies((prev) =>
-        prev.filter((id) => !pendingIds.includes(id))
-      );
-    } else {
-      setSelectedCompanies((prev) => [...new Set([...prev, ...pendingIds])]);
-    }
-  };
-
-  // =========================================================
   // UPDATE COMPANY STATUS
   // =========================================================
 
@@ -338,6 +300,11 @@ const CompanyManagement = () => {
 
     if (!company) {
       alert("Company not found.");
+      return;
+    }
+
+    if (company.status !== "Pending Review") {
+      alert("Only companies with Pending Review status can be approved.");
       return;
     }
 
@@ -396,10 +363,6 @@ const CompanyManagement = () => {
         prev.map((item) => (item.id === id ? updatedCompany : item))
       );
 
-      setSelectedCompanies((prev) =>
-        prev.filter((companyId) => companyId !== id)
-      );
-
       setSelectedCompany((current) =>
         current?.id === id ? updatedCompany : current
       );
@@ -408,10 +371,17 @@ const CompanyManagement = () => {
       // 4. SUCCESS MESSAGE
       // =====================================================
 
-      alert(
-        `Company approved successfully.\n\n` +
-          `An approval notification has been sent to ${company.email}.`
-      );
+      if (emailError || emailData?.success === false) {
+        alert(
+          `Company approved successfully.\n\n` +
+            `However, the approval notification email could not be sent to ${company.email}.`
+        );
+      } else {
+        alert(
+          `Company approved successfully.\n\n` +
+            `An approval notification has been sent to ${company.email}.`
+        );
+      }
     } catch (error) {
       console.error("Company approval failed:", error);
 
@@ -424,217 +394,17 @@ const CompanyManagement = () => {
   };
 
   // =========================================================
-  // APPROVE SELECTED
-  // =========================================================
-
-  const approveSelected = async () => {
-    if (selectedCompanies.length === 0) return;
-
-    const pendingCompanies = companies.filter(
-      (company) =>
-        selectedCompanies.includes(company.id) &&
-        company.status === "Pending Review"
-    );
-
-    if (pendingCompanies.length === 0) {
-      alert("No pending companies are selected.");
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-
-      await Promise.all(
-        pendingCompanies.map((company) =>
-          updateCompanyStatus(company.id, "Approved")
-        )
-      );
-
-      const approvedIds = new Set(
-        pendingCompanies.map((company) => company.id)
-      );
-
-      setCompanies((prev) =>
-        prev.map((company) =>
-          approvedIds.has(company.id)
-            ? {
-                ...company,
-                status: "Approved",
-                rejectionReason: "",
-              }
-            : company
-        )
-      );
-
-      setSelectedCompanies([]);
-
-      if (selectedCompany && approvedIds.has(selectedCompany.id)) {
-        setSelectedCompany((current) =>
-          current
-            ? {
-                ...current,
-                status: "Approved",
-                rejectionReason: "",
-              }
-            : current
-        );
-      }
-
-      alert(
-        `${pendingCompanies.length} company registration${
-          pendingCompanies.length === 1 ? "" : "s"
-        } approved successfully.`
-      );
-    } catch (error) {
-      console.error("Bulk company approval failed:", error);
-
-      alert(
-        `The selected companies could not be approved.\n\n${
-          error?.message || "Please try again."
-        }`
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // =========================================================
-  // OPEN BULK REJECT MODAL
-  // =========================================================
-
-  const openBulkRejectModal = () => {
-    const pendingSelected = selectedCompanies.filter((id) => {
-      const company = companies.find((item) => item.id === id);
-
-      return company?.status === "Pending Review";
-    });
-
-    if (pendingSelected.length === 0) {
-      alert("Please select at least one company with Pending Review status.");
-      return;
-    }
-
-    setSelectedCompanies(pendingSelected);
-    setBulkRejectReason("");
-    setShowBulkRejectModal(true);
-  };
-
-  // =========================================================
-  // REJECT SELECTED
-  // =========================================================
-
-  const rejectSelected = async () => {
-    const reason = bulkRejectReason.trim();
-
-    if (!reason) {
-      alert(
-        "Please provide a reason for rejecting the selected registrations."
-      );
-      return;
-    }
-
-    const pendingSelectedCompanies = companies.filter(
-      (company) =>
-        selectedCompanies.includes(company.id) &&
-        company.status === "Pending Review"
-    );
-
-    if (pendingSelectedCompanies.length === 0) {
-      alert("No pending companies are selected.");
-
-      setShowBulkRejectModal(false);
-      setBulkRejectReason("");
-      setSelectedCompanies([]);
-
-      return;
-    }
-
-    try {
-      setActionLoading(true);
-
-      await Promise.all(
-        pendingSelectedCompanies.map((company) =>
-          updateCompanyStatus(company.id, "Rejected")
-        )
-      );
-
-      const rejectedAt = formatDate(new Date().toISOString());
-
-      const updatedIds = new Set(
-        pendingSelectedCompanies.map((company) => company.id)
-      );
-
-      setCompanies((prev) =>
-        prev.map((company) => {
-          if (!updatedIds.has(company.id)) {
-            return company;
-          }
-
-          return {
-            ...company,
-            status: "Rejected",
-            rejectionReason: reason,
-            rejectionEmailSent: false,
-            rejectionEmailSentAt: null,
-
-            rejectionHistory: [
-              ...(company.rejectionHistory || []),
-              {
-                reason,
-                rejectedAt,
-              },
-            ],
-          };
-        })
-      );
-
-      setSelectedCompanies([]);
-      setShowBulkRejectModal(false);
-      setBulkRejectReason("");
-
-      setSelectedCompany((current) => {
-        if (!current || !updatedIds.has(current.id)) {
-          return current;
-        }
-
-        return {
-          ...current,
-          status: "Rejected",
-          rejectionReason: reason,
-
-          rejectionHistory: [
-            ...(current.rejectionHistory || []),
-            {
-              reason,
-              rejectedAt,
-            },
-          ],
-        };
-      });
-
-      alert(
-        `${pendingSelectedCompanies.length} registration${
-          pendingSelectedCompanies.length === 1 ? "" : "s"
-        } rejected successfully.\n\nThe rejection reason has been recorded.`
-      );
-    } catch (error) {
-      console.error("Bulk rejection failed:", error);
-
-      alert(
-        `The selected companies could not be rejected.\n\n${
-          error?.message || "Please try again."
-        }`
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // =========================================================
   // OPEN REJECT MODAL
   // =========================================================
 
   const openRejectModal = (company) => {
+    if (!company) return;
+
+    if (company.status !== "Pending Review") {
+      alert("Only companies with Pending Review status can be rejected.");
+      return;
+    }
+
     setSelectedCompany(company);
     setRejectReason("");
     setShowRejectModal(true);
@@ -651,6 +421,11 @@ const CompanyManagement = () => {
 
     if (!reason) {
       alert("Please provide a reason for rejecting this registration.");
+      return;
+    }
+
+    if (selectedCompany.status !== "Pending Review") {
+      alert("Only companies with Pending Review status can be rejected.");
       return;
     }
 
@@ -681,10 +456,6 @@ const CompanyManagement = () => {
         prev.map((company) =>
           company.id === selectedCompany.id ? updatedCompany : company
         )
-      );
-
-      setSelectedCompanies((prev) =>
-        prev.filter((id) => id !== selectedCompany.id)
       );
 
       setSelectedCompany(updatedCompany);
@@ -718,9 +489,11 @@ const CompanyManagement = () => {
   //    ↓
   // Admin clicks Reopen for Review
   //    ↓
+  // Secure verification upload link generated
+  //    ↓
   // Database status = pending
   //    ↓
-  // Send reopened email
+  // Send reopened email with upload link
   //    ↓
   // Frontend status = Pending Review
   //
@@ -848,15 +621,7 @@ const CompanyManagement = () => {
       );
 
       // =====================================================
-      // 5. REMOVE FROM SELECTED COMPANIES
-      // =====================================================
-
-      setSelectedCompanies((prev) =>
-        prev.filter((companyId) => companyId !== id)
-      );
-
-      // =====================================================
-      // 6. SUCCESS MESSAGE
+      // 5. SUCCESS MESSAGE
       // =====================================================
 
       if (!emailWasSent) {
@@ -883,6 +648,7 @@ const CompanyManagement = () => {
       setActionLoading(false);
     }
   };
+
   // =========================================================
   // VIEW DOCUMENT
   // =========================================================
@@ -952,14 +718,6 @@ const CompanyManagement = () => {
   const rejectedCount = companies.filter(
     (company) => company.status === "Rejected"
   ).length;
-
-  const pendingIds = filteredCompanies
-    .filter((company) => company.status === "Pending Review")
-    .map((company) => company.id);
-
-  const isAllSelected =
-    pendingIds.length > 0 &&
-    pendingIds.every((id) => selectedCompanies.includes(id));
 
   // =========================================================
   // SHARED STYLES
@@ -1100,38 +858,6 @@ const CompanyManagement = () => {
             <option value="Rejected">Rejected</option>
             <option value="Suspended">Suspended</option>
           </select>
-
-          <button
-            type="button"
-            onClick={approveSelected}
-            disabled={selectedCompanies.length === 0 || actionLoading}
-            className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
-              selectedCompanies.length === 0 || actionLoading
-                ? darkMode
-                  ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                : "bg-emerald-600 text-white hover:bg-emerald-700"
-            }`}
-          >
-            Approve Selected
-            {selectedCompanies.length > 0 && ` (${selectedCompanies.length})`}
-          </button>
-
-          <button
-            type="button"
-            onClick={openBulkRejectModal}
-            disabled={selectedCompanies.length === 0 || actionLoading}
-            className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
-              selectedCompanies.length === 0 || actionLoading
-                ? darkMode
-                  ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                : "bg-red-600 text-white hover:bg-red-700"
-            }`}
-          >
-            Reject Selected
-            {selectedCompanies.length > 0 && ` (${selectedCompanies.length})`}
-          </button>
         </div>
       </div>
 
@@ -1140,9 +866,7 @@ const CompanyManagement = () => {
       ===================================================== */}
 
       <div className={`border rounded-xl overflow-hidden ${panel}`}>
-        <div
-          className={`px-4 py-3 border-b flex items-center justify-between ${border}`}
-        >
+        <div className={`px-4 py-3 border-b ${border}`}>
           <div>
             <h2 className={`text-sm font-bold ${heading}`}>
               Registered Companies
@@ -1154,35 +878,12 @@ const CompanyManagement = () => {
                 : `${filteredCompanies.length} companies found`}
             </p>
           </div>
-
-          {selectedCompanies.length > 0 && (
-            <span
-              className={`text-[10px] font-semibold px-2 py-1 rounded ${
-                darkMode
-                  ? "bg-blue-900/40 text-blue-300"
-                  : "bg-blue-50 text-blue-600"
-              }`}
-            >
-              {selectedCompanies.length} selected
-            </span>
-          )}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] border-collapse">
+          <table className="w-full min-w-[900px] border-collapse">
             <thead>
               <tr className={darkMode ? "bg-slate-800" : "bg-slate-50"}>
-                <th className={`w-12 px-3 py-3 border-b text-center ${border}`}>
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
-                    onChange={toggleSelectAll}
-                    disabled={loading}
-                    className="cursor-pointer"
-                    aria-label="Select pending companies"
-                  />
-                </th>
-
                 <th
                   className={`px-3 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
@@ -1228,7 +929,7 @@ const CompanyManagement = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className={`px-4 py-16 text-center ${muted}`}>
+                  <td colSpan="5" className={`px-4 py-16 text-center ${muted}`}>
                     <div className="text-2xl mb-2 animate-pulse">🏢</div>
 
                     <p className="text-sm font-semibold">
@@ -1241,104 +942,77 @@ const CompanyManagement = () => {
                   </td>
                 </tr>
               ) : filteredCompanies.length > 0 ? (
-                filteredCompanies.map((company) => {
-                  const isSelected = selectedCompanies.includes(company.id);
-
-                  return (
-                    <tr
-                      key={company.id}
-                      className={`transition ${
-                        darkMode ? "hover:bg-slate-800/70" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <td
-                        className={`px-3 py-3 border-b text-center ${border}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={
-                            company.status !== "Pending Review" || actionLoading
-                          }
-                          onChange={() => toggleCompanySelection(company.id)}
-                          className={`${
-                            company.status === "Pending Review"
-                              ? "cursor-pointer"
-                              : "cursor-not-allowed opacity-40"
-                          }`}
-                          aria-label={`Select ${company.company}`}
-                        />
-                      </td>
-
-                      <td className={`px-3 py-3 border-b ${border}`}>
-                        <div>
-                          <p className={`text-xs font-semibold ${heading}`}>
-                            {company.company}
-                          </p>
-
-                          <p className={`text-[10px] mt-0.5 ${muted}`}>
-                            Submitted {company.submittedAt}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className={`px-3 py-3 border-b ${border}`}>
-                        <p
-                          className={`text-xs ${
-                            darkMode ? "text-slate-300" : "text-slate-700"
-                          }`}
-                        >
-                          {company.contact}
+                filteredCompanies.map((company) => (
+                  <tr
+                    key={company.id}
+                    className={`transition ${
+                      darkMode ? "hover:bg-slate-800/70" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <td className={`px-3 py-3 border-b ${border}`}>
+                      <div>
+                        <p className={`text-xs font-semibold ${heading}`}>
+                          {company.company}
                         </p>
 
                         <p className={`text-[10px] mt-0.5 ${muted}`}>
-                          {company.email}
+                          Submitted {company.submittedAt}
                         </p>
-                      </td>
+                      </div>
+                    </td>
 
-                      <td
-                        className={`px-3 py-3 border-b text-xs ${
-                          darkMode
-                            ? "border-slate-700 text-slate-300"
-                            : "border-slate-200 text-slate-600"
+                    <td className={`px-3 py-3 border-b ${border}`}>
+                      <p
+                        className={`text-xs ${
+                          darkMode ? "text-slate-300" : "text-slate-700"
                         }`}
                       >
-                        {company.industry}
-                      </td>
+                        {company.contact}
+                      </p>
 
-                      <td
-                        className={`px-3 py-3 border-b text-center ${border}`}
-                      >
-                        <span
-                          className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(
-                            company.status
-                          )}`}
-                        >
-                          {company.status}
-                        </span>
-                      </td>
+                      <p className={`text-[10px] mt-0.5 ${muted}`}>
+                        {company.email}
+                      </p>
+                    </td>
 
-                      <td
-                        className={`px-3 py-3 border-b text-center ${border}`}
+                    <td
+                      className={`px-3 py-3 border-b text-xs ${
+                        darkMode
+                          ? "border-slate-700 text-slate-300"
+                          : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {company.industry}
+                    </td>
+
+                    <td className={`px-3 py-3 border-b text-center ${border}`}>
+                      <span
+                        className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(
+                          company.status
+                        )}`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCompany(company)}
-                          className={`px-3 py-1.5 rounded-lg border text-[10px] font-semibold transition ${
-                            darkMode
-                              ? "border-slate-600 text-slate-300 hover:bg-slate-800"
-                              : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                          }`}
-                        >
-                          Review
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                        {company.status}
+                      </span>
+                    </td>
+
+                    <td className={`px-3 py-3 border-b text-center ${border}`}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCompany(company)}
+                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-semibold transition ${
+                          darkMode
+                            ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))
               ) : (
                 <tr>
-                  <td colSpan="6" className={`px-4 py-12 text-center ${muted}`}>
+                  <td colSpan="5" className={`px-4 py-12 text-center ${muted}`}>
                     <div className="text-2xl mb-2">🏢</div>
 
                     <p className="text-sm font-semibold">No companies found</p>
@@ -1377,6 +1051,10 @@ const CompanyManagement = () => {
           <div
             className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${panel}`}
           >
+            {/* =================================================
+                MODAL HEADER
+            ================================================= */}
+
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1420,8 +1098,14 @@ const CompanyManagement = () => {
               </div>
             </div>
 
+            {/* =================================================
+                MODAL CONTENT
+            ================================================= */}
+
             <div className="p-5 space-y-6">
-              {/* COMPANY DETAILS */}
+              {/* =================================================
+                  COMPANY DETAILS
+              ================================================= */}
 
               <section>
                 <h3 className={`text-sm font-bold ${heading}`}>
@@ -1522,7 +1206,9 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* DOCUMENTS */}
+              {/* =================================================
+                  DOCUMENTS
+              ================================================= */}
 
               <section>
                 <div className="flex items-end justify-between gap-3 mb-3">
@@ -1596,7 +1282,9 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* REJECTION REASON */}
+              {/* =================================================
+                  REJECTION REASON
+              ================================================= */}
 
               {selectedCompany.status === "Rejected" &&
                 selectedCompany.rejectionReason && (
@@ -1621,7 +1309,9 @@ const CompanyManagement = () => {
                   </section>
                 )}
 
-              {/* REJECTION HISTORY */}
+              {/* =================================================
+                  REJECTION HISTORY
+              ================================================= */}
 
               {selectedCompany.rejectionHistory?.length > 0 && (
                 <section>
@@ -1669,7 +1359,9 @@ const CompanyManagement = () => {
                 </section>
               )}
 
-              {/* ACCOUNT STATUS */}
+              {/* =================================================
+                  ACCOUNT STATUS
+              ================================================= */}
 
               <section
                 className={`rounded-xl border p-4 ${
@@ -1704,7 +1396,9 @@ const CompanyManagement = () => {
               </section>
             </div>
 
-            {/* MODAL ACTIONS */}
+            {/* =================================================
+                MODAL ACTIONS
+            ================================================= */}
 
             <div className={`p-5 border-t ${border}`}>
               {selectedCompany.status === "Pending Review" && (
@@ -1755,135 +1449,6 @@ const CompanyManagement = () => {
       )}
 
       {/* =====================================================
-          BULK REJECT MODAL
-      ===================================================== */}
-
-      {showBulkRejectModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => {
-              if (actionLoading) return;
-
-              setShowBulkRejectModal(false);
-              setBulkRejectReason("");
-            }}
-          />
-
-          <div
-            className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${panel}`}
-          >
-            <div className={`p-5 border-b ${border}`}>
-              <div className="flex items-start gap-3">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                    darkMode ? "bg-red-950/50" : "bg-red-50"
-                  }`}
-                >
-                  ⚠️
-                </div>
-
-                <div>
-                  <h2 className={`text-lg font-bold ${heading}`}>
-                    Reject Selected Companies
-                  </h2>
-
-                  <p className={`text-xs mt-1 ${muted}`}>
-                    You are about to reject {selectedCompanies.length} selected
-                    registration
-                    {selectedCompanies.length === 1 ? "" : "s"}.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div
-                className={`rounded-xl border p-4 ${
-                  darkMode
-                    ? "bg-red-950/20 border-red-900/50"
-                    : "bg-red-50 border-red-200"
-                }`}
-              >
-                <p className={`text-xs font-semibold ${heading}`}>
-                  Selected registrations
-                </p>
-
-                <p className={`text-[10px] mt-1 ${muted}`}>
-                  All selected companies with Pending Review status will be
-                  rejected using the same reason.
-                </p>
-              </div>
-
-              <div>
-                <label
-                  className={`block text-xs font-semibold mb-2 ${heading}`}
-                >
-                  Rejection Reason
-                </label>
-
-                <textarea
-                  rows="5"
-                  maxLength={500}
-                  value={bulkRejectReason}
-                  onChange={(e) => setBulkRejectReason(e.target.value)}
-                  placeholder="Example: The submitted business documents could not be verified. Please submit valid and readable copies."
-                  className={`w-full border rounded-xl px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
-                    darkMode
-                      ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                      : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"
-                  }`}
-                />
-
-                <div className="flex justify-between mt-1">
-                  <p className={`text-[10px] ${muted}`}>
-                    This reason will be recorded with the registration.
-                  </p>
-
-                  <p className={`text-[10px] ${muted}`}>
-                    {bulkRejectReason.length}/500
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className={`p-5 border-t ${border}`}>
-              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
-                <button
-                  type="button"
-                  disabled={actionLoading}
-                  onClick={() => {
-                    setShowBulkRejectModal(false);
-                    setBulkRejectReason("");
-                  }}
-                  className={`px-4 py-2.5 rounded-lg border text-xs font-semibold ${
-                    darkMode
-                      ? "border-slate-600 text-slate-300 hover:bg-slate-800"
-                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={rejectSelected}
-                  disabled={!bulkRejectReason.trim() || actionLoading}
-                  className={`px-4 py-2.5 rounded-lg text-xs font-semibold text-white transition ${
-                    !bulkRejectReason.trim() || actionLoading
-                      ? "bg-red-300 cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700"
-                  }`}
-                >
-                  {actionLoading ? "Processing..." : "Reject Selected"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================
           REJECT MODAL
       ===================================================== */}
 
@@ -1902,6 +1467,10 @@ const CompanyManagement = () => {
           <div
             className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${panel}`}
           >
+            {/* =================================================
+                REJECT MODAL HEADER
+            ================================================= */}
+
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start gap-3">
                 <div
@@ -1925,7 +1494,13 @@ const CompanyManagement = () => {
               </div>
             </div>
 
+            {/* =================================================
+                REJECT MODAL CONTENT
+            ================================================= */}
+
             <div className="p-5 space-y-4">
+              {/* COMPANY */}
+
               <div
                 className={`rounded-xl border p-4 ${
                   darkMode
@@ -1947,6 +1522,8 @@ const CompanyManagement = () => {
                   {selectedCompany.contact}
                 </p>
               </div>
+
+              {/* EMAIL */}
 
               <div
                 className={`rounded-xl border p-4 ${
@@ -1984,6 +1561,8 @@ const CompanyManagement = () => {
                 </div>
               </div>
 
+              {/* REASON */}
+
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${heading}`}
@@ -2015,6 +1594,8 @@ const CompanyManagement = () => {
                 </div>
               </div>
 
+              {/* INFO */}
+
               <div
                 className={`flex items-start gap-3 rounded-xl border p-3 ${
                   darkMode
@@ -2036,6 +1617,10 @@ const CompanyManagement = () => {
                 </div>
               </div>
             </div>
+
+            {/* =================================================
+                REJECT MODAL ACTIONS
+            ================================================= */}
 
             <div className={`p-5 border-t ${border}`}>
               <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
