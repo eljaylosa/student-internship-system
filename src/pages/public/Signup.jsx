@@ -1,8 +1,12 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 const SignUp = () => {
+  const navigate = useNavigate();
+
   const [activeRole, setActiveRole] = useState("student");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [forms, setForms] = useState({
     student: {
@@ -74,11 +78,190 @@ const SignUp = () => {
     handleChange(role, field, file);
   };
 
-  const handleSubmit = (event) => {
+  /*
+   * Upload a verification document to Supabase Storage.
+   */
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        resolve(null);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        resolve({
+          name: file.name,
+          type: file.type,
+          data: reader.result,
+        });
+      };
+
+      reader.onerror = () => {
+        reject(new Error(`Unable to read ${file.name}.`));
+      };
+
+      reader.readAsDataURL(file);
+    });
+  };
+
+  /*
+   * Submit Student / Registrar registration.
+   */
+  const submitCreateRequest = async (currentForm) => {
+    /*
+     * Convert uploaded documents into data that can be
+     * securely sent to the Edge Function.
+     */
+
+    let corFile = null;
+    let studentIdFile = null;
+
+    let employeeIdFile = null;
+    let appointmentLetterFile = null;
+
+    if (activeRole === "student") {
+      corFile = await fileToBase64(currentForm.cor);
+
+      studentIdFile = await fileToBase64(currentForm.studentIdDocument);
+    }
+
+    if (activeRole === "registrar") {
+      employeeIdFile = await fileToBase64(currentForm.employeeIdDocument);
+
+      appointmentLetterFile = await fileToBase64(currentForm.appointmentLetter);
+    }
+
+    /*
+     * Call the Edge Function.
+     */
+    const { data, error } = await supabase.functions.invoke(
+      "create-registration-request",
+      {
+        body: {
+          email: currentForm.email.trim(),
+          password: currentForm.password,
+
+          role: activeRole,
+
+          firstName: currentForm.firstName.trim(),
+
+          middleInitial: currentForm.middleInitial?.trim() || "",
+
+          lastName: currentForm.lastName.trim(),
+
+          phone: currentForm.phone.trim(),
+
+          studentId:
+            activeRole === "student" ? currentForm.studentId.trim() : null,
+
+          employeeId:
+            activeRole === "registrar" ? currentForm.employeeId.trim() : null,
+
+          department: currentForm.department?.trim() || "",
+
+          program: activeRole === "student" ? currentForm.program.trim() : null,
+
+          yearLevel: activeRole === "student" ? currentForm.yearLevel : null,
+
+          position:
+            activeRole === "registrar" ? currentForm.position.trim() : null,
+
+          corFile,
+
+          studentIdFile,
+
+          employeeIdFile,
+
+          appointmentLetterFile,
+        },
+      }
+    );
+
+    if (error) {
+      console.error("Registration Edge Function error:", error);
+
+      throw new Error(
+        error.message || "Unable to submit your registration request."
+      );
+    }
+
+    if (!data?.success) {
+      throw new Error(
+        data?.error || "Unable to submit your registration request."
+      );
+    }
+
+    return data;
+  };
+
+  const submitCompanyRegistration = async (currentForm) => {
+    const businessRegistration = await fileToBase64(
+      currentForm.businessRegistration
+    );
+
+    const birRegistration = await fileToBase64(currentForm.birRegistration);
+
+    const supportingDocument = await fileToBase64(
+      currentForm.supportingDocument
+    );
+
+    const { data, error } = await supabase.functions.invoke(
+      "create-company-registration",
+      {
+        body: {
+          email: currentForm.email.trim(),
+          password: currentForm.password,
+
+          firstName: currentForm.firstName.trim(),
+          middleInitial: currentForm.middleInitial?.trim() || "",
+          lastName: currentForm.lastName.trim(),
+
+          phone: currentForm.phone.trim(),
+
+          companyName: currentForm.companyName.trim(),
+          companyEmail: currentForm.companyEmail.trim(),
+          companyPhone: currentForm.companyPhone.trim(),
+          companyAddress: currentForm.companyAddress.trim(),
+
+          website: currentForm.website?.trim() || "",
+
+          industry: currentForm.industry.trim(),
+          designation: currentForm.designation.trim(),
+
+          businessRegistration,
+          birRegistration,
+          supportingDocument,
+        },
+      }
+    );
+
+    if (error) {
+      console.error("Company Registration Edge Function error:", error);
+
+      throw new Error(
+        error.message || "Unable to submit company registration."
+      );
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || "Unable to submit company registration.");
+    }
+
+    return data;
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (isSubmitting) return;
 
     const currentForm = forms[activeRole];
 
+    /*
+     * PASSWORD VALIDATION
+     */
     if (currentForm.password !== currentForm.confirmPassword) {
       alert("Passwords do not match.");
       return;
@@ -95,20 +278,11 @@ const SignUp = () => {
     }
 
     /*
-      COMPANY REGISTRATION
-
-      Company accounts should NOT immediately become active.
-
-      Future database flow:
-
-      1. Save company registration as Pending.
-      2. Admin reviews company information and documents.
-      3. Admin approves the company.
-      4. Email verification is sent.
-      5. Phone/SMS verification is completed.
-      6. Account becomes Active.
-    */
-
+     * COMPANY
+     *
+     * Company remains separate because CompanyManagement.jsx
+     * handles companies.
+     */
     if (activeRole === "company") {
       if (!currentForm.businessRegistration) {
         alert("Please upload your business registration document.");
@@ -120,39 +294,33 @@ const SignUp = () => {
         return;
       }
 
-      console.log("Company registration submitted for admin review:", {
-        ...currentForm,
-        businessRegistration: currentForm.businessRegistration?.name || null,
-        birRegistration: currentForm.birRegistration?.name || null,
-        supportingDocument: currentForm.supportingDocument?.name || null,
-        password: "[HIDDEN]",
-        confirmPassword: "[HIDDEN]",
-      });
+      try {
+        setIsSubmitting(true);
 
-      alert(
-        "Company registration submitted successfully. Your registration will be reviewed by the administrator before your account can be verified."
-      );
+        await submitCompanyRegistration(currentForm);
+
+        alert(
+          "Company registration submitted successfully. Your account is now pending review by the administrator."
+        );
+
+        navigate("/login", { replace: true });
+      } catch (error) {
+        console.error("Company registration error:", error);
+
+        alert(
+          error?.message ||
+            "Something went wrong while submitting your company registration."
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
 
       return;
     }
 
     /*
-      STUDENT REGISTRATION
-
-      Required verification documents:
-
-      1. Certificate of Registration (COR)
-      2. Student ID
-
-      Future database flow:
-
-      1. Create account as Pending Verification.
-      2. Registrar reviews submitted student documents.
-      3. Send email verification.
-      4. Verify phone number through SMS OTP.
-      5. Activate account.
-    */
-
+     * STUDENT DOCUMENT VALIDATION
+     */
     if (activeRole === "student") {
       if (!currentForm.cor) {
         alert("Please upload your Certificate of Registration (COR).");
@@ -163,39 +331,11 @@ const SignUp = () => {
         alert("Please upload your Student ID.");
         return;
       }
-
-      console.log("Student registration submitted:", {
-        ...currentForm,
-        cor: currentForm.cor?.name || null,
-        studentIdDocument: currentForm.studentIdDocument?.name || null,
-        password: "[HIDDEN]",
-        confirmPassword: "[HIDDEN]",
-      });
-
-      alert(
-        "Registration submitted successfully. Your documents will be reviewed before your account can be fully activated."
-      );
-
-      return;
     }
 
     /*
-      REGISTRAR REGISTRATION
-
-      Required verification documents:
-
-      1. University / Employee ID
-      2. Proof of Appointment / Authorization Letter
-
-      Future database flow:
-
-      1. Create account as Pending Verification.
-      2. Administrator reviews registrar credentials.
-      3. Send email verification.
-      4. Verify phone number through SMS OTP.
-      5. Activate account.
-    */
-
+     * REGISTRAR DOCUMENT VALIDATION
+     */
     if (activeRole === "registrar") {
       if (!currentForm.employeeIdDocument) {
         alert("Please upload your University / Employee ID.");
@@ -208,20 +348,29 @@ const SignUp = () => {
         );
         return;
       }
+    }
 
-      console.log("Registrar registration submitted:", {
-        ...currentForm,
-        employeeIdDocument: currentForm.employeeIdDocument?.name || null,
-        appointmentLetter: currentForm.appointmentLetter?.name || null,
-        password: "[HIDDEN]",
-        confirmPassword: "[HIDDEN]",
-      });
+    try {
+      setIsSubmitting(true);
+
+      await submitCreateRequest(currentForm);
 
       alert(
-        "Registrar registration submitted successfully. Your credentials will be reviewed before your account can be fully activated."
+        activeRole === "student"
+          ? "Registration submitted successfully. Your Student account is now pending review by the administrator."
+          : "Registration submitted successfully. Your Registrar Adviser account is now pending review by the administrator."
       );
 
-      return;
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Registration error:", error);
+
+      alert(
+        error?.message ||
+          "Something went wrong while creating your account. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -291,7 +440,7 @@ const SignUp = () => {
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1m4 7h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
           />
         </svg>
       ),
@@ -506,8 +655,7 @@ const SignUp = () => {
 
               <p className="text-xs text-purple-700 leading-relaxed mt-1">
                 Your registration and submitted documents will be reviewed by a
-                SIMS administrator. Email and SMS verification will only proceed
-                after your company registration has been approved.
+                SIMS administrator.
               </p>
             </div>
           </div>
@@ -527,9 +675,8 @@ const SignUp = () => {
               </p>
 
               <p className="text-xs text-emerald-700 leading-relaxed mt-1">
-                Your university credentials and authorization documents will be
-                reviewed before your Registrar Adviser account can be fully
-                activated.
+                Your credentials will be reviewed before your Registrar Adviser
+                account can be activated.
               </p>
             </div>
           </div>
@@ -549,8 +696,7 @@ const SignUp = () => {
 
             <p className="text-xs text-blue-700 leading-relaxed mt-1">
               Your COR and Student ID will be reviewed before your account can
-              be fully activated. You will also need to verify your email and
-              phone number.
+              be fully activated.
             </p>
           </div>
         </div>
@@ -561,7 +707,7 @@ const SignUp = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
       {/* NAVIGATION */}
-      <header className="bg-slate-900 border-b border-slate-800 text-white px-8 py-4 flex justify-between items-center shadow-md">
+      {/* <header className="bg-slate-900 border-b border-slate-800 text-white px-8 py-4 flex justify-between items-center shadow-md">
         <Link
           to="/"
           className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition font-bold"
@@ -579,10 +725,10 @@ const SignUp = () => {
         >
           Login
         </Link>
-      </header>
+      </header> */}
 
       {/* MAIN */}
-      <main className="flex-1 flex flex-col items-center py-14 px-4 max-w-3xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center py-30 px-4 max-w-3xl mx-auto w-full">
         {/* PAGE HEADER */}
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
@@ -683,10 +829,6 @@ const SignUp = () => {
                     }
                     className={inputClass}
                   />
-
-                  <p className="text-[10px] text-slate-400 mt-1.5">
-                    A verification code will be sent through SMS.
-                  </p>
                 </div>
               </div>
             </section>
@@ -802,13 +944,11 @@ const SignUp = () => {
                     </h4>
 
                     <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Upload your current university documents. These will be
-                      reviewed before your account can be fully activated.
+                      Upload your current university documents.
                     </p>
                   </div>
 
                   <div className="space-y-4">
-                    {/* COR */}
                     <div>
                       <label className={labelClass}>
                         Certificate of Registration (COR)
@@ -828,13 +968,8 @@ const SignUp = () => {
                         }
                         className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload your current Certificate of Registration.
-                      </p>
                     </div>
 
-                    {/* STUDENT ID */}
                     <div>
                       <label className={labelClass}>
                         Student ID
@@ -854,11 +989,6 @@ const SignUp = () => {
                         }
                         className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload a clear image or scanned copy of your valid
-                        university Student ID.
-                      </p>
                     </div>
                   </div>
                 </section>
@@ -948,14 +1078,13 @@ const SignUp = () => {
                       Registrar Verification Documents
                     </h4>
 
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      These documents will verify your university employment and
-                      authorization to access the Registrar Adviser portal.
+                    <p className="text-xs text-slate-400 mt-1">
+                      Upload your university credentials and authorization
+                      documents.
                     </p>
                   </div>
 
                   <div className="space-y-4">
-                    {/* EMPLOYEE ID */}
                     <div>
                       <label className={labelClass}>
                         University / Employee ID
@@ -975,14 +1104,8 @@ const SignUp = () => {
                         }
                         className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload a clear image or scanned copy of your valid
-                        university employee ID.
-                      </p>
                     </div>
 
-                    {/* APPOINTMENT LETTER */}
                     <div>
                       <label className={labelClass}>
                         Proof of Appointment / Authorization Letter
@@ -1002,11 +1125,6 @@ const SignUp = () => {
                         }
                         className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload an official document confirming your appointment
-                        or authorization as a Registrar Adviser.
-                      </p>
                     </div>
                   </div>
                 </section>
@@ -1150,17 +1268,11 @@ const SignUp = () => {
                   </div>
                 </section>
 
-                {/* REPRESENTATIVE */}
                 <section className={sectionClass}>
                   <div className="mb-5">
                     <h4 className="text-sm font-bold text-slate-800">
                       Company Representative
                     </h4>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      Provide your role and contact information as the person
-                      representing this company.
-                    </p>
                   </div>
 
                   <div>
@@ -1183,26 +1295,17 @@ const SignUp = () => {
                   </div>
                 </section>
 
-                {/* DOCUMENTS */}
                 <section className={sectionClass}>
                   <div className="mb-5">
                     <h4 className="text-sm font-bold text-slate-800">
                       Company Verification Documents
                     </h4>
-
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      These documents will be reviewed by a SIMS administrator
-                      before the company account can proceed to email and SMS
-                      verification.
-                    </p>
                   </div>
 
                   <div className="space-y-4">
-                    {/* BUSINESS REGISTRATION */}
                     <div>
                       <label className={labelClass}>
-                        Business Registration
-                        <span className="text-red-500 ml-1">*</span>
+                        Business Registration *
                       </label>
 
                       <input
@@ -1216,21 +1319,12 @@ const SignUp = () => {
                             event.target.files?.[0] || null
                           )
                         }
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                        className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload the appropriate official business registration
-                        document.
-                      </p>
                     </div>
 
-                    {/* BIR */}
                     <div>
-                      <label className={labelClass}>
-                        BIR Registration
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
+                      <label className={labelClass}>BIR Registration *</label>
 
                       <input
                         type="file"
@@ -1243,52 +1337,17 @@ const SignUp = () => {
                             event.target.files?.[0] || null
                           )
                         }
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                        className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Upload your official BIR registration document.
-                      </p>
                     </div>
 
-                    {/* SUPPORTING DOCUMENT */}
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <label className={`${labelClass} mb-0`}>
-                          Supporting Document
-                          <span className="ml-1 text-slate-400 font-medium normal-case">
-                            (Optional)
-                          </span>
-                        </label>
-
-                        {/* HOVER EXAMPLES */}
-                        <div className="relative group">
-                          <button
-                            type="button"
-                            className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 transition"
-                          >
-                            ?
-                          </button>
-
-                          <div className="absolute z-30 left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
-                            <p className="font-bold text-white mb-1">
-                              Examples of supporting documents:
-                            </p>
-
-                            <ul className="list-disc list-inside text-slate-300 space-y-0.5">
-                              <li>Mayor's Permit</li>
-                              <li>SEC / DTI Certificate</li>
-                              <li>Company ID</li>
-                              <li>Authorization Letter</li>
-                              <li>
-                                Other documents supporting company legitimacy
-                              </li>
-                            </ul>
-
-                            <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45" />
-                          </div>
-                        </div>
-                      </div>
+                      <label className={labelClass}>
+                        Supporting Document
+                        <span className="ml-1 text-slate-400 font-medium normal-case">
+                          (Optional)
+                        </span>
+                      </label>
 
                       <input
                         type="file"
@@ -1300,13 +1359,8 @@ const SignUp = () => {
                             event.target.files?.[0] || null
                           )
                         }
-                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 file:font-semibold hover:file:bg-purple-100"
+                        className={fileInputClass}
                       />
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Optional document that can further establish the
-                        legitimacy of the organization.
-                      </p>
                     </div>
                   </div>
                 </section>
@@ -1365,9 +1419,18 @@ const SignUp = () => {
             {/* SUBMIT */}
             <button
               type="submit"
-              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200`}
+              disabled={isSubmitting}
+              className={`w-full bg-gradient-to-r ${
+                activePortal.accent
+              } text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm transition-all duration-200 ${
+                isSubmitting
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:opacity-95"
+              }`}
             >
-              {activeRole === "company"
+              {isSubmitting
+                ? "Submitting Registration..."
+                : activeRole === "company"
                 ? "Submit Company Registration"
                 : `Create ${activePortal.label} Account`}
             </button>

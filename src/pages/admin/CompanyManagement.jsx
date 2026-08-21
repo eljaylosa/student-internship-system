@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 // =========================================================
 // COMPANY MANAGEMENT
@@ -9,297 +10,249 @@ const CompanyManagement = () => {
   const { darkMode } = useOutletContext();
 
   // =========================================================
-  // COMPANY DATA
-  // =========================================================
-
-  const [companies, setCompanies] = useState([
-    {
-      id: 1,
-      company: "Tech Solutions Inc.",
-      contact: "Mark Santos",
-      email: "mark@techsolutions.com",
-      phone: "+63 917 123 4567",
-      industry: "Information Technology",
-      designation: "HR Manager",
-      status: "Approved",
-      emailVerified: true,
-      submittedAt: "August 5, 2026",
-      rejectionReason: "",
-      rejectionEmailSent: false,
-      rejectionEmailSentAt: null,
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "tech-solutions-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "tech-solutions-business-permit.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "BIR Registration",
-          fileName: "tech-solutions-bir.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-
-    {
-      id: 2,
-      company: "Innovate Labs",
-      contact: "Sarah Cruz",
-      email: "sarah@innovatelabs.com",
-      phone: "+63 918 456 7890",
-      industry: "Software Development",
-      designation: "Operations Manager",
-      status: "Approved",
-      emailVerified: true,
-      submittedAt: "August 6, 2026",
-      rejectionReason: "",
-      rejectionEmailSent: false,
-      rejectionEmailSentAt: null,
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "innovate-labs-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "innovate-labs-business-permit.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-
-    {
-      id: 3,
-      company: "Bataan Digital Corp.",
-      contact: "James Reyes",
-      email: "james@bataandigital.com",
-      phone: "+63 919 222 3344",
-      industry: "Technology",
-      designation: "Company Supervisor",
-      status: "Approved",
-      emailVerified: true,
-      submittedAt: "August 7, 2026",
-      rejectionReason: "",
-      rejectionEmailSent: false,
-      rejectionEmailSentAt: null,
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "bataan-digital-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "bataan-digital-permit.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "BIR Registration",
-          fileName: "bataan-digital-bir.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-
-    {
-      id: 4,
-      company: "Future Systems",
-      contact: "Anna Garcia",
-      email: "anna@futuresystems.ph",
-      phone: "+63 917 555 1020",
-      industry: "Information Technology",
-      designation: "HR Manager",
-      status: "Pending Review",
-      emailVerified: false,
-      submittedAt: "August 13, 2026",
-      rejectionReason: "",
-      rejectionEmailSent: false,
-      rejectionEmailSentAt: null,
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "future-systems-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "future-systems-business-permit.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "BIR Registration",
-          fileName: "future-systems-bir.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-
-    {
-      id: 5,
-      company: "NextGen Solutions",
-      contact: "Michael Tan",
-      email: "michael@nextgensolutions.ph",
-      phone: "+63 918 771 4432",
-      industry: "Software Development",
-      designation: "Lead Developer",
-      status: "Pending Review",
-      emailVerified: false,
-      submittedAt: "August 13, 2026",
-      rejectionReason: "",
-      rejectionEmailSent: false,
-      rejectionEmailSentAt: null,
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "nextgen-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "nextgen-business-permit.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-
-    {
-      id: 6,
-      company: "Digital Works PH",
-      contact: "Kevin Ramos",
-      email: "kevin@digitalworks.ph",
-      phone: "+63 919 884 2211",
-      industry: "Digital Services",
-      designation: "Company Representative",
-      status: "Rejected",
-      emailVerified: false,
-      submittedAt: "August 11, 2026",
-      rejectionReason:
-        "Submitted business registration document could not be verified.",
-      rejectionEmailSent: true,
-      rejectionEmailSentAt: "August 11, 2026",
-      reopenEmailSent: false,
-      reopenEmailSentAt: null,
-      rejectionHistory: [
-        {
-          reason:
-            "Submitted business registration document could not be verified.",
-          rejectedAt: "August 11, 2026",
-        },
-      ],
-      documents: [
-        {
-          type: "DTI / SEC Registration",
-          fileName: "digital-works-registration.pdf",
-          fileUrl: "#",
-        },
-        {
-          type: "Business Permit",
-          fileName: "digital-works-permit.pdf",
-          fileUrl: "#",
-        },
-      ],
-    },
-  ]);
-
-  // =========================================================
   // STATES
   // =========================================================
 
+  const [companies, setCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
+
   const [selectedCompanies, setSelectedCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
   const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState("");
 
   // =========================================================
-  // EMAIL PLACEHOLDER
-  // =========================================================
-  //
-  // This is intentionally kept in the frontend for now.
-  //
-  // Later this function should call your backend / Supabase
-  // Edge Function / email provider.
-  //
+  // STATUS HELPERS
   // =========================================================
 
-  const sendCompanyEmail = async ({
-    type,
-    companyName,
-    contactName,
-    recipientEmail,
-    reason = "",
-  }) => {
-    console.log("EMAIL NOTIFICATION", {
-      type,
-      companyName,
-      contactName,
-      recipientEmail,
-      reason,
-    });
+  const databaseStatusToUi = (status) => {
+    switch (status) {
+      case "active":
+        return "Approved";
 
-    /*
-      ========================================================
-      FUTURE REAL EMAIL IMPLEMENTATION
-      ========================================================
+      case "rejected":
+        return "Rejected";
 
-      Example:
+      case "suspended":
+        return "Suspended";
 
-      await fetch("/api/company-notification", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type,
-          companyName,
-          contactName,
-          recipientEmail,
-          reason,
-        }),
-      });
+      case "pending":
+      default:
+        return "Pending Review";
+    }
+  };
 
-      ========================================================
-    */
+  const uiStatusToDatabase = (status) => {
+    switch (status) {
+      case "Approved":
+        return "active";
 
-    return true;
+      case "Rejected":
+        return "rejected";
+
+      case "Suspended":
+        return "suspended";
+
+      case "Pending Review":
+      default:
+        return "pending";
+    }
   };
 
   // =========================================================
   // DATE FORMATTER
   // =========================================================
 
-  const getCurrentDate = () => {
-    return new Date().toLocaleDateString("en-US", {
+  const formatDate = (date) => {
+    if (!date) return "Unknown";
+
+    return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
   };
+
+  // =========================================================
+  // STORAGE URL
+  // =========================================================
+
+  const getDocumentUrl = async (filePath) => {
+    if (!filePath) {
+      return null;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("verification-documents")
+        .createSignedUrl(filePath, 60 * 10);
+
+      if (error) {
+        console.error("Unable to create signed document URL:", error);
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (error) {
+      console.error("Document URL error:", error);
+      return null;
+    }
+  };
+
+  // =========================================================
+  // FETCH COMPANIES
+  // =========================================================
+
+  const fetchCompanies = async () => {
+    try {
+      setLoading(true);
+
+      const { data: companyData, error: companyError } = await supabase
+        .from("companies")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (companyError) {
+        throw companyError;
+      }
+
+      if (!companyData || companyData.length === 0) {
+        setCompanies([]);
+        return;
+      }
+
+      const userIds = companyData
+        .map((company) => company.user_id)
+        .filter(Boolean);
+
+      let requestData = [];
+
+      if (userIds.length > 0) {
+        const { data, error: requestError } = await supabase
+          .from("create_requests")
+          .select("*")
+          .in("user_id", userIds);
+
+        if (requestError) {
+          console.warn(
+            "Unable to load create request information:",
+            requestError
+          );
+        } else {
+          requestData = data || [];
+        }
+      }
+
+      const formattedCompanies = companyData.map((company) => {
+        const request = requestData.find(
+          (item) => item.user_id === company.user_id
+        );
+
+        const firstName = request?.first_name || "";
+        const middleInitial = request?.middle_initial || "";
+        const lastName = request?.last_name || "";
+
+        const contactName =
+          `${firstName} ${
+            middleInitial ? `${middleInitial} ` : ""
+          }${lastName}`.trim() || "Company Representative";
+
+        const documents = [];
+
+        if (company.business_registration_url) {
+          documents.push({
+            type: "Business Registration",
+            fileName:
+              company.business_registration_url.split("/").pop() ||
+              "business-registration",
+            filePath: company.business_registration_url,
+          });
+        }
+
+        if (company.bir_registration_url) {
+          documents.push({
+            type: "BIR Registration",
+            fileName:
+              company.bir_registration_url.split("/").pop() ||
+              "bir-registration",
+            filePath: company.bir_registration_url,
+          });
+        }
+
+        if (company.supporting_document_url) {
+          documents.push({
+            type: "Supporting Document",
+            fileName:
+              company.supporting_document_url.split("/").pop() ||
+              "supporting-document",
+            filePath: company.supporting_document_url,
+          });
+        }
+
+        return {
+          id: company.id,
+          userId: company.user_id,
+
+          company: company.company_name,
+          contact: contactName,
+
+          email: company.company_email,
+          phone: company.company_phone,
+          address: company.company_address,
+
+          website: company.website,
+
+          industry: company.industry,
+          designation: company.designation,
+
+          status: databaseStatusToUi(company.status),
+
+          submittedAt: formatDate(company.created_at),
+          createdAt: company.created_at,
+          updatedAt: company.updated_at,
+
+          rejectionReason: "",
+          rejectionEmailSent: false,
+          rejectionEmailSentAt: null,
+
+          reopenEmailSent: false,
+          reopenEmailSentAt: null,
+
+          rejectionHistory: [],
+
+          documents,
+        };
+      });
+
+      setCompanies(formattedCompanies);
+    } catch (error) {
+      console.error("Failed to load companies:", error);
+
+      alert(
+        `Unable to load companies.\n\n${error?.message || "Unknown error."}`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
+
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
 
   // =========================================================
   // FILTERED COMPANIES
@@ -310,10 +263,10 @@ const CompanyManagement = () => {
       const search = searchTerm.toLowerCase().trim();
 
       const matchesSearch =
-        company.company.toLowerCase().includes(search) ||
-        company.contact.toLowerCase().includes(search) ||
-        company.industry.toLowerCase().includes(search) ||
-        company.email.toLowerCase().includes(search);
+        company.company?.toLowerCase().includes(search) ||
+        company.contact?.toLowerCase().includes(search) ||
+        company.industry?.toLowerCase().includes(search) ||
+        company.email?.toLowerCase().includes(search);
 
       const matchesStatus =
         filterStatus === "All" || company.status === filterStatus;
@@ -335,7 +288,7 @@ const CompanyManagement = () => {
   };
 
   // =========================================================
-  // SELECT ALL
+  // SELECT ALL PENDING
   // =========================================================
 
   const toggleSelectAll = () => {
@@ -357,70 +310,192 @@ const CompanyManagement = () => {
   };
 
   // =========================================================
+  // UPDATE COMPANY STATUS
+  // =========================================================
+
+  const updateCompanyStatus = async (id, newStatus) => {
+    const databaseStatus = uiStatusToDatabase(newStatus);
+
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        status: databaseStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  // =========================================================
   // APPROVE COMPANY
   // =========================================================
 
-  const approveCompany = (id) => {
-    setCompanies((prev) =>
-      prev.map((company) =>
-        company.id === id
-          ? {
-              ...company,
-              status: "Approved",
-              emailVerified: false,
-              rejectionReason: "",
-            }
-          : company
-      )
-    );
+  const approveCompany = async (id) => {
+    const company = companies.find((item) => item.id === id);
 
-    setSelectedCompanies((prev) =>
-      prev.filter((companyId) => companyId !== id)
-    );
+    if (!company) {
+      alert("Company not found.");
+      return;
+    }
 
-    setSelectedCompany((current) =>
-      current?.id === id
-        ? {
-            ...current,
-            status: "Approved",
-            emailVerified: false,
-            rejectionReason: "",
-          }
-        : current
-    );
+    try {
+      setActionLoading(true);
 
-    /*
-      LATER:
+      // =====================================================
+      // 1. UPDATE COMPANY STATUS
+      // =====================================================
 
-      After approval:
-      1. Update company registration status in database.
-      2. Generate email verification token.
-      3. Send verification email.
-      4. Optionally send SMS verification.
-    */
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", company.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // =====================================================
+      // 2. SEND APPROVAL EMAIL
+      // =====================================================
+
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: company.email,
+            name: company.contact,
+            type: "approved",
+            role: "company",
+            companyName: company.company,
+          },
+        });
+
+      if (emailError) {
+        console.error("Approval email failed:", emailError);
+      } else if (emailData?.success === false) {
+        console.error("Approval email was not sent:", emailData);
+      }
+
+      // =====================================================
+      // 3. UPDATE FRONTEND STATE
+      // =====================================================
+
+      const updatedCompany = {
+        ...company,
+        status: "Approved",
+        emailVerified: false,
+        rejectionReason: "",
+      };
+
+      setCompanies((prev) =>
+        prev.map((item) => (item.id === id ? updatedCompany : item))
+      );
+
+      setSelectedCompanies((prev) =>
+        prev.filter((companyId) => companyId !== id)
+      );
+
+      setSelectedCompany((current) =>
+        current?.id === id ? updatedCompany : current
+      );
+
+      // =====================================================
+      // 4. SUCCESS MESSAGE
+      // =====================================================
+
+      alert(
+        `Company approved successfully.\n\n` +
+          `An approval notification has been sent to ${company.email}.`
+      );
+    } catch (error) {
+      console.error("Company approval failed:", error);
+
+      alert(
+        error?.message || "The company could not be approved. Please try again."
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // =========================================================
   // APPROVE SELECTED
   // =========================================================
 
-  const approveSelected = () => {
+  const approveSelected = async () => {
     if (selectedCompanies.length === 0) return;
 
-    setCompanies((prev) =>
-      prev.map((company) =>
-        selectedCompanies.includes(company.id)
-          ? {
-              ...company,
-              status: "Approved",
-              emailVerified: false,
-              rejectionReason: "",
-            }
-          : company
-      )
+    const pendingCompanies = companies.filter(
+      (company) =>
+        selectedCompanies.includes(company.id) &&
+        company.status === "Pending Review"
     );
 
-    setSelectedCompanies([]);
+    if (pendingCompanies.length === 0) {
+      alert("No pending companies are selected.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      await Promise.all(
+        pendingCompanies.map((company) =>
+          updateCompanyStatus(company.id, "Approved")
+        )
+      );
+
+      const approvedIds = new Set(
+        pendingCompanies.map((company) => company.id)
+      );
+
+      setCompanies((prev) =>
+        prev.map((company) =>
+          approvedIds.has(company.id)
+            ? {
+                ...company,
+                status: "Approved",
+                rejectionReason: "",
+              }
+            : company
+        )
+      );
+
+      setSelectedCompanies([]);
+
+      if (selectedCompany && approvedIds.has(selectedCompany.id)) {
+        setSelectedCompany((current) =>
+          current
+            ? {
+                ...current,
+                status: "Approved",
+                rejectionReason: "",
+              }
+            : current
+        );
+      }
+
+      alert(
+        `${pendingCompanies.length} company registration${
+          pendingCompanies.length === 1 ? "" : "s"
+        } approved successfully.`
+      );
+    } catch (error) {
+      console.error("Bulk company approval failed:", error);
+
+      alert(
+        `The selected companies could not be approved.\n\n${
+          error?.message || "Please try again."
+        }`
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // =========================================================
@@ -430,6 +505,7 @@ const CompanyManagement = () => {
   const openBulkRejectModal = () => {
     const pendingSelected = selectedCompanies.filter((id) => {
       const company = companies.find((item) => item.id === id);
+
       return company?.status === "Pending Review";
     });
 
@@ -465,27 +541,24 @@ const CompanyManagement = () => {
 
     if (pendingSelectedCompanies.length === 0) {
       alert("No pending companies are selected.");
+
       setShowBulkRejectModal(false);
       setBulkRejectReason("");
       setSelectedCompanies([]);
+
       return;
     }
 
     try {
-      const rejectedAt = getCurrentDate();
+      setActionLoading(true);
 
-      // Prepare the notification for every selected company.
       await Promise.all(
         pendingSelectedCompanies.map((company) =>
-          sendCompanyEmail({
-            type: "registration_rejected",
-            companyName: company.company,
-            contactName: company.contact,
-            recipientEmail: company.email,
-            reason,
-          })
+          updateCompanyStatus(company.id, "Rejected")
         )
       );
+
+      const rejectedAt = formatDate(new Date().toISOString());
 
       const updatedIds = new Set(
         pendingSelectedCompanies.map((company) => company.id)
@@ -493,15 +566,17 @@ const CompanyManagement = () => {
 
       setCompanies((prev) =>
         prev.map((company) => {
-          if (!updatedIds.has(company.id)) return company;
+          if (!updatedIds.has(company.id)) {
+            return company;
+          }
 
           return {
             ...company,
             status: "Rejected",
-            emailVerified: false,
             rejectionReason: reason,
-            rejectionEmailSent: true,
-            rejectionEmailSentAt: rejectedAt,
+            rejectionEmailSent: false,
+            rejectionEmailSentAt: null,
+
             rejectionHistory: [
               ...(company.rejectionHistory || []),
               {
@@ -517,18 +592,16 @@ const CompanyManagement = () => {
       setShowBulkRejectModal(false);
       setBulkRejectReason("");
 
-      // Keep an open company review modal in sync if its company was part of
-      // the bulk rejection.
       setSelectedCompany((current) => {
-        if (!current || !updatedIds.has(current.id)) return current;
+        if (!current || !updatedIds.has(current.id)) {
+          return current;
+        }
 
         return {
           ...current,
           status: "Rejected",
-          emailVerified: false,
           rejectionReason: reason,
-          rejectionEmailSent: true,
-          rejectionEmailSentAt: rejectedAt,
+
           rejectionHistory: [
             ...(current.rejectionHistory || []),
             {
@@ -542,11 +615,18 @@ const CompanyManagement = () => {
       alert(
         `${pendingSelectedCompanies.length} registration${
           pendingSelectedCompanies.length === 1 ? "" : "s"
-        } rejected successfully.\n\nA rejection notification has been prepared for each selected company.`
+        } rejected successfully.\n\nThe rejection reason has been recorded.`
       );
     } catch (error) {
       console.error("Bulk rejection failed:", error);
-      alert("The selected companies could not be rejected. Please try again.");
+
+      alert(
+        `The selected companies could not be rejected.\n\n${
+          error?.message || "Please try again."
+        }`
+      );
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -575,23 +655,11 @@ const CompanyManagement = () => {
     }
 
     try {
-      const rejectedAt = getCurrentDate();
+      setActionLoading(true);
 
-      // =====================================================
-      // SEND REJECTION EMAIL
-      // =====================================================
+      await updateCompanyStatus(selectedCompany.id, "Rejected");
 
-      await sendCompanyEmail({
-        type: "registration_rejected",
-        companyName: selectedCompany.company,
-        contactName: selectedCompany.contact,
-        recipientEmail: selectedCompany.email,
-        reason,
-      });
-
-      // =====================================================
-      // CREATE REJECTION HISTORY ENTRY
-      // =====================================================
+      const rejectedAt = formatDate(new Date().toISOString());
 
       const historyEntry = {
         reason,
@@ -601,19 +669,13 @@ const CompanyManagement = () => {
       const updatedCompany = {
         ...selectedCompany,
         status: "Rejected",
-        emailVerified: false,
         rejectionReason: reason,
-        rejectionEmailSent: true,
-        rejectionEmailSentAt: rejectedAt,
+
         rejectionHistory: [
           ...(selectedCompany.rejectionHistory || []),
           historyEntry,
         ],
       };
-
-      // =====================================================
-      // UPDATE COMPANY
-      // =====================================================
 
       setCompanies((prev) =>
         prev.map((company) =>
@@ -631,47 +693,150 @@ const CompanyManagement = () => {
       setRejectReason("");
 
       alert(
-        `Registration rejected successfully.\n\nA rejection notification has been prepared for ${selectedCompany.email}.`
+        `Registration for ${selectedCompany.company} was rejected successfully.`
       );
     } catch (error) {
       console.error("Rejection failed:", error);
 
-      alert("The company could not be rejected. Please try again.");
+      alert(
+        `The company could not be rejected.\n\n${
+          error?.message || "Please try again."
+        }`
+      );
+    } finally {
+      setActionLoading(false);
     }
   };
 
   // =========================================================
   // REOPEN COMPANY
   // =========================================================
+  //
+  // FLOW:
+  //
+  // Rejected
+  //    ↓
+  // Admin clicks Reopen for Review
+  //    ↓
+  // Database status = pending
+  //    ↓
+  // Send reopened email
+  //    ↓
+  // Frontend status = Pending Review
+  //
+  // IMPORTANT:
+  // If the email fails, the company remains reopened because
+  // the database status was already successfully changed.
+  //
+  // =========================================================
 
   const reopenCompany = async (id) => {
     const company = companies.find((item) => item.id === id);
 
-    if (!company) return;
+    if (!company) {
+      alert("Company not found.");
+      return;
+    }
+
+    if (company.status !== "Rejected") {
+      alert("Only rejected company registrations can be reopened.");
+      return;
+    }
 
     try {
-      const reopenedAt = getCurrentDate();
+      setActionLoading(true);
 
       // =====================================================
-      // SEND REOPEN EMAIL
+      // 1. GENERATE SECURE VERIFICATION UPLOAD LINK
       // =====================================================
 
-      await sendCompanyEmail({
-        type: "registration_reopened",
-        companyName: company.company,
-        contactName: company.contact,
-        recipientEmail: company.email,
-      });
+      const { data: linkData, error: linkError } =
+        await supabase.functions.invoke("create-company-verification-link", {
+          body: {
+            company_id: company.id,
+          },
+        });
+
+      if (linkError) {
+        console.error("Verification link generation failed:", linkError);
+
+        throw new Error(
+          linkError.message ||
+            "Unable to create the company verification upload link."
+        );
+      }
+
+      if (!linkData?.success || !linkData?.uploadUrl) {
+        console.error("Invalid verification link response:", linkData);
+
+        throw new Error(
+          linkData?.error ||
+            "The company verification upload link could not be created."
+        );
+      }
+
+      const uploadUrl = linkData.uploadUrl;
+
+      console.log("Company verification upload URL generated:", uploadUrl);
 
       // =====================================================
-      // UPDATE COMPANY
+      // 2. UPDATE COMPANY STATUS TO PENDING
       // =====================================================
+
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({
+          status: "pending",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // =====================================================
+      // 3. SEND REOPENED EMAIL WITH UPLOAD LINK
+      // =====================================================
+
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: company.email,
+            name: company.contact,
+            type: "reopened",
+            role: "company",
+            companyName: company.company,
+            uploadUrl,
+          },
+        });
+
+      // =====================================================
+      // EMAIL RESULT
+      // =====================================================
+
+      if (emailError) {
+        console.error("Reopened email failed:", emailError);
+      } else if (emailData?.success === false) {
+        console.error("Reopened email was not sent:", emailData);
+      } else {
+        console.log(`Reopened email successfully sent to ${company.email}`);
+      }
+
+      // =====================================================
+      // 4. UPDATE FRONTEND STATE
+      // =====================================================
+
+      const emailWasSent = !emailError && emailData?.success !== false;
 
       const updatedCompany = {
         ...company,
         status: "Pending Review",
-        reopenEmailSent: true,
-        reopenEmailSentAt: reopenedAt,
+        rejectionReason: "",
+
+        reopenEmailSent: emailWasSent,
+
+        reopenEmailSentAt: emailWasSent ? new Date().toISOString() : null,
       };
 
       setCompanies((prev) =>
@@ -682,13 +847,65 @@ const CompanyManagement = () => {
         current?.id === id ? updatedCompany : current
       );
 
-      alert(
-        `Registration reopened successfully.\n\nA reopening notification has been prepared for ${company.email}.`
-      );
-    } catch (error) {
-      console.error("Reopen failed:", error);
+      // =====================================================
+      // 5. REMOVE FROM SELECTED COMPANIES
+      // =====================================================
 
-      alert("The company could not be reopened. Please try again.");
+      setSelectedCompanies((prev) =>
+        prev.filter((companyId) => companyId !== id)
+      );
+
+      // =====================================================
+      // 6. SUCCESS MESSAGE
+      // =====================================================
+
+      if (!emailWasSent) {
+        alert(
+          `Registration for ${company.company} has been reopened for review.\n\n` +
+            `The secure document upload link was successfully generated, ` +
+            `but the notification email could not be sent.`
+        );
+      } else {
+        alert(
+          `Registration for ${company.company} has been reopened for review.\n\n` +
+            `A secure document upload link has been generated and sent to ${company.email}.`
+        );
+      }
+    } catch (error) {
+      console.error("Reopen company failed:", error);
+
+      alert(
+        `The company could not be reopened.\n\n${
+          error?.message || "Please try again."
+        }`
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  // =========================================================
+  // VIEW DOCUMENT
+  // =========================================================
+
+  const viewDocument = async (document) => {
+    if (!document?.filePath) {
+      alert("This document is unavailable.");
+      return;
+    }
+
+    try {
+      const url = await getDocumentUrl(document.filePath);
+
+      if (!url) {
+        alert("Unable to generate a secure document link.");
+        return;
+      }
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Document viewing failed:", error);
+
+      alert("The document could not be opened.");
     }
   };
 
@@ -788,6 +1005,19 @@ const CompanyManagement = () => {
               system.
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={fetchCompanies}
+            disabled={loading}
+            className={`h-10 px-4 rounded-lg border text-xs font-semibold transition ${
+              darkMode
+                ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                : "border-slate-300 text-slate-700 hover:bg-slate-50"
+            } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {loading ? "Loading..." : "↻ Refresh"}
+          </button>
         </div>
       </div>
 
@@ -874,9 +1104,9 @@ const CompanyManagement = () => {
           <button
             type="button"
             onClick={approveSelected}
-            disabled={selectedCompanies.length === 0}
+            disabled={selectedCompanies.length === 0 || actionLoading}
             className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
-              selectedCompanies.length === 0
+              selectedCompanies.length === 0 || actionLoading
                 ? darkMode
                   ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -890,9 +1120,9 @@ const CompanyManagement = () => {
           <button
             type="button"
             onClick={openBulkRejectModal}
-            disabled={selectedCompanies.length === 0}
+            disabled={selectedCompanies.length === 0 || actionLoading}
             className={`h-10 px-4 rounded-lg text-xs font-semibold transition ${
-              selectedCompanies.length === 0
+              selectedCompanies.length === 0 || actionLoading
                 ? darkMode
                   ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -919,7 +1149,9 @@ const CompanyManagement = () => {
             </h2>
 
             <p className={`text-[10px] mt-0.5 ${muted}`}>
-              {filteredCompanies.length} companies found
+              {loading
+                ? "Loading companies..."
+                : `${filteredCompanies.length} companies found`}
             </p>
           </div>
 
@@ -945,6 +1177,7 @@ const CompanyManagement = () => {
                     type="checkbox"
                     checked={isAllSelected}
                     onChange={toggleSelectAll}
+                    disabled={loading}
                     className="cursor-pointer"
                     aria-label="Select pending companies"
                   />
@@ -993,7 +1226,21 @@ const CompanyManagement = () => {
             </thead>
 
             <tbody>
-              {filteredCompanies.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className={`px-4 py-16 text-center ${muted}`}>
+                    <div className="text-2xl mb-2 animate-pulse">🏢</div>
+
+                    <p className="text-sm font-semibold">
+                      Loading companies...
+                    </p>
+
+                    <p className="text-xs mt-1">
+                      Fetching registrations from Supabase.
+                    </p>
+                  </td>
+                </tr>
+              ) : filteredCompanies.length > 0 ? (
                 filteredCompanies.map((company) => {
                   const isSelected = selectedCompanies.includes(company.id);
 
@@ -1004,15 +1251,15 @@ const CompanyManagement = () => {
                         darkMode ? "hover:bg-slate-800/70" : "hover:bg-slate-50"
                       }`}
                     >
-                      {/* CHECKBOX */}
-
                       <td
                         className={`px-3 py-3 border-b text-center ${border}`}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          disabled={company.status !== "Pending Review"}
+                          disabled={
+                            company.status !== "Pending Review" || actionLoading
+                          }
                           onChange={() => toggleCompanySelection(company.id)}
                           className={`${
                             company.status === "Pending Review"
@@ -1022,8 +1269,6 @@ const CompanyManagement = () => {
                           aria-label={`Select ${company.company}`}
                         />
                       </td>
-
-                      {/* COMPANY */}
 
                       <td className={`px-3 py-3 border-b ${border}`}>
                         <div>
@@ -1036,8 +1281,6 @@ const CompanyManagement = () => {
                           </p>
                         </div>
                       </td>
-
-                      {/* CONTACT */}
 
                       <td className={`px-3 py-3 border-b ${border}`}>
                         <p
@@ -1053,8 +1296,6 @@ const CompanyManagement = () => {
                         </p>
                       </td>
 
-                      {/* INDUSTRY */}
-
                       <td
                         className={`px-3 py-3 border-b text-xs ${
                           darkMode
@@ -1064,8 +1305,6 @@ const CompanyManagement = () => {
                       >
                         {company.industry}
                       </td>
-
-                      {/* STATUS */}
 
                       <td
                         className={`px-3 py-3 border-b text-center ${border}`}
@@ -1078,8 +1317,6 @@ const CompanyManagement = () => {
                           {company.status}
                         </span>
                       </td>
-
-                      {/* ACTION */}
 
                       <td
                         className={`px-3 py-3 border-b text-center ${border}`}
@@ -1140,8 +1377,6 @@ const CompanyManagement = () => {
           <div
             className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${panel}`}
           >
-            {/* MODAL HEADER */}
-
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1165,7 +1400,7 @@ const CompanyManagement = () => {
                     </span>
 
                     <span className={`text-[10px] ${muted}`}>
-                      Company ID: {selectedCompany.id}
+                      Registration ID: {selectedCompany.id}
                     </span>
                   </div>
                 </div>
@@ -1184,8 +1419,6 @@ const CompanyManagement = () => {
                 </button>
               </div>
             </div>
-
-            {/* MODAL CONTENT */}
 
             <div className="p-5 space-y-6">
               {/* COMPANY DETAILS */}
@@ -1255,6 +1488,37 @@ const CompanyManagement = () => {
                       {selectedCompany.phone}
                     </p>
                   </div>
+
+                  <div className="sm:col-span-2">
+                    <p className={`text-[10px] uppercase font-bold ${muted}`}>
+                      Address
+                    </p>
+
+                    <p className={`text-sm font-medium mt-1 ${heading}`}>
+                      {selectedCompany.address || "Not provided"}
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <p className={`text-[10px] uppercase font-bold ${muted}`}>
+                      Website
+                    </p>
+
+                    {selectedCompany.website ? (
+                      <a
+                        href={selectedCompany.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-medium mt-1 text-blue-500 hover:underline break-all"
+                      >
+                        {selectedCompany.website}
+                      </a>
+                    ) : (
+                      <p className={`text-sm font-medium mt-1 ${muted}`}>
+                        Not provided
+                      </p>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -1278,41 +1542,57 @@ const CompanyManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  {selectedCompany.documents?.map((document, index) => (
-                    <div
-                      key={index}
-                      className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border ${border}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                            darkMode ? "bg-slate-800" : "bg-slate-100"
-                          }`}
-                        >
-                          📄
-                        </div>
-
-                        <div>
-                          <p className={`text-xs font-semibold ${heading}`}>
-                            {document.type}
-                          </p>
-
-                          <p className={`text-[10px] mt-0.5 ${muted}`}>
-                            {document.fileName}
-                          </p>
-                        </div>
-                      </div>
-
-                      <a
-                        href={document.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold text-center transition"
+                  {selectedCompany.documents?.length > 0 ? (
+                    selectedCompany.documents.map((document, index) => (
+                      <div
+                        key={index}
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border ${border}`}
                       >
-                        View File
-                      </a>
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                              darkMode ? "bg-slate-800" : "bg-slate-100"
+                            }`}
+                          >
+                            📄
+                          </div>
+
+                          <div>
+                            <p className={`text-xs font-semibold ${heading}`}>
+                              {document.type}
+                            </p>
+
+                            <p className={`text-[10px] mt-0.5 ${muted}`}>
+                              {document.fileName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => viewDocument(document)}
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold text-center transition"
+                        >
+                          View File
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div
+                      className={`rounded-xl border p-5 text-center ${border}`}
+                    >
+                      <div className="text-xl mb-2">📂</div>
+
+                      <p className={`text-xs font-semibold ${heading}`}>
+                        No documents submitted
+                      </p>
+
+                      <p className={`text-[10px] mt-1 ${muted}`}>
+                        This registration does not contain any uploaded
+                        verification documents.
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </section>
 
@@ -1338,20 +1618,6 @@ const CompanyManagement = () => {
                     >
                       {selectedCompany.rejectionReason}
                     </p>
-
-                    {selectedCompany.rejectionEmailSent && (
-                      <p
-                        className={`text-[10px] mt-2 ${
-                          darkMode ? "text-red-300" : "text-red-600"
-                        }`}
-                      >
-                        📧 Rejection notification sent to{" "}
-                        {selectedCompany.email}
-                        {selectedCompany.rejectionEmailSentAt
-                          ? ` on ${selectedCompany.rejectionEmailSentAt}`
-                          : "."}
-                      </p>
-                    )}
                   </section>
                 )}
 
@@ -1403,7 +1669,7 @@ const CompanyManagement = () => {
                 </section>
               )}
 
-              {/* NOTIFICATION STATUS */}
+              {/* ACCOUNT STATUS */}
 
               <section
                 className={`rounded-xl border p-4 ${
@@ -1413,110 +1679,26 @@ const CompanyManagement = () => {
                 }`}
               >
                 <p className={`text-[10px] uppercase font-bold ${muted}`}>
-                  Registration Notifications
-                </p>
-
-                <div className="grid sm:grid-cols-2 gap-3 mt-3">
-                  {/* REJECTION EMAIL */}
-
-                  <div
-                    className={`rounded-lg border p-3 ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
-                    }`}
-                  >
-                    <p className={`text-xs font-semibold ${heading}`}>
-                      Rejection Email
-                    </p>
-
-                    <p className="text-[10px] mt-1">
-                      <span
-                        className={
-                          selectedCompany.rejectionEmailSent
-                            ? "text-emerald-500"
-                            : muted
-                        }
-                      >
-                        {selectedCompany.rejectionEmailSent
-                          ? "✓ Sent"
-                          : "Not sent"}
-                      </span>
-                    </p>
-
-                    {selectedCompany.rejectionEmailSentAt && (
-                      <p className={`text-[10px] mt-1 ${muted}`}>
-                        {selectedCompany.rejectionEmailSentAt}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* REOPEN EMAIL */}
-
-                  <div
-                    className={`rounded-lg border p-3 ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
-                    }`}
-                  >
-                    <p className={`text-xs font-semibold ${heading}`}>
-                      Reopen Notification
-                    </p>
-
-                    <p className="text-[10px] mt-1">
-                      <span
-                        className={
-                          selectedCompany.reopenEmailSent
-                            ? "text-emerald-500"
-                            : muted
-                        }
-                      >
-                        {selectedCompany.reopenEmailSent
-                          ? "✓ Sent"
-                          : "Not sent"}
-                      </span>
-                    </p>
-
-                    {selectedCompany.reopenEmailSentAt && (
-                      <p className={`text-[10px] mt-1 ${muted}`}>
-                        {selectedCompany.reopenEmailSentAt}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* EMAIL STATUS */}
-
-              <section
-                className={`rounded-xl border p-4 ${
-                  darkMode
-                    ? "bg-slate-800/50 border-slate-700"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <p className={`text-[10px] uppercase font-bold ${muted}`}>
-                  Account Verification
+                  Account Status
                 </p>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2">
                   <div>
                     <p className={`text-xs font-semibold ${heading}`}>
-                      Email Verification
+                      Company Registration
                     </p>
 
                     <p className={`text-[10px] mt-0.5 ${muted}`}>
-                      Approval and email verification are separate steps.
+                      The registration status is stored directly in Supabase.
                     </p>
                   </div>
 
                   <span
-                    className={`text-[10px] font-bold ${
-                      selectedCompany.emailVerified
-                        ? "text-emerald-500"
-                        : "text-amber-500"
-                    }`}
+                    className={`text-[10px] font-bold ${getStatusStyle(
+                      selectedCompany.status
+                    )} px-2.5 py-1 rounded-full border`}
                   >
-                    {selectedCompany.emailVerified
-                      ? "Email Verified"
-                      : "Not Yet Verified"}
+                    {selectedCompany.status}
                   </span>
                 </div>
               </section>
@@ -1529,22 +1711,26 @@ const CompanyManagement = () => {
                 <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
                   <button
                     type="button"
+                    disabled={actionLoading}
                     onClick={() => openRejectModal(selectedCompany)}
                     className={`px-4 py-2.5 rounded-lg border text-xs font-semibold transition ${
                       darkMode
                         ? "border-red-800 text-red-400 hover:bg-red-950/40"
                         : "border-red-200 text-red-600 hover:bg-red-50"
-                    }`}
+                    } ${actionLoading ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     Reject Registration
                   </button>
 
                   <button
                     type="button"
+                    disabled={actionLoading}
                     onClick={() => approveCompany(selectedCompany.id)}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+                    className={`px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition ${
+                      actionLoading ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
                   >
-                    Approve Company
+                    {actionLoading ? "Processing..." : "Approve Company"}
                   </button>
                 </div>
               )}
@@ -1553,10 +1739,13 @@ const CompanyManagement = () => {
                 <div className="flex justify-end">
                   <button
                     type="button"
+                    disabled={actionLoading}
                     onClick={() => reopenCompany(selectedCompany.id)}
-                    className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                    className={`px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition ${
+                      actionLoading ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
                   >
-                    Reopen for Review & Notify
+                    {actionLoading ? "Processing..." : "Reopen for Review"}
                   </button>
                 </div>
               )}
@@ -1574,6 +1763,8 @@ const CompanyManagement = () => {
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => {
+              if (actionLoading) return;
+
               setShowBulkRejectModal(false);
               setBulkRejectReason("");
             }}
@@ -1599,7 +1790,8 @@ const CompanyManagement = () => {
 
                   <p className={`text-xs mt-1 ${muted}`}>
                     You are about to reject {selectedCompanies.length} selected
-                    registration{selectedCompanies.length === 1 ? "" : "s"}.
+                    registration
+                    {selectedCompanies.length === 1 ? "" : "s"}.
                   </p>
                 </div>
               </div>
@@ -1616,6 +1808,7 @@ const CompanyManagement = () => {
                 <p className={`text-xs font-semibold ${heading}`}>
                   Selected registrations
                 </p>
+
                 <p className={`text-[10px] mt-1 ${muted}`}>
                   All selected companies with Pending Review status will be
                   rejected using the same reason.
@@ -1644,30 +1837,11 @@ const CompanyManagement = () => {
 
                 <div className="flex justify-between mt-1">
                   <p className={`text-[10px] ${muted}`}>
-                    This reason will be included in the rejection notification.
+                    This reason will be recorded with the registration.
                   </p>
 
                   <p className={`text-[10px] ${muted}`}>
                     {bulkRejectReason.length}/500
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={`flex items-start gap-3 rounded-xl border p-3 ${
-                  darkMode
-                    ? "bg-slate-800/50 border-slate-700"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <span className="text-sm">📧</span>
-                <div>
-                  <p className={`text-xs font-semibold ${heading}`}>
-                    Companies will be notified
-                  </p>
-                  <p className={`text-[10px] mt-0.5 ${muted}`}>
-                    Each selected company representative will receive the
-                    rejection notification using this reason.
                   </p>
                 </div>
               </div>
@@ -1677,6 +1851,7 @@ const CompanyManagement = () => {
               <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
                 <button
                   type="button"
+                  disabled={actionLoading}
                   onClick={() => {
                     setShowBulkRejectModal(false);
                     setBulkRejectReason("");
@@ -1693,14 +1868,14 @@ const CompanyManagement = () => {
                 <button
                   type="button"
                   onClick={rejectSelected}
-                  disabled={!bulkRejectReason.trim()}
+                  disabled={!bulkRejectReason.trim() || actionLoading}
                   className={`px-4 py-2.5 rounded-lg text-xs font-semibold text-white transition ${
-                    !bulkRejectReason.trim()
+                    !bulkRejectReason.trim() || actionLoading
                       ? "bg-red-300 cursor-not-allowed"
                       : "bg-red-600 hover:bg-red-700"
                   }`}
                 >
-                  Reject Selected & Notify
+                  {actionLoading ? "Processing..." : "Reject Selected"}
                 </button>
               </div>
             </div>
@@ -1716,14 +1891,17 @@ const CompanyManagement = () => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowRejectModal(false)}
+            onClick={() => {
+              if (actionLoading) return;
+
+              setShowRejectModal(false);
+              setRejectReason("");
+            }}
           />
 
           <div
             className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${panel}`}
           >
-            {/* HEADER */}
-
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start gap-3">
                 <div
@@ -1740,18 +1918,14 @@ const CompanyManagement = () => {
                   </h2>
 
                   <p className={`text-xs mt-1 ${muted}`}>
-                    This will reject the company's registration and notify the
-                    representative by email.
+                    This will reject the company's registration and record the
+                    reason.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* CONTENT */}
-
             <div className="p-5 space-y-4">
-              {/* COMPANY */}
-
               <div
                 className={`rounded-xl border p-4 ${
                   darkMode
@@ -1774,8 +1948,6 @@ const CompanyManagement = () => {
                 </p>
               </div>
 
-              {/* EMAIL */}
-
               <div
                 className={`rounded-xl border p-4 ${
                   darkMode
@@ -1788,7 +1960,7 @@ const CompanyManagement = () => {
                     <p
                       className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
                     >
-                      Notification Email
+                      Registration Email
                     </p>
 
                     <p
@@ -1812,8 +1984,6 @@ const CompanyManagement = () => {
                 </div>
               </div>
 
-              {/* REASON */}
-
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${heading}`}
@@ -1836,7 +2006,7 @@ const CompanyManagement = () => {
 
                 <div className="flex justify-between mt-1">
                   <p className={`text-[10px] ${muted}`}>
-                    This message will be included in the rejection email.
+                    This reason will be stored with the registration.
                   </p>
 
                   <p className={`text-[10px] ${muted}`}>
@@ -1845,8 +2015,6 @@ const CompanyManagement = () => {
                 </div>
               </div>
 
-              {/* EMAIL NOTICE */}
-
               <div
                 className={`flex items-start gap-3 rounded-xl border p-3 ${
                   darkMode
@@ -1854,30 +2022,26 @@ const CompanyManagement = () => {
                     : "bg-slate-50 border-slate-200"
                 }`}
               >
-                <span className="text-sm">📧</span>
+                <span className="text-sm">ℹ️</span>
 
                 <div>
                   <p className={`text-xs font-semibold ${heading}`}>
-                    Company will be notified
+                    Registration status will be updated
                   </p>
 
                   <p className={`text-[10px] mt-0.5 ${muted}`}>
-                    The rejection reason will be sent to{" "}
-                    <span className="font-semibold">
-                      {selectedCompany.email}
-                    </span>
-                    .
+                    The company status will change from pending to rejected in
+                    Supabase.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* ACTIONS */}
-
             <div className={`p-5 border-t ${border}`}>
               <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
                 <button
                   type="button"
+                  disabled={actionLoading}
                   onClick={() => {
                     setShowRejectModal(false);
                     setRejectReason("");
@@ -1894,14 +2058,14 @@ const CompanyManagement = () => {
                 <button
                   type="button"
                   onClick={rejectCompany}
-                  disabled={!rejectReason.trim()}
+                  disabled={!rejectReason.trim() || actionLoading}
                   className={`px-4 py-2.5 rounded-lg text-xs font-semibold text-white transition ${
-                    !rejectReason.trim()
+                    !rejectReason.trim() || actionLoading
                       ? "bg-red-300 cursor-not-allowed"
                       : "bg-red-600 hover:bg-red-700"
                   }`}
                 >
-                  Reject & Notify Company
+                  {actionLoading ? "Processing..." : "Reject Registration"}
                 </button>
               </div>
             </div>

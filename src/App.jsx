@@ -27,6 +27,7 @@ import Footer from "./components/layout/Footer.jsx";
 
 import SignUp from "./pages/public/Signup.jsx";
 import Login from "./pages/public/Login.jsx";
+import ResetPassword from "./pages/public/ResetPassword";
 import TermsAndConditions from "./pages/public/Terms-&-Condition.jsx";
 import PrivacyPolicy from "./pages/public/Privacy-Policy.jsx";
 
@@ -67,14 +68,14 @@ import RegistrarSettings from "./pages/registrar/Settings.jsx";
 
 import CompanyDashboard from "./pages/company/Dashboard.jsx";
 import CompanyManageJobs from "./pages/company/ManageJobs.jsx";
-import CompanyManageApplication from "./pages/company/ManageApplications.jsx"
+import CompanyManageApplication from "./pages/company/ManageApplications.jsx";
 import CompanyInterns from "./pages/company/Interns.jsx";
 import CompanyEvaluate from "./pages/company/Evaluate.jsx";
 import CompanyFeedback from "./pages/company/Feedback.jsx";
 import CompanyNotification from "./pages/company/Notification.jsx";
 import CompanyMessages from "./pages/company/Messages.jsx";
 import CompanySettings from "./pages/company/Settings.jsx";
-
+import CompanyVerificationUpload from "./pages/company/VerificationUpload.jsx";
 
 // =========================================================
 // ADMIN PORTAL
@@ -84,7 +85,6 @@ import AdminLogin from "./pages/admin/Login.jsx";
 import AdminDashboard from "./pages/admin/Dashboard.jsx";
 import AdminProfile from "./pages/admin/Profile.jsx";
 import AdminUserManagement from "./pages/admin/UserManagement.jsx";
-import AdminReviewCreateRequests from "./pages/admin/ReviewCreateRequests.jsx";
 import AdminCompanyManagement from "./pages/admin/CompanyManagement.jsx";
 import AdminInternshipRecords from "./pages/admin/InternshipRecords.jsx";
 import AdminDocumentManagement from "./pages/admin/DocumentManagement.jsx";
@@ -205,6 +205,7 @@ function AppContent() {
 
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
 
@@ -263,6 +264,16 @@ function AppContent() {
           <Route path="messages" element={<RegistrarMessages />} />
           <Route path="settings" element={<RegistrarSettings />} />
         </Route>
+
+        {/* =====================================================
+    COMPANY VERIFICATION DOCUMENT UPLOAD
+    Public route accessed through secure email link
+===================================================== */}
+
+        <Route
+          path="/company/verification-upload"
+          element={<CompanyVerificationUpload />}
+        />
 
         {/* =====================================================
             COMPANY PORTAL

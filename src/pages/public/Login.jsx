@@ -1,11 +1,18 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 const Login = () => {
-  // Active role tab
+  // =========================================================
+  // ACTIVE ROLE TAB
+  // =========================================================
+
   const [activeRole, setActiveRole] = useState("student");
 
-  // Independent form states for each user role
+  // =========================================================
+  // FORM STATES
+  // =========================================================
+
   const [forms, setForms] = useState({
     student: {
       email: "",
@@ -23,35 +30,14 @@ const Login = () => {
     },
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const navigate = useNavigate();
 
   // =========================================================
-  // LOCAL DEMO CREDENTIALS
-  // Temporary credentials until real authentication is added.
-  // Login uses EMAIL + PASSWORD only.
+  // UPDATE FORM
   // =========================================================
 
-  const localCredentials = {
-    student: {
-      email: "student@gmail.com",
-      password: "password",
-      route: "/student/dashboard",
-    },
-
-    registrar: {
-      email: "registrar@gmail.com",
-      password: "password",
-      route: "/registrar/dashboard",
-    },
-
-    company: {
-      email: "company@gmail.com",
-      password: "password",
-      route: "/company/dashboard",
-    },
-  };
-
-  // Update the form based on the selected role
   const handleChange = (role, field, value) => {
     setForms((prev) => ({
       ...prev,
@@ -65,30 +51,244 @@ const Login = () => {
   // =========================================================
   // LOGIN
   // =========================================================
+  //
+  // Flow:
+  //
+  // Email + Password
+  //       ↓
+  // Supabase Auth
+  //       ↓
+  // Authenticated user
+  //       ↓
+  // public.users
+  //       ↓
+  // Check status
+  //       ↓
+  // Check role
+  //       ↓
+  // Redirect
+  //
+  // =========================================================
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     const currentForm = forms[activeRole];
-    const credentials = localCredentials[activeRole];
 
     const email = currentForm.email.trim().toLowerCase();
     const password = currentForm.password;
 
-    // Check email
-    if (email !== credentials.email.toLowerCase()) {
-      alert("Invalid email or password.");
+    if (!email || !password) {
+      alert("Please enter your email and password.");
       return;
     }
 
-    // Check password
-    if (password !== credentials.password) {
-      alert("Invalid email or password.");
-      return;
-    }
+    try {
+      setIsSubmitting(true);
 
-    // Successful login
-    navigate(credentials.route, { replace: true });
+      // =====================================================
+      // 1. AUTHENTICATE THROUGH SUPABASE AUTH
+      // =====================================================
+
+      const { data: authData, error: authError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+      if (authError) {
+        console.error("Login authentication error:", authError);
+
+        alert("Invalid email or password.");
+        return;
+      }
+
+      const authenticatedUser = authData?.user;
+
+      if (!authenticatedUser) {
+        alert("Unable to authenticate your account.");
+        return;
+      }
+
+      console.log("User authenticated successfully:", {
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+      });
+
+      // =====================================================
+      // 2. FETCH OFFICIAL USER RECORD
+      // =====================================================
+
+      const { data: userRecord, error: userError } = await supabase
+        .from("users")
+        .select(
+          `
+          id,
+          email,
+          role,
+          first_name,
+          middle_name,
+          last_name,
+          status
+        `
+        )
+        .eq("id", authenticatedUser.id)
+        .maybeSingle();
+
+      if (userError) {
+        console.error("Users table error:", userError);
+
+        // Sign out because the authenticated account does
+        // not have a valid SIMS user record.
+        await supabase.auth.signOut();
+
+        alert(
+          "Unable to load your SIMS account information. Please try again."
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // 3. MAKE SURE USERS RECORD EXISTS
+      // =====================================================
+
+      if (!userRecord) {
+        console.error(
+          "Authenticated account has no users table record:",
+          authenticatedUser.id
+        );
+
+        await supabase.auth.signOut();
+
+        alert(
+          "Your account has not been activated in SIMS yet. Please contact the administrator."
+        );
+
+        return;
+      }
+
+      console.log("SIMS user record:", userRecord);
+
+      // =====================================================
+      // 4. CHECK ACCOUNT STATUS
+      // =====================================================
+
+      const accountStatus = userRecord.status?.toLowerCase();
+
+      if (accountStatus !== "active") {
+        console.warn("Inactive SIMS account:", {
+          id: userRecord.id,
+          status: userRecord.status,
+        });
+
+        await supabase.auth.signOut();
+
+        if (accountStatus === "pending") {
+          alert(
+            "Your account is still pending approval. Please wait for the administrator to review your registration."
+          );
+        } else if (accountStatus === "rejected") {
+          alert(
+            "Your SIMS account is currently rejected. Please submit a new registration request."
+          );
+        } else {
+          alert(
+            "Your SIMS account is not currently active. Please contact the administrator."
+          );
+        }
+
+        return;
+      }
+
+      // =====================================================
+      // 5. CHECK SELECTED PORTAL ROLE
+      // =====================================================
+
+      const databaseRole = userRecord.role?.toLowerCase();
+
+      if (databaseRole !== activeRole) {
+        console.warn("Portal role mismatch:", {
+          selectedPortal: activeRole,
+          databaseRole,
+        });
+
+        await supabase.auth.signOut();
+
+        let expectedPortal = "the selected portal";
+
+        if (databaseRole === "student") {
+          expectedPortal = "Student";
+        } else if (databaseRole === "registrar") {
+          expectedPortal = "Registrar Adviser";
+        } else if (databaseRole === "company") {
+          expectedPortal = "Company Supervisor";
+        }
+
+        alert(
+          `This account belongs to the ${expectedPortal} portal. Please select the correct portal to continue.`
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // 6. DETERMINE DESTINATION
+      // =====================================================
+
+      let destination = "/";
+
+      switch (databaseRole) {
+        case "student":
+          destination = "/student/dashboard";
+          break;
+
+        case "registrar":
+          destination = "/registrar/dashboard";
+          break;
+
+        case "company":
+          destination = "/company/dashboard";
+          break;
+
+        default:
+          console.error("Unsupported user role:", databaseRole);
+
+          await supabase.auth.signOut();
+
+          alert(
+            "Your account has an unsupported SIMS role. Please contact the administrator."
+          );
+
+          return;
+      }
+
+      // =====================================================
+      // 7. SUCCESSFUL LOGIN
+      // =====================================================
+
+      console.log("Login successful:", {
+        id: userRecord.id,
+        email: userRecord.email,
+        role: userRecord.role,
+        status: userRecord.status,
+        destination,
+      });
+
+      navigate(destination, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Unexpected login error:", error);
+
+      alert("Something went wrong while signing in. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // =========================================================
@@ -114,6 +314,7 @@ const Login = () => {
             strokeLinejoin="round"
             d="M12 14l9-5-9-5-9 5 9 5z"
           />
+
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -168,14 +369,23 @@ const Login = () => {
     },
   ];
 
-  // Get the currently selected portal
+  // =========================================================
+  // ACTIVE PORTAL
+  // =========================================================
+
   const activePortal = portals.find((portal) => portal.key === activeRole);
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
       {/* Main Login Area */}
+
       <main className="flex-1 flex flex-col items-center justify-center py-30 px-4 max-w-3xl mx-auto w-full">
         {/* Page Heading */}
+
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
             Login to Your Account
@@ -188,17 +398,19 @@ const Login = () => {
         </div>
 
         {/* Role Tabs */}
+
         <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
           {portals.map((portal) => (
             <button
               key={portal.key}
               type="button"
               onClick={() => setActiveRole(portal.key)}
+              disabled={isSubmitting}
               className={`py-3 px-2 rounded-lg text-xs font-bold tracking-wider transition-all duration-200 uppercase ${
                 activeRole === portal.key
                   ? `bg-gradient-to-r ${portal.accent} text-white shadow-md scale-[1.02]`
                   : "text-slate-500 hover:text-slate-800 hover:bg-white"
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {portal.label}
             </button>
@@ -206,8 +418,10 @@ const Login = () => {
         </div>
 
         {/* Active Login Card */}
+
         <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full transition-all duration-300">
           {/* Portal Icon */}
+
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
               {activePortal.icon}
@@ -215,6 +429,7 @@ const Login = () => {
           </div>
 
           {/* Portal Header */}
+
           <h3 className="font-bold text-xl text-slate-800 text-center mb-1">
             {activePortal.label}
           </h3>
@@ -224,8 +439,10 @@ const Login = () => {
           </p>
 
           {/* Login Form */}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
+
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                 Email Address
@@ -234,16 +451,18 @@ const Login = () => {
               <input
                 type="email"
                 required
+                disabled={isSubmitting}
                 placeholder="Enter your email"
                 value={forms[activeRole].email}
                 onChange={(e) =>
                   handleChange(activeRole, "email", e.target.value)
                 }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
               />
             </div>
 
             {/* Password */}
+
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                 Password
@@ -252,35 +471,46 @@ const Login = () => {
               <input
                 type="password"
                 required
+                disabled={isSubmitting}
                 placeholder="••••••••"
                 value={forms[activeRole].password}
                 onChange={(e) =>
                   handleChange(activeRole, "password", e.target.value)
                 }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
               />
             </div>
 
             {/* Sign In Button */}
+
             <button
               type="submit"
-              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer`}
+              disabled={isSubmitting}
+              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              Sign In as {activePortal.label}
+              {isSubmitting
+                ? "Signing In..."
+                : `Sign In as ${activePortal.label}`}
             </button>
 
             {/* Forgot Password */}
+
             <div className="text-center">
-              <a
-                href="#"
-                className="text-xs font-semibold text-slate-400 hover:text-slate-800 hover:underline transition"
+              <button
+                type="button"
+                onClick={() =>
+                  alert("Password recovery will be available soon.")
+                }
+                disabled={isSubmitting}
+                className="text-xs font-semibold text-slate-400 hover:text-slate-800 hover:underline transition disabled:opacity-50"
               >
                 Forgot Password?
-              </a>
+              </button>
             </div>
           </form>
 
           {/* Sign Up Redirect */}
+
           <div className="border-t border-slate-100 mt-8 pt-6 text-center">
             <p className="text-sm text-slate-500">
               Don't have an account?{" "}
@@ -295,6 +525,7 @@ const Login = () => {
         </div>
 
         {/* Footer */}
+
         <footer className="mt-8 text-center text-xs text-slate-400">
           © 2026 SIMS |{" "}
           <Link to="/privacy" className="hover:text-slate-700">

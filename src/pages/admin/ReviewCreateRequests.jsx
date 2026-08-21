@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
-const STORAGE_KEY = "sims_create_requests";
+import { supabase } from "../../supabaseClient";
 
 const ReviewCreateRequests = () => {
   const { darkMode } = useOutletContext();
@@ -9,11 +8,82 @@ const ReviewCreateRequests = () => {
   const [requests, setRequests] = useState([]);
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+
   const [selectedRequest, setSelectedRequest] = useState(null);
+
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
+
   const [rejectionReason, setRejectionReason] = useState("");
+
   const [notification, setNotification] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // =========================================================
+  // NORMALIZE SUPABASE REQUEST
+  // =========================================================
+  // Supabase uses snake_case.
+  // React UI uses camelCase.
+  //
+  // Every request entering React state passes through this
+  // function so the rest of the component always works with
+  // one consistent data structure.
+  // =========================================================
+
+  const formatRequest = (request) => {
+    if (!request) return null;
+
+    return {
+      id: request.id,
+
+      userId: request.user_id ?? request.userId ?? null,
+
+      role: request.role ?? "",
+
+      status: (request.status ?? "pending").toLowerCase(),
+
+      firstName: request.first_name ?? request.firstName ?? "",
+      middleInitial: request.middle_initial ?? request.middleInitial ?? "",
+      lastName: request.last_name ?? request.lastName ?? "",
+
+      email: request.email ?? "",
+      phone: request.phone ?? "",
+
+      studentId: request.student_id ?? request.studentId ?? "",
+      employeeId: request.employee_id ?? request.employeeId ?? "",
+
+      department: request.department ?? "",
+      program: request.program ?? "",
+      yearLevel: request.year_level ?? request.yearLevel ?? "",
+      position: request.position ?? "",
+
+      corUrl: request.cor_url ?? request.corUrl ?? null,
+
+      studentIdDocumentUrl:
+        request.student_id_document_url ?? request.studentIdDocumentUrl ?? null,
+
+      employeeIdDocumentUrl:
+        request.employee_id_document_url ??
+        request.employeeIdDocumentUrl ??
+        null,
+
+      appointmentLetterUrl:
+        request.appointment_letter_url ?? request.appointmentLetterUrl ?? null,
+
+      rejectionReason:
+        request.rejection_reason ?? request.rejectionReason ?? null,
+
+      reviewedBy: request.reviewed_by ?? request.reviewedBy ?? null,
+
+      reviewedAt: request.reviewed_at ?? request.reviewedAt ?? null,
+
+      createdAt: request.created_at ?? request.createdAt ?? null,
+
+      updatedAt: request.updated_at ?? request.updatedAt ?? null,
+    };
+  };
 
   // =========================================================
   // LOAD REQUESTS
@@ -23,35 +93,66 @@ const ReviewCreateRequests = () => {
     loadRequests();
   }, []);
 
-  const loadRequests = () => {
-    try {
-      const storedRequests = localStorage.getItem(STORAGE_KEY);
+  const loadRequests = async () => {
+    setLoading(true);
 
-      if (!storedRequests) {
+    try {
+      console.log("🔍 Loading create_requests...");
+
+      const { data, error } = await supabase
+        .from("create_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      console.log("📦 SUPABASE RAW DATA:", data);
+      console.log("❌ SUPABASE ERROR:", error);
+
+      if (error) {
+        showNotification(
+          `Failed to load registration requests: ${error.message}`,
+          "error"
+        );
+
         setRequests([]);
         return;
       }
 
-      const parsedRequests = JSON.parse(storedRequests);
+      console.log("📊 Number of requests:", data?.length || 0);
 
-      if (Array.isArray(parsedRequests)) {
-        setRequests(parsedRequests);
-      } else {
-        setRequests([]);
-      }
+      // =====================================================
+      // IMPORTANT:
+      // Normalize every Supabase row before storing it.
+      //
+      // BEFORE:
+      // request.first_name
+      // request.last_name
+      // request.student_id
+      // request.created_at
+      //
+      // AFTER:
+      // request.firstName
+      // request.lastName
+      // request.studentId
+      // request.createdAt
+      // =====================================================
+
+      const formattedRequests = (data || []).map(formatRequest).filter(Boolean);
+
+      console.log("✅ FORMATTED REQUESTS:", formattedRequests);
+
+      setRequests(formattedRequests);
     } catch (error) {
-      console.error("Failed to load create requests:", error);
+      console.error("💥 LOAD ERROR:", error);
+
+      showNotification(
+        "Something went wrong while loading registration requests.",
+        "error"
+      );
+
       setRequests([]);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  // =========================================================
-  // SAVE REQUESTS
-  // =========================================================
-
-  const saveRequests = (updatedRequests) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRequests));
-    setRequests(updatedRequests);
   };
 
   // =========================================================
@@ -66,7 +167,7 @@ const ReviewCreateRequests = () => {
 
     setTimeout(() => {
       setNotification(null);
-    }, 3500);
+    }, 4000);
   };
 
   // =========================================================
@@ -86,10 +187,14 @@ const ReviewCreateRequests = () => {
         (activeFilter === "approved" && status === "approved") ||
         (activeFilter === "rejected" && status === "rejected");
 
+      if (!matchesFilter) {
+        return false;
+      }
+
       const searchValue = searchTerm.toLowerCase().trim();
 
       if (!searchValue) {
-        return matchesFilter;
+        return true;
       }
 
       const fullName = [
@@ -102,16 +207,15 @@ const ReviewCreateRequests = () => {
         .toLowerCase();
 
       const identifier =
-        request.role === "student"
-          ? request.studentId || ""
-          : request.employeeId || "";
+        role === "student" ? request.studentId || "" : request.employeeId || "";
 
-      const matchesSearch =
+      const email = request.email?.toLowerCase() || "";
+
+      return (
         fullName.includes(searchValue) ||
-        request.email?.toLowerCase().includes(searchValue) ||
-        identifier.toLowerCase().includes(searchValue);
-
-      return matchesFilter && matchesSearch;
+        email.includes(searchValue) ||
+        identifier.toLowerCase().includes(searchValue)
+      );
     });
   }, [requests, activeFilter, searchTerm]);
 
@@ -121,15 +225,15 @@ const ReviewCreateRequests = () => {
 
   const statistics = useMemo(() => {
     const studentRequests = requests.filter(
-      (request) => request.role === "student"
+      (request) => request.role?.toLowerCase() === "student"
     );
 
     const registrarRequests = requests.filter(
-      (request) => request.role === "registrar"
+      (request) => request.role?.toLowerCase() === "registrar"
     );
 
     const pendingRequests = requests.filter(
-      (request) => request.status === "pending"
+      (request) => request.status?.toLowerCase() === "pending"
     );
 
     return {
@@ -150,39 +254,130 @@ const ReviewCreateRequests = () => {
   };
 
   // =========================================================
-  // APPROVE
+  // APPROVE REQUEST
   // =========================================================
 
-  const handleApprove = () => {
-    if (!selectedRequest) return;
+  const handleApprove = async () => {
+    if (!selectedRequest || actionLoading) return;
 
-    const reviewedAt = new Date().toISOString();
+    try {
+      setActionLoading(true);
 
-    const updatedRequests = requests.map((request) =>
-      request.id === selectedRequest.id
-        ? {
-            ...request,
+      console.log("🚀 Approving registration request:", selectedRequest.id);
+
+      // =====================================================
+      // CALL APPROVE REGISTRATION EDGE FUNCTION
+      // =====================================================
+
+      const { data, error } = await supabase.functions.invoke(
+        "approve-registration",
+        {
+          body: {
+            requestId: selectedRequest.id,
+          },
+        }
+      );
+
+      console.log("📦 APPROVE FUNCTION RESPONSE:", data);
+      console.log("❌ APPROVE FUNCTION ERROR:", error);
+
+      if (error) {
+        console.error("Approval Edge Function error:", error);
+
+        showNotification(
+          `Failed to approve request: ${error.message}`,
+          "error"
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // HANDLE EDGE FUNCTION ERROR RESPONSE
+      // =====================================================
+
+      if (!data?.success) {
+        showNotification(
+          data?.error || "Failed to approve registration request.",
+          "error"
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // FORMAT UPDATED REQUEST
+      // =====================================================
+
+      const formattedRequest = data.request
+        ? formatRequest(data.request)
+        : {
+            ...selectedRequest,
             status: "approved",
-            reviewedAt,
             rejectionReason: null,
-          }
-        : request
-    );
+            reviewedAt: new Date().toISOString(),
+          };
 
-    saveRequests(updatedRequests);
+      // =====================================================
+      // SEND APPROVAL EMAIL
+      // =====================================================
 
-    setSelectedRequest({
-      ...selectedRequest,
-      status: "approved",
-      reviewedAt,
-      rejectionReason: null,
-    });
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: formattedRequest.email,
+            name: getFullName(formattedRequest),
+            type: "approved",
+          },
+        });
 
-    setShowReviewModal(false);
+      if (emailError) {
+        console.error("📧 Approval email error:", emailError);
 
-    showNotification(
-      `${getFullName(selectedRequest)}'s registration has been approved.`
-    );
+        showNotification(
+          `Registration approved, but the approval email could not be sent: ${emailError.message}`,
+          "error"
+        );
+      } else {
+        console.log("📧 Approval email sent:", emailData);
+      }
+
+      // =====================================================
+      // UPDATE LOCAL REQUEST STATE
+      // =====================================================
+
+      setRequests((currentRequests) =>
+        currentRequests.map((request) =>
+          request.id === formattedRequest.id ? formattedRequest : request
+        )
+      );
+
+      setSelectedRequest(formattedRequest);
+
+      setShowReviewModal(false);
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+
+      showNotification(
+        `${getFullName(
+          formattedRequest
+        )}'s registration has been approved and their account has been activated.`
+      );
+
+      console.log("✅ Registration approval completed successfully.");
+      console.log("👤 Auth/User ID:", data.userId);
+    } catch (error) {
+      console.error("💥 Unexpected approval error:", error);
+
+      showNotification(
+        "An unexpected error occurred while approving the request.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // =========================================================
@@ -195,47 +390,135 @@ const ReviewCreateRequests = () => {
   };
 
   // =========================================================
-  // REJECT
+  // REJECT REQUEST
   // =========================================================
 
-  const handleReject = () => {
+  const handleReject = async () => {
     const reason = rejectionReason.trim();
 
-    if (!reason) {
+    if (!reason || !selectedRequest || actionLoading) {
       return;
     }
 
-    if (!selectedRequest) return;
+    try {
+      setActionLoading(true);
 
-    const reviewedAt = new Date().toISOString();
+      console.log("🚫 Rejecting registration request:", selectedRequest.id);
 
-    const updatedRequests = requests.map((request) =>
-      request.id === selectedRequest.id
-        ? {
-            ...request,
-            status: "rejected",
-            rejectionReason: reason,
-            reviewedAt,
-          }
-        : request
-    );
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    saveRequests(updatedRequests);
+      const reviewedAt = new Date().toISOString();
 
-    setSelectedRequest({
-      ...selectedRequest,
-      status: "rejected",
-      rejectionReason: reason,
-      reviewedAt,
-    });
+      const updateData = {
+        status: "rejected",
+        rejection_reason: reason,
+        reviewed_at: reviewedAt,
+      };
 
-    setShowRejectModal(false);
-    setShowReviewModal(false);
+      if (user?.id) {
+        updateData.reviewed_by = user.id;
+      }
 
-    showNotification(
-      `${getFullName(selectedRequest)}'s registration has been rejected.`,
-      "error"
-    );
+      // =====================================================
+      // UPDATE REQUEST
+      // =====================================================
+
+      const { error } = await supabase
+        .from("create_requests")
+        .update(updateData)
+        .eq("id", selectedRequest.id);
+
+      if (error) {
+        console.error("❌ Rejection update error:", error);
+
+        showNotification(`Failed to reject request: ${error.message}`, "error");
+
+        return;
+      }
+
+      console.log("✅ Registration request rejected in database.");
+
+      // =====================================================
+      // CREATE UPDATED LOCAL REQUEST
+      // =====================================================
+
+      const formattedRequest = formatRequest({
+        ...selectedRequest,
+        status: "rejected",
+        rejection_reason: reason,
+        reviewed_by: user?.id ?? selectedRequest.reviewedBy ?? null,
+        reviewed_at: reviewedAt,
+        updated_at: reviewedAt,
+      });
+
+      console.log("📦 UPDATED REQUEST:", formattedRequest);
+
+      // =====================================================
+      // SEND REJECTION EMAIL
+      // =====================================================
+
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: formattedRequest.email,
+            name: getFullName(formattedRequest),
+            type: "rejected",
+            reason: reason,
+          },
+        });
+
+      if (emailError) {
+        console.error("📧 Rejection email error:", emailError);
+
+        showNotification(
+          `Request rejected, but the rejection email could not be sent: ${emailError.message}`,
+          "error"
+        );
+      } else {
+        console.log("📧 Rejection email sent:", emailData);
+      }
+
+      // =====================================================
+      // UPDATE LOCAL STATE
+      // =====================================================
+
+      setRequests((currentRequests) =>
+        currentRequests.map((request) =>
+          request.id === formattedRequest.id ? formattedRequest : request
+        )
+      );
+
+      setSelectedRequest(formattedRequest);
+
+      // =====================================================
+      // CLOSE MODALS
+      // =====================================================
+
+      setShowRejectModal(false);
+      setShowReviewModal(false);
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+
+      showNotification(
+        `${getFullName(formattedRequest)}'s registration has been rejected.`,
+        "error"
+      );
+
+      console.log("✅ Registration rejection completed successfully.");
+    } catch (error) {
+      console.error("💥 Unexpected rejection error:", error);
+
+      showNotification(
+        "An unexpected error occurred while rejecting the request.",
+        "error"
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // =========================================================
@@ -243,13 +526,20 @@ const ReviewCreateRequests = () => {
   // =========================================================
 
   const getFullName = (request) => {
-    return [request.firstName, request.middleInitial, request.lastName]
+    if (!request) return "Unknown User";
+
+    const name = [request.firstName, request.middleInitial, request.lastName]
       .filter(Boolean)
-      .join(" ");
+      .join(" ")
+      .trim();
+
+    return name || "Unknown User";
   };
 
   const getIdentifier = (request) => {
-    if (request.role === "student") {
+    if (!request) return "—";
+
+    if (request.role?.toLowerCase() === "student") {
       return request.studentId || "—";
     }
 
@@ -257,14 +547,21 @@ const ReviewCreateRequests = () => {
   };
 
   const getRoleLabel = (role) => {
-    if (role === "student") return "Student";
-    if (role === "registrar") return "Registrar Adviser";
+    const normalizedRole = role?.toLowerCase();
+
+    if (normalizedRole === "student") {
+      return "Student";
+    }
+
+    if (normalizedRole === "registrar") {
+      return "Registrar Adviser";
+    }
 
     return role || "Unknown";
   };
 
   const getStatusClasses = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case "pending":
         return darkMode
           ? "bg-amber-950/50 text-amber-300 border-amber-800"
@@ -288,7 +585,7 @@ const ReviewCreateRequests = () => {
   };
 
   const getRoleClasses = (role) => {
-    if (role === "student") {
+    if (role?.toLowerCase() === "student") {
       return darkMode
         ? "bg-blue-950/50 text-blue-300"
         : "bg-blue-50 text-blue-700";
@@ -333,92 +630,91 @@ const ReviewCreateRequests = () => {
     });
   };
 
-  const getDocumentData = (request, documentKey) => {
-    const document = request.documents?.[documentKey];
+  // =========================================================
+  // DOCUMENT HELPERS
+  // =========================================================
 
-    if (!document) {
+  const getDocumentData = (request, documentKey) => {
+    if (!request) return null;
+
+    const documentMap = {
+      cor: {
+        name: "Certificate of Registration",
+        url: request.corUrl,
+      },
+
+      studentIdDocument: {
+        name: "Student ID",
+        url: request.studentIdDocumentUrl,
+      },
+
+      employeeIdDocument: {
+        name: "University / Employee ID",
+        url: request.employeeIdDocumentUrl,
+      },
+
+      appointmentLetter: {
+        name: "Proof of Appointment / Authorization Letter",
+        url: request.appointmentLetterUrl,
+      },
+    };
+
+    const document = documentMap[documentKey];
+
+    if (!document?.url) {
       return null;
     }
 
-    if (typeof document === "string") {
-      return {
-        name: document,
-        url: document,
-      };
-    }
-
-    return {
-      name: document.name || "Uploaded Document",
-      url: document.url || null,
-      type: document.type || "",
-    };
+    return document;
   };
 
   // =========================================================
   // DOCUMENT VIEW
   // =========================================================
 
-  const handleViewDocument = (document) => {
-    if (!document) return;
+  const handleViewDocument = async (document) => {
+    if (!document?.url) {
+      showNotification(
+        "This document does not have a valid storage path.",
+        "error"
+      );
 
-    if (document.url) {
-      window.open(document.url, "_blank", "noopener,noreferrer");
       return;
     }
 
-    showNotification(
-      "This document does not have a preview URL yet. File storage will be connected when the backend is implemented.",
-      "error"
-    );
+    console.log("📄 DOCUMENT DATA:", document);
+    console.log("📁 STORAGE PATH:", document.url);
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("verification-documents")
+        .createSignedUrl(document.url, 300);
+
+      console.log("🔗 SIGNED URL DATA:", data);
+      console.log("❌ SIGNED URL ERROR:", error);
+
+      if (error) {
+        showNotification(`Unable to open document: ${error.message}`, "error");
+
+        return;
+      }
+
+      if (!data?.signedUrl) {
+        showNotification("Unable to generate a document preview URL.", "error");
+
+        return;
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("💥 Document preview error:", error);
+
+      showNotification(
+        "Something went wrong while opening the document.",
+        "error"
+      );
+    }
   };
-
-  // =========================================================
-  // EMPTY STATE
-  // =========================================================
-
-  const renderEmptyState = () => (
-    <div className="py-20 text-center">
-      <div
-        className={`w-16 h-16 mx-auto mb-5 rounded-2xl flex items-center justify-center ${
-          darkMode ? "bg-slate-800" : "bg-slate-100"
-        }`}
-      >
-        <svg
-          className={`w-7 h-7 ${
-            darkMode ? "text-slate-500" : "text-slate-400"
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"
-          />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
-        </svg>
-      </div>
-
-      <h3
-        className={`text-sm font-bold ${
-          darkMode ? "text-slate-200" : "text-slate-800"
-        }`}
-      >
-        No registration requests found
-      </h3>
-
-      <p
-        className={`text-xs mt-2 max-w-sm mx-auto ${
-          darkMode ? "text-slate-500" : "text-slate-400"
-        }`}
-      >
-        New Student and Registrar account creation requests will appear here
-        after they submit the registration form.
-      </p>
-    </div>
-  );
 
   // =========================================================
   // DOCUMENT ROW
@@ -455,6 +751,7 @@ const ReviewCreateRequests = () => {
                 strokeLinejoin="round"
                 d="M7 3h7l5 5v13H7a2 2 0 01-2-2V5a2 2 0 012-2z"
               />
+
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -500,6 +797,55 @@ const ReviewCreateRequests = () => {
   };
 
   // =========================================================
+  // EMPTY STATE
+  // =========================================================
+
+  const renderEmptyState = () => (
+    <div className="py-20 text-center">
+      <div
+        className={`w-16 h-16 mx-auto mb-5 rounded-2xl flex items-center justify-center ${
+          darkMode ? "bg-slate-800" : "bg-slate-100"
+        }`}
+      >
+        <svg
+          className={`w-7 h-7 ${
+            darkMode ? "text-slate-500" : "text-slate-400"
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"
+          />
+
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+        </svg>
+      </div>
+
+      <h3
+        className={`text-sm font-bold ${
+          darkMode ? "text-slate-200" : "text-slate-800"
+        }`}
+      >
+        No registration requests found
+      </h3>
+
+      <p
+        className={`text-xs mt-2 max-w-sm mx-auto ${
+          darkMode ? "text-slate-500" : "text-slate-400"
+        }`}
+      >
+        New Student and Registrar account creation requests will appear here
+        after they submit the registration form.
+      </p>
+    </div>
+  );
+
+  // =========================================================
   // REVIEW MODAL
   // =========================================================
 
@@ -508,8 +854,9 @@ const ReviewCreateRequests = () => {
       return null;
     }
 
-    const isStudent = selectedRequest.role === "student";
-    const isPending = selectedRequest.status === "pending";
+    const isStudent = selectedRequest.role?.toLowerCase() === "student";
+
+    const isPending = selectedRequest.status?.toLowerCase() === "pending";
 
     const studentDocuments = {
       cor: getDocumentData(selectedRequest, "cor"),
@@ -528,7 +875,11 @@ const ReviewCreateRequests = () => {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
-          onClick={() => setShowReviewModal(false)}
+          onClick={() => {
+            if (!actionLoading) {
+              setShowReviewModal(false);
+            }
+          }}
         />
 
         <div
@@ -536,7 +887,7 @@ const ReviewCreateRequests = () => {
             darkMode ? "bg-slate-900 text-slate-100" : "bg-white text-slate-900"
           }`}
         >
-          {/* MODAL HEADER */}
+          {/* HEADER */}
 
           <div
             className={`px-6 py-5 border-b flex items-center justify-between ${
@@ -573,12 +924,13 @@ const ReviewCreateRequests = () => {
 
             <button
               type="button"
+              disabled={actionLoading}
               onClick={() => setShowReviewModal(false)}
               className={`w-9 h-9 rounded-lg flex items-center justify-center transition ${
                 darkMode
                   ? "text-slate-400 hover:bg-slate-800 hover:text-white"
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              }`}
+              } disabled:opacity-40`}
             >
               <svg
                 className="w-5 h-5"
@@ -596,7 +948,7 @@ const ReviewCreateRequests = () => {
             </button>
           </div>
 
-          {/* MODAL BODY */}
+          {/* BODY */}
 
           <div
             className={`overflow-y-auto max-h-[calc(90vh-150px)] p-6 space-y-6 ${
@@ -810,7 +1162,7 @@ const ReviewCreateRequests = () => {
 
             {/* REJECTION REASON */}
 
-            {selectedRequest.status === "rejected" &&
+            {selectedRequest.status?.toLowerCase() === "rejected" &&
               selectedRequest.rejectionReason && (
                 <section
                   className={`border rounded-xl p-4 ${
@@ -850,7 +1202,7 @@ const ReviewCreateRequests = () => {
             )}
           </div>
 
-          {/* MODAL FOOTER */}
+          {/* FOOTER */}
 
           {isPending && (
             <div
@@ -862,22 +1214,24 @@ const ReviewCreateRequests = () => {
             >
               <button
                 type="button"
+                disabled={actionLoading}
                 onClick={handleOpenReject}
                 className={`px-5 py-2.5 rounded-xl border text-xs font-bold transition ${
                   darkMode
                     ? "border-red-900 bg-slate-900 text-red-400 hover:bg-red-950"
                     : "border-red-200 bg-white text-red-600 hover:bg-red-50"
-                }`}
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
-                Reject Request
+                {actionLoading ? "Processing..." : "Reject Request"}
               </button>
 
               <button
                 type="button"
+                disabled={actionLoading}
                 onClick={handleApprove}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
               >
-                Approve Request
+                {actionLoading ? "Approving..." : "Approve Request"}
               </button>
             </div>
           )}
@@ -899,7 +1253,11 @@ const ReviewCreateRequests = () => {
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <div
           className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
-          onClick={() => setShowRejectModal(false)}
+          onClick={() => {
+            if (!actionLoading) {
+              setShowRejectModal(false);
+            }
+          }}
         />
 
         <div
@@ -968,11 +1326,12 @@ const ReviewCreateRequests = () => {
               value={rejectionReason}
               onChange={(event) => setRejectionReason(event.target.value)}
               rows={5}
+              disabled={actionLoading}
               placeholder="Example: Please upload a clearer copy of your Student ID."
               className={`w-full resize-none rounded-xl border px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-300 transition ${
                 darkMode
-                  ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500 focus:bg-slate-800"
-                  : "bg-slate-50 border-slate-200 text-slate-700 focus:bg-white"
+                  ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500"
+                  : "bg-slate-50 border-slate-200 text-slate-700"
               }`}
             />
 
@@ -989,23 +1348,24 @@ const ReviewCreateRequests = () => {
           <div className="flex gap-3 justify-end mt-6">
             <button
               type="button"
+              disabled={actionLoading}
               onClick={() => setShowRejectModal(false)}
               className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                 darkMode
                   ? "border-slate-700 text-slate-300 hover:bg-slate-800"
                   : "border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}
+              } disabled:opacity-40`}
             >
               Cancel
             </button>
 
             <button
               type="button"
-              disabled={!rejectionReason.trim()}
+              disabled={!rejectionReason.trim() || actionLoading}
               onClick={handleReject}
               className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              Confirm Rejection
+              {actionLoading ? "Rejecting..." : "Confirm Rejection"}
             </button>
           </div>
         </div>
@@ -1023,9 +1383,7 @@ const ReviewCreateRequests = () => {
         darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
-      {/* =====================================================
-          NOTIFICATION
-      ===================================================== */}
+      {/* NOTIFICATION */}
 
       {notification && (
         <div
@@ -1051,9 +1409,7 @@ const ReviewCreateRequests = () => {
         </div>
       )}
 
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
+      {/* PAGE HEADER */}
 
       <div
         className={`border-b transition-colors duration-300 ${
@@ -1072,6 +1428,7 @@ const ReviewCreateRequests = () => {
               >
                 <span>Administration</span>
                 <span>/</span>
+
                 <span
                   className={darkMode ? "text-slate-300" : "text-slate-600"}
                 >
@@ -1100,14 +1457,15 @@ const ReviewCreateRequests = () => {
             <button
               type="button"
               onClick={loadRequests}
+              disabled={loading}
               className={`self-start lg:self-center flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                 darkMode
                   ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
                   : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
+              } disabled:opacity-50`}
             >
               <svg
-                className="w-4 h-4"
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1119,20 +1477,17 @@ const ReviewCreateRequests = () => {
                   d="M4 4v5h5M20 20v-5h-5M5.05 9A7 7 0 0117.95 6.05L20 9M19 15a7 7 0 01-12.95 2.95L4 15"
                 />
               </svg>
-              Refresh
+
+              {loading ? "Loading..." : "Refresh"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* =====================================================
-          CONTENT
-      ===================================================== */}
+      {/* CONTENT */}
 
       <main className="p-6 md:p-8">
-        {/* ===================================================
-            STATISTICS
-        =================================================== */}
+        {/* STATISTICS */}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
@@ -1184,9 +1539,7 @@ const ReviewCreateRequests = () => {
           />
         </div>
 
-        {/* ===================================================
-            TABLE CARD
-        =================================================== */}
+        {/* TABLE CARD */}
 
         <div
           className={`rounded-2xl shadow-sm overflow-hidden border transition-colors ${
@@ -1203,8 +1556,6 @@ const ReviewCreateRequests = () => {
             }`}
           >
             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-              {/* FILTERS */}
-
               <div className="flex flex-wrap gap-2">
                 <FilterButton
                   label="All"
@@ -1249,8 +1600,6 @@ const ReviewCreateRequests = () => {
                 />
               </div>
 
-              {/* SEARCH */}
-
               <div className="relative w-full xl:w-72">
                 <svg
                   className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
@@ -1275,19 +1624,37 @@ const ReviewCreateRequests = () => {
                   placeholder="Search name, email, or ID..."
                   className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs transition ${
                     darkMode
-                      ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500 focus:bg-slate-800 focus:ring-slate-600"
-                      : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400 focus:bg-white focus:ring-slate-200"
-                  } focus:outline-none focus:ring-2`}
+                      ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500"
+                      : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400"
+                  } focus:outline-none focus:ring-2 ${
+                    darkMode ? "focus:ring-slate-600" : "focus:ring-slate-200"
+                  }`}
                 />
               </div>
             </div>
           </div>
 
-          {/* =================================================
-              TABLE
-          ================================================= */}
+          {/* LOADING */}
 
-          {filteredRequests.length === 0 ? (
+          {loading ? (
+            <div className="py-20 text-center">
+              <div
+                className={`w-10 h-10 mx-auto rounded-full border-4 animate-spin ${
+                  darkMode
+                    ? "border-slate-700 border-t-slate-300"
+                    : "border-slate-200 border-t-slate-700"
+                }`}
+              />
+
+              <p
+                className={`text-xs font-semibold mt-4 ${
+                  darkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
+                Loading registration requests...
+              </p>
+            </div>
+          ) : filteredRequests.length === 0 ? (
             renderEmptyState()
           ) : (
             <>
@@ -1459,9 +1826,7 @@ const ReviewCreateRequests = () => {
                 </table>
               </div>
 
-              {/* =================================================
-                  MOBILE CARDS
-              ================================================= */}
+              {/* MOBILE */}
 
               <div
                 className={`md:hidden ${
@@ -1607,7 +1972,7 @@ const MobileInfo = ({ label, value, darkMode }) => {
           darkMode ? "text-slate-300" : "text-slate-600"
         }`}
       >
-        {value}
+        {value || "—"}
       </p>
     </div>
   );

@@ -1,74 +1,141 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
 
   // =========================================================
-  // MOCK AUTH SERVICE
-  // =========================================================
-  const login = (role, email, password) => {
-    // Return ok: true so result.ok evaluates correctly in handleSubmit
-    return { ok: true };
-  };
-
-  // =========================================================
   // STATE
   // =========================================================
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
   const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // =========================================================
-  // DEMO ADMIN ACCOUNT
-  // =========================================================
-  const adminAccount = { email: "admin@gmail.com", password: "password" };
-
-  // =========================================================
   // HANDLE INPUT
   // =========================================================
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+
     setErrorMessage("");
   };
 
   // =========================================================
   // HANDLE LOGIN
   // =========================================================
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     setErrorMessage("");
 
-    if (!formData.email || !formData.password) {
+    const email = formData.email.trim();
+    const password = formData.password;
+
+    // ---------------------------------------------------------
+    // BASIC VALIDATION
+    // ---------------------------------------------------------
+
+    if (!email || !password) {
       setErrorMessage("Please enter your email and password.");
       return;
     }
 
-    if (
-      formData.email === adminAccount.email &&
-      formData.password === adminAccount.password
-    ) {
-      setIsLoading(true);
+    setIsLoading(true);
 
-      setTimeout(() => {
-        const result = login("admin", formData.email.trim(), formData.password);
+    try {
+      // -------------------------------------------------------
+      // SIGN IN THROUGH SUPABASE AUTH
+      // -------------------------------------------------------
 
-        if (result?.ok) {
-          navigate("/admin/dashboard", { replace: true });
-        } else {
-          setErrorMessage("Invalid administrator credentials.");
-        }
-        setIsLoading(false);
-      }, 500);
-    } else {
-      setErrorMessage("Invalid administrator credentials.");
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error("Admin login error:", error);
+
+        setErrorMessage(
+          error.message === "Invalid login credentials"
+            ? "Invalid administrator credentials."
+            : error.message
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // VERIFY AUTH USER
+      // -------------------------------------------------------
+
+      const authenticatedUser = data?.user;
+
+      if (!authenticatedUser) {
+        console.error("No authenticated user returned from Supabase.");
+
+        setErrorMessage(
+          "Unable to establish an administrator session. Please try again."
+        );
+
+        return;
+      }
+
+      console.log("Admin authenticated successfully:", {
+        id: authenticatedUser.id,
+        email: authenticatedUser.email,
+      });
+
+      // -------------------------------------------------------
+      // ADMIN EMAIL CHECK
+      // -------------------------------------------------------
+      //
+      // Since this is a dedicated Admin Login page, we only
+      // allow the designated administrator account here.
+      //
+      // This prevents another Supabase Auth account from using
+      // the Admin Login page.
+      // -------------------------------------------------------
+
+      if (authenticatedUser.email?.toLowerCase() !== "admin@gmail.com") {
+        console.error(
+          "Authenticated account is not authorized as administrator:",
+          authenticatedUser.email
+        );
+
+        await supabase.auth.signOut();
+
+        setErrorMessage("This account is not authorized as an administrator.");
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // SUCCESS
+      // -------------------------------------------------------
+
+      navigate("/admin/dashboard", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Unexpected admin login error:", error);
+
+      setErrorMessage(
+        "Something went wrong while signing in. Please try again."
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -145,6 +212,7 @@ const AdminLogin = () => {
                 onChange={(e) => handleChange("email", e.target.value)}
                 placeholder="Enter administrator email"
                 autoComplete="email"
+                disabled={isLoading}
                 className="
                   w-full
                   h-11
@@ -160,6 +228,8 @@ const AdminLogin = () => {
                   transition
                   focus:bg-white
                   focus:border-slate-700
+                  disabled:opacity-60
+                  disabled:cursor-not-allowed
                 "
               />
             </div>
@@ -182,6 +252,7 @@ const AdminLogin = () => {
                   onChange={(e) => handleChange("password", e.target.value)}
                   placeholder="Enter administrator password"
                   autoComplete="current-password"
+                  disabled={isLoading}
                   className="
                     w-full
                     h-11
@@ -198,11 +269,14 @@ const AdminLogin = () => {
                     transition
                     focus:bg-white
                     focus:border-slate-700
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
                   "
                 />
 
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={() => setShowPassword(!showPassword)}
                   className="
                     absolute
@@ -214,6 +288,7 @@ const AdminLogin = () => {
                     text-slate-500
                     hover:text-slate-800
                     transition
+                    disabled:opacity-40
                   "
                 >
                   {showPassword ? "Hide" : "Show"}
