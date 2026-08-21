@@ -1,520 +1,1022 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const VerificationUpload = () => {
+  const [searchParams] = useSearchParams();
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  const token = searchParams.get("token");
 
-const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+  const [loading, setLoading] = useState(true);
+  const [valid, setValid] = useState(false);
+  const [error, setError] = useState("");
 
-Deno.serve(async (req) => {
-  // =========================================================
-  // CORS
-  // =========================================================
+  const [company, setCompany] = useState(null);
+  const [verification, setVerification] = useState(null);
 
-  if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: corsHeaders,
-    });
-  }
+  const [businessRegistration, setBusinessRegistration] = useState(null);
+  const [birRegistration, setBirRegistration] = useState(null);
+  const [supportingDocument, setSupportingDocument] = useState(null);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   // =========================================================
-  // METHOD
+  // VALIDATE VERIFICATION TOKEN
   // =========================================================
 
-  if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Method not allowed.",
-      }),
-      {
-        status: 405,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  }
-
-  try {
-    // =======================================================
-    // SUPABASE ADMIN CLIENT
-    // =======================================================
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Supabase environment variables are not configured.");
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    // =======================================================
-    // REQUEST BODY
-    // =======================================================
-
-    const body = await req.json();
-
-    const { token, businessRegistration, birRegistration, supportingDocument } =
-      body;
-
-    // =======================================================
-    // BASIC VALIDATION
-    // =======================================================
-
-    if (!token) {
-      throw new Error("Verification token is required.");
-    }
-
-    if (!businessRegistration) {
-      throw new Error("Business registration document is required.");
-    }
-
-    if (!birRegistration) {
-      throw new Error("BIR registration document is required.");
-    }
-
-    // =======================================================
-    // FIND VERIFICATION REQUEST
-    // =======================================================
-
-    const { data: verificationRequest, error: requestError } = await supabase
-      .from("company_verification_requests")
-      .select(
-        `
-          id,
-          company_id,
-          token,
-          expires_at,
-          used_at,
-          companies (
-            id,
-            company_name,
-            status,
-            business_registration_url,
-            bir_registration_url,
-            supporting_document_url
-          )
-        `
-      )
-      .eq("token", token)
-      .maybeSingle();
-
-    if (requestError) {
-      console.error("Verification request lookup error:", requestError);
-
-      throw new Error("Unable to validate verification request.");
-    }
-
-    // =======================================================
-    // TOKEN NOT FOUND
-    // =======================================================
-
-    if (!verificationRequest) {
-      throw new Error("Invalid verification link.");
-    }
-
-    // =======================================================
-    // EXPIRATION
-    // =======================================================
-
-    const expiresAt = new Date(verificationRequest.expires_at);
-
-    if (expiresAt <= new Date()) {
-      throw new Error("This verification link has expired.");
-    }
-
-    // =======================================================
-    // TOKEN ALREADY USED
-    // =======================================================
-
-    if (verificationRequest.used_at) {
-      throw new Error("This verification link has already been used.");
-    }
-
-    // =======================================================
-    // COMPANY
-    // =======================================================
-
-    const company = verificationRequest.companies;
-
-    if (!company) {
-      throw new Error(
-        "The company associated with this verification request could not be found."
-      );
-    }
-
-    // =======================================================
-    // COMPANY STATUS
-    // =======================================================
-
-    if (company.status !== "pending") {
-      throw new Error(
-        "This company verification request is no longer pending."
-      );
-    }
-
-    // =======================================================
-    // FILE VALIDATION HELPER
-    // =======================================================
-
-    const validateFile = (
-      fileData: any,
-      documentName: string,
-      required = false
-    ) => {
-      if (!fileData) {
-        if (required) {
-          throw new Error(`${documentName} is required.`);
-        }
-
+  useEffect(() => {
+    const validateToken = async () => {
+      if (!token) {
+        setError("No verification token was provided.");
+        setLoading(false);
         return;
       }
 
-      if (!fileData.data) {
-        throw new Error(`Invalid file data for ${documentName}.`);
-      }
+      try {
+        setLoading(true);
+        setError("");
 
-      const contentType = fileData.type || "application/octet-stream";
-
-      if (!ALLOWED_TYPES.includes(contentType)) {
-        throw new Error(
-          `${documentName} must be a PDF, JPG, JPEG, or PNG file.`
+        const { data, error: functionError } = await supabase.functions.invoke(
+          "validate-company-verification",
+          {
+            body: {
+              token,
+            },
+          }
         );
-      }
 
-      const base64Data = fileData.data.split(",")[1];
+        if (functionError) {
+          console.error("Verification validation failed:", functionError);
 
-      if (!base64Data) {
-        throw new Error(`Invalid file data for ${documentName}.`);
-      }
+          let message =
+            functionError.message ||
+            "Unable to validate this verification link.";
 
-      /*
-       * Base64 is approximately 4/3 the original
-       * file size.
-       */
-      const estimatedSize = Math.floor((base64Data.length * 3) / 4);
+          if (functionError.context) {
+            try {
+              const responseBody = await functionError.context.json();
 
-      if (estimatedSize > MAX_FILE_SIZE) {
-        throw new Error(`${documentName} must not exceed 10 MB.`);
+              if (responseBody?.error) {
+                message = responseBody.error;
+              }
+            } catch {
+              // Ignore response parsing errors
+            }
+          }
+
+          throw new Error(message);
+        }
+
+        if (!data?.success) {
+          throw new Error(data?.error || "This verification link is invalid.");
+        }
+
+        // =====================================================
+        // VALID
+        // =====================================================
+
+        setVerification(data.verification || null);
+        setCompany(data.company || null);
+        setValid(true);
+      } catch (error) {
+        console.error("Company verification validation error:", error);
+
+        setValid(false);
+
+        setError(
+          error?.message || "Unable to validate this verification link."
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
-    // =======================================================
-    // VALIDATE FILES
-    // =======================================================
+    validateToken();
+  }, [token]);
 
-    validateFile(businessRegistration, "Business Registration", true);
+  // =========================================================
+  // FILE HANDLERS
+  // =========================================================
 
-    validateFile(birRegistration, "BIR Registration", true);
+  const handleFileChange = (setter, event) => {
+    const file = event.target.files?.[0] || null;
 
-    validateFile(supportingDocument, "Supporting Document", false);
+    setter(file);
+  };
 
-    // =======================================================
-    // SANITIZE ORIGINAL FILE NAME
-    // =======================================================
+  // =========================================================
+  // FILE TO BASE64
+  // =========================================================
 
-    const sanitizeFileName = (fileName: string) => {
-      if (!fileName) {
-        return "document";
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        resolve(null);
+        return;
       }
 
-      /*
-       * Keep the user's original filename as much as possible,
-       * while removing characters that should not be used
-       * inside a Storage path.
-       */
-      const lastPart = fileName.split(/[\\/]/).pop() || "document";
+      const reader = new FileReader();
 
-      const sanitized = lastPart
-        .replace(/[^\w.\-() ]+/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^\.+/, "")
-        .trim();
-
-      return sanitized || "document";
-    };
-
-    // =======================================================
-    // FILE UPLOAD HELPER
-    // =======================================================
-
-    const uploadedPaths: string[] = [];
-
-    const uploadFile = async (fileData: any, documentName: string) => {
-      if (!fileData) {
-        return null;
-      }
-
-      // -----------------------------------------------------
-      // ORIGINAL FILENAME
-      // -----------------------------------------------------
-
-      const originalFileName = fileData.name || "document";
-
-      const safeFileName = sanitizeFileName(originalFileName);
-
-      const contentType = fileData.type || "application/octet-stream";
-
-      // -----------------------------------------------------
-      // STORAGE PATH
-      // -----------------------------------------------------
-      //
-      // IMPORTANT:
-      // The actual uploaded filename is preserved.
-      //
-      // Example:
-      //
-      // company/
-      //   abc123/
-      //     verification456/
-      //       SEC-Certificate-2026.pdf
-      //
-      // This allows CompanyManagement to display:
-      //
-      // SEC-Certificate-2026.pdf
-      //
-      // instead of:
-      //
-      // business-registration.pdf
-      //
-      // -----------------------------------------------------
-
-      const filePath = `company/${company.id}/${verificationRequest.id}/${safeFileName}`;
-
-      const base64Data = fileData.data.split(",")[1];
-
-      if (!base64Data) {
-        throw new Error(`Invalid file data for ${documentName}.`);
-      }
-
-      const binaryString = atob(base64Data);
-
-      const bytes = new Uint8Array(binaryString.length);
-
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from("verification-documents")
-        .upload(filePath, bytes, {
-          contentType,
-          upsert: true,
+      reader.onload = () => {
+        resolve({
+          name: file.name,
+          type: file.type,
+          data: reader.result,
         });
+      };
 
-      if (uploadError) {
+      reader.onerror = () => {
+        reject(new Error(`Unable to read ${file.name}.`));
+      };
+
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // =========================================================
+  // SUBMIT DOCUMENTS
+  // =========================================================
+
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
+    setError("");
+
+    // =======================================================
+    // REQUIRED DOCUMENT VALIDATION
+    // =======================================================
+
+    if (!businessRegistration) {
+      setError("Please upload your Business Registration document.");
+      return;
+    }
+
+    if (!birRegistration) {
+      setError("Please upload your BIR Registration document.");
+      return;
+    }
+
+    // =======================================================
+    // FILE SIZE VALIDATION
+    // =======================================================
+
+    const maxFileSize = 10 * 1024 * 1024;
+
+    const files = [
+      {
+        file: businessRegistration,
+        label: "Business Registration",
+      },
+      {
+        file: birRegistration,
+        label: "BIR Registration",
+      },
+      {
+        file: supportingDocument,
+        label: "Supporting Document",
+      },
+    ];
+
+    for (const item of files) {
+      if (item.file && item.file.size > maxFileSize) {
+        setError(`${item.label} must not exceed 10 MB.`);
+        return;
+      }
+    }
+
+    // =======================================================
+    // FILE TYPE VALIDATION
+    // =======================================================
+
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
+
+    for (const item of files) {
+      if (item.file && !allowedTypes.includes(item.file.type)) {
+        setError(`${item.label} must be a PDF, JPG, JPEG, or PNG file.`);
+        return;
+      }
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      // =====================================================
+      // CONVERT FILES
+      // =====================================================
+
+      const businessRegistrationData = await fileToBase64(businessRegistration);
+
+      const birRegistrationData = await fileToBase64(birRegistration);
+
+      const supportingDocumentData = await fileToBase64(supportingDocument);
+
+      // =====================================================
+      // CALL EDGE FUNCTION
+      // =====================================================
+
+      const { data, error: functionError } = await supabase.functions.invoke(
+        "resubmit-company-verification",
+        {
+          body: {
+            token,
+
+            businessRegistration: businessRegistrationData,
+
+            birRegistration: birRegistrationData,
+
+            supportingDocument: supportingDocumentData,
+          },
+        }
+      );
+
+      if (functionError) {
+        console.error(
+          "Company verification resubmission failed:",
+          functionError
+        );
+
+        let message =
+          functionError.message ||
+          "Unable to submit your verification documents.";
+
+        if (functionError.context) {
+          try {
+            const responseBody = await functionError.context.json();
+
+            if (responseBody?.error) {
+              message = responseBody.error;
+            }
+          } catch {
+            // Ignore response parsing errors
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      if (!data?.success) {
         throw new Error(
-          `Failed to upload ${documentName}: ${uploadError.message}`
+          data?.error || "Unable to submit your verification documents."
         );
       }
 
-      uploadedPaths.push(filePath);
+      // =====================================================
+      // SUCCESS
+      // =====================================================
 
-      return filePath;
-    };
+      setSubmitted(true);
+    } catch (error) {
+      console.error("Company verification submission error:", error);
 
-    // =======================================================
-    // SAVE PREVIOUS FILE PATHS
-    // =======================================================
-    //
-    // We keep these so they can be removed after the new
-    // documents have been successfully saved.
-    //
-    // =======================================================
-
-    const previousPaths = [
-      company.business_registration_url,
-      company.bir_registration_url,
-      company.supporting_document_url,
-    ].filter(Boolean);
-
-    // =======================================================
-    // UPLOAD DOCUMENTS
-    // =======================================================
-
-    const businessRegistrationPath = await uploadFile(
-      businessRegistration,
-      "Business Registration"
-    );
-
-    const birRegistrationPath = await uploadFile(
-      birRegistration,
-      "BIR Registration"
-    );
-
-    const supportingDocumentPath = await uploadFile(
-      supportingDocument,
-      "Supporting Document"
-    );
-
-    // =======================================================
-    // UPDATE COMPANY DOCUMENTS
-    // =======================================================
-
-    const companyUpdate: {
-      business_registration_url: string,
-      bir_registration_url: string,
-      supporting_document_url?: string | null,
-    } = {
-      business_registration_url: businessRegistrationPath,
-
-      bir_registration_url: birRegistrationPath,
-    };
-
-    /*
-     * Supporting Document is optional.
-     *
-     * If the company uploads a new supporting document,
-     * replace the old one.
-     *
-     * If no new supporting document was uploaded,
-     * keep the previous document.
-     */
-    if (supportingDocumentPath) {
-      companyUpdate.supporting_document_url = supportingDocumentPath;
-    }
-
-    const { error: companyUpdateError } = await supabase
-      .from("companies")
-      .update(companyUpdate)
-      .eq("id", company.id);
-
-    if (companyUpdateError) {
-      console.error("Company document update error:", companyUpdateError);
-
-      throw new Error(
-        `Unable to save company documents: ${companyUpdateError.message}`
+      setError(
+        error?.message ||
+          "Something went wrong while submitting your documents."
       );
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    // =======================================================
-    // MARK TOKEN AS USED
-    // =======================================================
+  // =========================================================
+  // LOADING
+  // =========================================================
 
-    const usedAt = new Date().toISOString();
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f8fafc",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 20px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "500px",
+            background: "#ffffff",
+            borderRadius: "16px",
+            padding: "40px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.08)",
+            border: "1px solid #e2e8f0",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              margin: "0 auto 20px",
+              borderRadius: "16px",
+              background: "#eff6ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "30px",
+            }}
+          >
+            🔐
+          </div>
 
-    const { data: updatedRequest, error: tokenUpdateError } = await supabase
-      .from("company_verification_requests")
-      .update({
-        used_at: usedAt,
-      })
-      .eq("id", verificationRequest.id)
-      .is("used_at", null)
-      .select("id, used_at")
-      .maybeSingle();
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "24px",
+              fontWeight: "700",
+              color: "#0f172a",
+            }}
+          >
+            Validating Verification Link
+          </h1>
 
-    if (tokenUpdateError) {
-      console.error("Verification token update error:", tokenUpdateError);
+          <p
+            style={{
+              marginTop: "10px",
+              color: "#64748b",
+              fontSize: "14px",
+              lineHeight: 1.6,
+            }}
+          >
+            Please wait while we securely verify your registration link.
+          </p>
 
-      throw new Error(
-        "Documents were uploaded, but the verification request could not be completed."
-      );
-    }
+          <div
+            style={{
+              marginTop: "24px",
+              width: "32px",
+              height: "32px",
+              marginLeft: "auto",
+              marginRight: "auto",
+              borderRadius: "50%",
+              border: "3px solid #dbeafe",
+              borderTopColor: "#2563eb",
+              animation: "spin 1s linear infinite",
+            }}
+          />
 
-    if (!updatedRequest) {
-      throw new Error("This verification link has already been used.");
-    }
-
-    // =======================================================
-    // DELETE OLD DOCUMENTS
-    // =======================================================
-    //
-    // Only remove previous files after the new files and
-    // database update succeeded.
-    //
-    // This prevents old files from being deleted if the
-    // upload/update fails.
-    //
-    // =======================================================
-
-    const newPaths = uploadedPaths;
-
-    const pathsToDelete = previousPaths.filter(
-      (oldPath: string) => oldPath && !newPaths.includes(oldPath)
-    );
-
-    if (pathsToDelete.length > 0) {
-      const { error: deleteError } = await supabase.storage
-        .from("verification-documents")
-        .remove(pathsToDelete);
-
-      if (deleteError) {
-        /*
-         * Do not fail the whole submission if cleanup
-         * fails. The new documents are already saved
-         * successfully.
-         */
-        console.warn(
-          "Some previous verification documents could not be removed:",
-          deleteError
-        );
-      }
-    }
-
-    // =======================================================
-    // SUCCESS
-    // =======================================================
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-
-        message: "Company verification documents submitted successfully.",
-
-        companyId: company.id,
-
-        verificationRequestId: verificationRequest.id,
-
-        submittedAt: usedAt,
-
-        documents: {
-          businessRegistration: businessRegistrationPath,
-
-          birRegistration: birRegistrationPath,
-
-          supportingDocument: supportingDocumentPath,
-        },
-      }),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  } catch (error) {
-    console.error("Company verification resubmission error:", error);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-
-        error:
-          error instanceof Error ? error.message : "Unexpected server error.",
-      }),
-      {
-        status: 400,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+          <style>
+            {`
+              @keyframes spin {
+                to {
+                  transform: rotate(360deg);
+                }
+              }
+            `}
+          </style>
+        </div>
+      </div>
     );
   }
-});
+
+  // =========================================================
+  // SUBMISSION SUCCESS
+  // =========================================================
+
+  if (submitted) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f8fafc",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 20px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "550px",
+            background: "#ffffff",
+            borderRadius: "16px",
+            padding: "40px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.08)",
+            border: "1px solid #e2e8f0",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "72px",
+              height: "72px",
+              margin: "0 auto 20px",
+              borderRadius: "18px",
+              background: "#ecfdf5",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "34px",
+            }}
+          >
+            ✓
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "26px",
+              fontWeight: "700",
+              color: "#065f46",
+            }}
+          >
+            Documents Submitted
+          </h1>
+
+          <p
+            style={{
+              marginTop: "12px",
+              color: "#64748b",
+              fontSize: "14px",
+              lineHeight: 1.7,
+            }}
+          >
+            Your updated company verification documents have been successfully
+            submitted for review.
+          </p>
+
+          <div
+            style={{
+              marginTop: "24px",
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "10px",
+              padding: "16px",
+              textAlign: "left",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "700",
+                color: "#166534",
+                textTransform: "uppercase",
+                marginBottom: "6px",
+              }}
+            >
+              Company
+            </div>
+
+            <div
+              style={{
+                fontSize: "15px",
+                fontWeight: "700",
+                color: "#14532d",
+              }}
+            >
+              {company?.companyName || "Company"}
+            </div>
+
+            <p
+              style={{
+                margin: "8px 0 0",
+                color: "#166534",
+                fontSize: "13px",
+                lineHeight: 1.6,
+              }}
+            >
+              SIMS Administration will review your updated documents and process
+              your company verification.
+            </p>
+          </div>
+
+          <div
+            style={{
+              marginTop: "20px",
+              padding: "12px",
+              background: "#f8fafc",
+              borderRadius: "8px",
+              color: "#64748b",
+              fontSize: "12px",
+            }}
+          >
+            This verification link can no longer be used.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // INVALID / EXPIRED / USED
+  // =========================================================
+
+  if (!valid) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f8fafc",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "40px 20px",
+          fontFamily: "Arial, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "550px",
+            background: "#ffffff",
+            borderRadius: "16px",
+            padding: "40px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.08)",
+            border: "1px solid #e2e8f0",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              margin: "0 auto 20px",
+              borderRadius: "16px",
+              background: "#fef2f2",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "30px",
+            }}
+          >
+            ⚠️
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "24px",
+              fontWeight: "700",
+              color: "#991b1b",
+            }}
+          >
+            Verification Link Unavailable
+          </h1>
+
+          <p
+            style={{
+              marginTop: "12px",
+              color: "#64748b",
+              fontSize: "14px",
+              lineHeight: 1.6,
+            }}
+          >
+            {error}
+          </p>
+
+          <div
+            style={{
+              marginTop: "24px",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "14px",
+              textAlign: "left",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: "11px",
+                fontWeight: "700",
+                color: "#64748b",
+                textTransform: "uppercase",
+              }}
+            >
+              What should I do?
+            </p>
+
+            <p
+              style={{
+                marginTop: "6px",
+                marginBottom: 0,
+                color: "#475569",
+                fontSize: "13px",
+                lineHeight: 1.6,
+              }}
+            >
+              Please contact SIMS Administration and request a new verification
+              link if you believe this link should still be active.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // VALID VERIFICATION PAGE
+  // =========================================================
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f8fafc",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 20px",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "700px",
+          background: "#ffffff",
+          borderRadius: "16px",
+          padding: "40px",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.08)",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        {/* HEADER */}
+
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: "32px",
+          }}
+        >
+          <div
+            style={{
+              width: "64px",
+              height: "64px",
+              margin: "0 auto 16px",
+              borderRadius: "16px",
+              background: "#ecfdf5",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "30px",
+            }}
+          >
+            ✅
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "28px",
+              fontWeight: "700",
+              color: "#0f172a",
+            }}
+          >
+            Verification Documents
+          </h1>
+
+          <p
+            style={{
+              marginTop: "10px",
+              marginBottom: 0,
+              color: "#64748b",
+              fontSize: "15px",
+              lineHeight: 1.6,
+            }}
+          >
+            Your verification link is valid. Please submit the corrected or
+            updated documents requested by SIMS Administration.
+          </p>
+        </div>
+
+        {/* COMPANY INFORMATION */}
+
+        <div
+          style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "18px",
+            marginBottom: "24px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              fontWeight: "700",
+              color: "#64748b",
+              textTransform: "uppercase",
+              marginBottom: "8px",
+            }}
+          >
+            Company
+          </div>
+
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: "700",
+              color: "#0f172a",
+            }}
+          >
+            {company?.companyName || "Company"}
+          </div>
+
+          <div
+            style={{
+              marginTop: "6px",
+              color: "#64748b",
+              fontSize: "13px",
+            }}
+          >
+            {company?.companyEmail}
+          </div>
+
+          {company?.industry && (
+            <div
+              style={{
+                marginTop: "4px",
+                color: "#64748b",
+                fontSize: "13px",
+              }}
+            >
+              Industry: {company.industry}
+            </div>
+          )}
+        </div>
+
+        {/* NOTICE */}
+
+        <div
+          style={{
+            background: "#eff6ff",
+            border: "1px solid #bfdbfe",
+            borderLeft: "4px solid #2563eb",
+            borderRadius: "8px",
+            padding: "16px",
+            marginBottom: "28px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "700",
+              color: "#1e40af",
+              marginBottom: "6px",
+            }}
+          >
+            Action Required
+          </div>
+
+          <div
+            style={{
+              color: "#334155",
+              fontSize: "14px",
+              lineHeight: 1.6,
+            }}
+          >
+            Your company registration has been reopened for review. Please
+            upload the required verification documents before submitting this
+            request again.
+          </div>
+        </div>
+
+        {/* EXPIRATION */}
+
+        {verification?.expiresAt && (
+          <div
+            style={{
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              borderRadius: "10px",
+              padding: "14px",
+              marginBottom: "28px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "700",
+                color: "#92400e",
+                textTransform: "uppercase",
+                marginBottom: "5px",
+              }}
+            >
+              Link expiration
+            </div>
+
+            <div
+              style={{
+                color: "#78350f",
+                fontSize: "13px",
+              }}
+            >
+              {new Date(verification.expiresAt).toLocaleString()}
+            </div>
+          </div>
+        )}
+
+        {/* ERROR */}
+
+        {error && (
+          <div
+            style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderLeft: "4px solid #dc2626",
+              borderRadius: "8px",
+              padding: "14px",
+              marginBottom: "24px",
+              color: "#991b1b",
+              fontSize: "13px",
+              lineHeight: 1.6,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* DOCUMENTS */}
+
+        <div style={{ marginBottom: "28px" }}>
+          <h2
+            style={{
+              margin: "0 0 16px",
+              fontSize: "18px",
+              color: "#0f172a",
+            }}
+          >
+            Company Verification Documents
+          </h2>
+
+          {/* BUSINESS REGISTRATION */}
+
+          <div
+            style={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "18px",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "600",
+                color: "#334155",
+                marginBottom: "6px",
+              }}
+            >
+              Business Registration <span style={{ color: "#dc2626" }}>*</span>
+            </div>
+
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(event) =>
+                handleFileChange(setBusinessRegistration, event)
+              }
+              disabled={isSubmitting}
+            />
+
+            {businessRegistration && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  color: "#64748b",
+                  fontSize: "12px",
+                }}
+              >
+                Selected: {businessRegistration.name}
+              </div>
+            )}
+          </div>
+
+          {/* BIR REGISTRATION */}
+
+          <div
+            style={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "18px",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "600",
+                color: "#334155",
+                marginBottom: "6px",
+              }}
+            >
+              BIR Registration <span style={{ color: "#dc2626" }}>*</span>
+            </div>
+
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(event) => handleFileChange(setBirRegistration, event)}
+              disabled={isSubmitting}
+            />
+
+            {birRegistration && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  color: "#64748b",
+                  fontSize: "12px",
+                }}
+              >
+                Selected: {birRegistration.name}
+              </div>
+            )}
+          </div>
+
+          {/* SUPPORTING DOCUMENT */}
+
+          <div
+            style={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "18px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "600",
+                color: "#334155",
+                marginBottom: "6px",
+              }}
+            >
+              Supporting Document{" "}
+              <span
+                style={{
+                  color: "#94a3b8",
+                  fontWeight: "400",
+                  fontSize: "12px",
+                }}
+              >
+                (Optional)
+              </span>
+            </div>
+
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(event) =>
+                handleFileChange(setSupportingDocument, event)
+              }
+              disabled={isSubmitting}
+            />
+
+            {supportingDocument && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  color: "#64748b",
+                  fontSize: "12px",
+                }}
+              >
+                Selected: {supportingDocument.name}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* SUBMIT */}
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          style={{
+            width: "100%",
+            border: "none",
+            borderRadius: "10px",
+            padding: "14px 20px",
+            background: isSubmitting ? "#94a3b8" : "#2563eb",
+            color: "#ffffff",
+            fontSize: "15px",
+            fontWeight: "700",
+            cursor: isSubmitting ? "not-allowed" : "pointer",
+          }}
+        >
+          {isSubmitting
+            ? "Submitting Documents..."
+            : "Submit Documents for Review"}
+        </button>
+
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: "16px",
+            marginBottom: 0,
+            color: "#94a3b8",
+            fontSize: "12px",
+            lineHeight: 1.5,
+          }}
+        >
+          Your documents will be securely submitted to SIMS Administration for
+          review.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default VerificationUpload;
