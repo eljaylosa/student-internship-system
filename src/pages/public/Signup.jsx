@@ -147,6 +147,8 @@ const SignUp = () => {
 
           firstName: currentForm.firstName.trim(),
 
+          resubmission: true,
+
           middleInitial: currentForm.middleInitial?.trim() || "",
 
           lastName: currentForm.lastName.trim(),

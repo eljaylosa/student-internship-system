@@ -394,132 +394,169 @@ const ReviewCreateRequests = () => {
   // =========================================================
 
   const handleReject = async () => {
-    const reason = rejectionReason.trim();
+  const reason = rejectionReason.trim();
 
-    if (!reason || !selectedRequest || actionLoading) {
+  if (!reason || !selectedRequest || actionLoading) {
+    return;
+  }
+
+  try {
+    setActionLoading(true);
+
+    console.log(
+      "🚫 Rejecting registration request:",
+      selectedRequest.id
+    );
+
+    // =====================================================
+    // CALL REJECTION EDGE FUNCTION
+    // =====================================================
+
+    const { data, error } = await supabase.functions.invoke(
+      "reject-registration",
+      {
+        body: {
+          requestId: selectedRequest.id,
+          rejectionReason: reason,
+        },
+      }
+    );
+
+    console.log("📦 REJECT FUNCTION RESPONSE:", data);
+    console.log("❌ REJECT FUNCTION ERROR:", error);
+
+    if (error) {
+      console.error(
+        "Rejection Edge Function error:",
+        error
+      );
+
+      showNotification(
+        `Failed to reject request: ${error.message}`,
+        "error"
+      );
+
       return;
     }
 
-    try {
-      setActionLoading(true);
+    // =====================================================
+    // HANDLE EDGE FUNCTION ERROR RESPONSE
+    // =====================================================
 
-      console.log("🚫 Rejecting registration request:", selectedRequest.id);
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const reviewedAt = new Date().toISOString();
-
-      const updateData = {
-        status: "rejected",
-        rejection_reason: reason,
-        reviewed_at: reviewedAt,
-      };
-
-      if (user?.id) {
-        updateData.reviewed_by = user.id;
-      }
-
-      // =====================================================
-      // UPDATE REQUEST
-      // =====================================================
-
-      const { error } = await supabase
-        .from("create_requests")
-        .update(updateData)
-        .eq("id", selectedRequest.id);
-
-      if (error) {
-        console.error("❌ Rejection update error:", error);
-
-        showNotification(`Failed to reject request: ${error.message}`, "error");
-
-        return;
-      }
-
-      console.log("✅ Registration request rejected in database.");
-
-      // =====================================================
-      // CREATE UPDATED LOCAL REQUEST
-      // =====================================================
-
-      const formattedRequest = formatRequest({
-        ...selectedRequest,
-        status: "rejected",
-        rejection_reason: reason,
-        reviewed_by: user?.id ?? selectedRequest.reviewedBy ?? null,
-        reviewed_at: reviewedAt,
-        updated_at: reviewedAt,
-      });
-
-      console.log("📦 UPDATED REQUEST:", formattedRequest);
-
-      // =====================================================
-      // SEND REJECTION EMAIL
-      // =====================================================
-
-      const { data: emailData, error: emailError } =
-        await supabase.functions.invoke("send-registration-email", {
-          body: {
-            email: formattedRequest.email,
-            name: getFullName(formattedRequest),
-            type: "rejected",
-            reason: reason,
-          },
-        });
-
-      if (emailError) {
-        console.error("📧 Rejection email error:", emailError);
-
-        showNotification(
-          `Request rejected, but the rejection email could not be sent: ${emailError.message}`,
-          "error"
-        );
-      } else {
-        console.log("📧 Rejection email sent:", emailData);
-      }
-
-      // =====================================================
-      // UPDATE LOCAL STATE
-      // =====================================================
-
-      setRequests((currentRequests) =>
-        currentRequests.map((request) =>
-          request.id === formattedRequest.id ? formattedRequest : request
-        )
-      );
-
-      setSelectedRequest(formattedRequest);
-
-      // =====================================================
-      // CLOSE MODALS
-      // =====================================================
-
-      setShowRejectModal(false);
-      setShowReviewModal(false);
-
-      // =====================================================
-      // SUCCESS
-      // =====================================================
-
+    if (!data?.success) {
       showNotification(
-        `${getFullName(formattedRequest)}'s registration has been rejected.`,
+        data?.error ||
+          "Failed to reject registration request.",
         "error"
       );
 
-      console.log("✅ Registration rejection completed successfully.");
-    } catch (error) {
-      console.error("💥 Unexpected rejection error:", error);
-
-      showNotification(
-        "An unexpected error occurred while rejecting the request.",
-        "error"
-      );
-    } finally {
-      setActionLoading(false);
+      return;
     }
-  };
+
+    // =====================================================
+    // FORMAT UPDATED REQUEST
+    // =====================================================
+
+    const formattedRequest = data.request
+      ? formatRequest(data.request)
+      : {
+          ...selectedRequest,
+          status: "rejected",
+          rejectionReason: reason,
+          reviewedBy: data.reviewerId ?? null,
+          reviewedAt: new Date().toISOString(),
+        };
+
+    console.log(
+      "📦 UPDATED REQUEST:",
+      formattedRequest
+    );
+
+    // =====================================================
+    // SEND REJECTION EMAIL
+    // =====================================================
+
+    const {
+      data: emailData,
+      error: emailError,
+    } = await supabase.functions.invoke(
+      "send-registration-email",
+      {
+        body: {
+          email: formattedRequest.email,
+          name: getFullName(formattedRequest),
+          type: "rejected",
+          reason: reason,
+        },
+      }
+    );
+
+    if (emailError) {
+      console.error(
+        "📧 Rejection email error:",
+        emailError
+      );
+
+      showNotification(
+        `Request rejected, but the rejection email could not be sent: ${emailError.message}`,
+        "error"
+      );
+    } else {
+      console.log(
+        "📧 Rejection email sent:",
+        emailData
+      );
+    }
+
+    // =====================================================
+    // UPDATE LOCAL STATE
+    // =====================================================
+
+    setRequests((currentRequests) =>
+      currentRequests.map((request) =>
+        request.id === formattedRequest.id
+          ? formattedRequest
+          : request
+      )
+    );
+
+    setSelectedRequest(formattedRequest);
+
+    // =====================================================
+    // CLOSE MODALS
+    // =====================================================
+
+    setShowRejectModal(false);
+    setShowReviewModal(false);
+
+    // =====================================================
+    // SUCCESS
+    // =====================================================
+
+    showNotification(
+      `${getFullName(
+        formattedRequest
+      )}'s registration has been rejected.`,
+      "error"
+    );
+
+    console.log(
+      "✅ Registration rejection completed successfully."
+    );
+  } catch (error) {
+    console.error(
+      "💥 Unexpected rejection error:",
+      error
+    );
+
+    showNotification(
+      "An unexpected error occurred while rejecting the request.",
+      "error"
+    );
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   // =========================================================
   // HELPERS

@@ -93,6 +93,7 @@ const CompanyManagement = () => {
 
       if (error) {
         console.error("Unable to create signed document URL:", error);
+
         return null;
       }
 
@@ -155,7 +156,9 @@ const CompanyManagement = () => {
         );
 
         const firstName = request?.first_name || "";
+
         const middleInitial = request?.middle_initial || "";
+
         const lastName = request?.last_name || "";
 
         const contactName =
@@ -171,6 +174,7 @@ const CompanyManagement = () => {
             fileName:
               company.business_registration_url.split("/").pop() ||
               "business-registration",
+
             filePath: company.business_registration_url,
           });
         }
@@ -181,6 +185,7 @@ const CompanyManagement = () => {
             fileName:
               company.bir_registration_url.split("/").pop() ||
               "bir-registration",
+
             filePath: company.bir_registration_url,
           });
         }
@@ -191,6 +196,7 @@ const CompanyManagement = () => {
             fileName:
               company.supporting_document_url.split("/").pop() ||
               "supporting-document",
+
             filePath: company.supporting_document_url,
           });
         }
@@ -214,6 +220,7 @@ const CompanyManagement = () => {
           status: databaseStatusToUi(company.status),
 
           submittedAt: formatDate(company.created_at),
+
           createdAt: company.created_at,
           updatedAt: company.updated_at,
 
@@ -305,6 +312,7 @@ const CompanyManagement = () => {
 
     if (company.status !== "Pending Review") {
       alert("Only companies with Pending Review status can be approved.");
+
       return;
     }
 
@@ -312,10 +320,10 @@ const CompanyManagement = () => {
       setActionLoading(true);
 
       // =====================================================
-      // 1. UPDATE COMPANY STATUS
+      // 1. ACTIVATE COMPANY RECORD
       // =====================================================
 
-      const { error: updateError } = await supabase
+      const { error: companyUpdateError } = await supabase
         .from("companies")
         .update({
           status: "active",
@@ -323,12 +331,117 @@ const CompanyManagement = () => {
         })
         .eq("id", company.id);
 
-      if (updateError) {
-        throw updateError;
+      if (companyUpdateError) {
+        throw companyUpdateError;
       }
 
       // =====================================================
-      // 2. SEND APPROVAL EMAIL
+      // 2. ACTIVATE SIMS USER RECORD
+      // =====================================================
+      //
+      // IMPORTANT:
+      //
+      // The Auth account already exists.
+      //
+      // We now activate the matching
+      // public.users record using the same
+      // UUID stored in companies.user_id.
+      //
+      // =====================================================
+
+      if (!company.userId) {
+        throw new Error(
+          "This company does not have a linked SIMS user account."
+        );
+      }
+
+      const { data: activatedUser, error: userUpdateError } = await supabase
+        .from("users")
+        .update({
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", company.userId)
+        .select("id, email, role, status")
+        .maybeSingle();
+
+      if (userUpdateError) {
+        console.error("SIMS user activation failed:", userUpdateError);
+
+        /*
+         * Roll the company status back
+         * because both records should stay
+         * synchronized.
+         */
+
+        await supabase
+          .from("companies")
+          .update({
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", company.id);
+
+        throw new Error(
+          `Company was not activated because the SIMS user account could not be activated: ${userUpdateError.message}`
+        );
+      }
+
+      if (!activatedUser) {
+        /*
+         * No users row was found.
+         *
+         * Roll back the company status so
+         * the registration does not become
+         * partially activated.
+         */
+
+        await supabase
+          .from("companies")
+          .update({
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", company.id);
+
+        throw new Error(
+          "The company has no matching SIMS user account. The registration cannot be activated yet."
+        );
+      }
+
+      // =====================================================
+      // 3. VERIFY USER ROLE
+      // =====================================================
+
+      if (activatedUser.role?.toLowerCase() !== "company") {
+        /*
+         * Roll back both records if the linked
+         * user does not have the expected role.
+         */
+
+        await supabase
+          .from("users")
+          .update({
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", company.userId);
+
+        await supabase
+          .from("companies")
+          .update({
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", company.id);
+
+        throw new Error(
+          "The linked SIMS user account does not have the company role."
+        );
+      }
+
+      // =====================================================
+      // 4. SEND APPROVAL EMAIL
       // =====================================================
 
       const { data: emailData, error: emailError } =
@@ -349,13 +462,16 @@ const CompanyManagement = () => {
       }
 
       // =====================================================
-      // 3. UPDATE FRONTEND STATE
+      // 5. UPDATE FRONTEND STATE
       // =====================================================
 
       const updatedCompany = {
         ...company,
+
         status: "Approved",
+
         emailVerified: false,
+
         rejectionReason: "",
       };
 
@@ -368,17 +484,19 @@ const CompanyManagement = () => {
       );
 
       // =====================================================
-      // 4. SUCCESS MESSAGE
+      // 6. SUCCESS MESSAGE
       // =====================================================
 
       if (emailError || emailData?.success === false) {
         alert(
           `Company approved successfully.\n\n` +
+            `The company account has been activated in SIMS.\n\n` +
             `However, the approval notification email could not be sent to ${company.email}.`
         );
       } else {
         alert(
           `Company approved successfully.\n\n` +
+            `The company account has been activated and can now log in.\n\n` +
             `An approval notification has been sent to ${company.email}.`
         );
       }
@@ -402,6 +520,7 @@ const CompanyManagement = () => {
 
     if (company.status !== "Pending Review") {
       alert("Only companies with Pending Review status can be rejected.");
+
       return;
     }
 
@@ -421,18 +540,94 @@ const CompanyManagement = () => {
 
     if (!reason) {
       alert("Please provide a reason for rejecting this registration.");
+
       return;
     }
 
     if (selectedCompany.status !== "Pending Review") {
       alert("Only companies with Pending Review status can be rejected.");
+
       return;
     }
 
     try {
       setActionLoading(true);
 
-      await updateCompanyStatus(selectedCompany.id, "Rejected");
+      // =====================================================
+      // 1. UPDATE COMPANY STATUS
+      // =====================================================
+
+      const { error: updateError } = await supabase
+        .from("companies")
+        .update({
+          status: "rejected",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedCompany.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // =====================================================
+      // 2. KEEP USER PENDING
+      // =====================================================
+      //
+      // The public.users record stays pending.
+      //
+      // This prevents login while the company
+      // registration is rejected.
+      //
+      // =====================================================
+
+      if (selectedCompany.userId) {
+        const { error: userUpdateError } = await supabase
+          .from("users")
+          .update({
+            status: "inactive",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", selectedCompany.userId);
+
+        if (userUpdateError) {
+          console.error("Unable to synchronize user status:", userUpdateError);
+        }
+      }
+
+      // =====================================================
+      // 3. SEND REJECTION EMAIL
+      // =====================================================
+
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: selectedCompany.email,
+
+            name: selectedCompany.contact,
+
+            type: "rejected",
+
+            role: "company",
+
+            companyName: selectedCompany.company,
+
+            reason,
+          },
+        });
+
+      if (emailError) {
+        console.error("Rejection email failed:", emailError);
+      } else if (emailData?.success === false) {
+        console.error("Rejection email was not sent:", emailData);
+      } else {
+        console.log(
+          `Rejection email successfully sent to ${selectedCompany.email}`
+        );
+      }
+
+      // =====================================================
+      // 4. CREATE REJECTION HISTORY
+      // =====================================================
 
       const rejectedAt = formatDate(new Date().toISOString());
 
@@ -441,13 +636,26 @@ const CompanyManagement = () => {
         rejectedAt,
       };
 
+      // =====================================================
+      // 5. UPDATE FRONTEND STATE
+      // =====================================================
+
+      const emailWasSent = !emailError && emailData?.success !== false;
+
       const updatedCompany = {
         ...selectedCompany,
+
         status: "Rejected",
+
         rejectionReason: reason,
+
+        rejectionEmailSent: emailWasSent,
+
+        rejectionEmailSentAt: emailWasSent ? new Date().toISOString() : null,
 
         rejectionHistory: [
           ...(selectedCompany.rejectionHistory || []),
+
           historyEntry,
         ],
       };
@@ -463,9 +671,21 @@ const CompanyManagement = () => {
       setShowRejectModal(false);
       setRejectReason("");
 
-      alert(
-        `Registration for ${selectedCompany.company} was rejected successfully.`
-      );
+      // =====================================================
+      // 6. RESULT MESSAGE
+      // =====================================================
+
+      if (!emailWasSent) {
+        alert(
+          `Registration for ${selectedCompany.company} was rejected successfully.\n\n` +
+            `However, the rejection notification email could not be sent to ${selectedCompany.email}.`
+        );
+      } else {
+        alert(
+          `Registration for ${selectedCompany.company} was rejected successfully.\n\n` +
+            `A rejection notification with the reason has been sent to ${selectedCompany.email}.`
+        );
+      }
     } catch (error) {
       console.error("Rejection failed:", error);
 
@@ -482,26 +702,6 @@ const CompanyManagement = () => {
   // =========================================================
   // REOPEN COMPANY
   // =========================================================
-  //
-  // FLOW:
-  //
-  // Rejected
-  //    ↓
-  // Admin clicks Reopen for Review
-  //    ↓
-  // Secure verification upload link generated
-  //    ↓
-  // Database status = pending
-  //    ↓
-  // Send reopened email with upload link
-  //    ↓
-  // Frontend status = Pending Review
-  //
-  // IMPORTANT:
-  // If the email fails, the company remains reopened because
-  // the database status was already successfully changed.
-  //
-  // =========================================================
 
   const reopenCompany = async (id) => {
     const company = companies.find((item) => item.id === id);
@@ -513,6 +713,7 @@ const CompanyManagement = () => {
 
     if (company.status !== "Rejected") {
       alert("Only rejected company registrations can be reopened.");
+
       return;
     }
 
@@ -553,23 +754,7 @@ const CompanyManagement = () => {
       console.log("Company verification upload URL generated:", uploadUrl);
 
       // =====================================================
-      // 2. UPDATE COMPANY STATUS TO PENDING
-      // =====================================================
-
-      const { error: updateError } = await supabase
-        .from("companies")
-        .update({
-          status: "pending",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      // =====================================================
-      // 3. SEND REOPENED EMAIL WITH UPLOAD LINK
+      // 2. SEND REOPENED EMAIL
       // =====================================================
 
       const { data: emailData, error: emailError } =
@@ -584,10 +769,6 @@ const CompanyManagement = () => {
           },
         });
 
-      // =====================================================
-      // EMAIL RESULT
-      // =====================================================
-
       if (emailError) {
         console.error("Reopened email failed:", emailError);
       } else if (emailData?.success === false) {
@@ -597,15 +778,15 @@ const CompanyManagement = () => {
       }
 
       // =====================================================
-      // 4. UPDATE FRONTEND STATE
+      // 3. KEEP COMPANY REJECTED
       // =====================================================
 
       const emailWasSent = !emailError && emailData?.success !== false;
 
       const updatedCompany = {
         ...company,
-        status: "Pending Review",
-        rejectionReason: "",
+
+        status: "Rejected",
 
         reopenEmailSent: emailWasSent,
 
@@ -621,19 +802,19 @@ const CompanyManagement = () => {
       );
 
       // =====================================================
-      // 5. SUCCESS MESSAGE
+      // 4. SUCCESS MESSAGE
       // =====================================================
 
       if (!emailWasSent) {
         alert(
-          `Registration for ${company.company} has been reopened for review.\n\n` +
-            `The secure document upload link was successfully generated, ` +
-            `but the notification email could not be sent.`
+          `Registration for ${company.company} has been reopened for resubmission.\n\n` +
+            `The secure document upload link was successfully generated, but the notification email could not be sent.`
         );
       } else {
         alert(
-          `Registration for ${company.company} has been reopened for review.\n\n` +
-            `A secure document upload link has been generated and sent to ${company.email}.`
+          `Registration for ${company.company} has been reopened for resubmission.\n\n` +
+            `A secure document upload link has been generated and sent to ${company.email}.\n\n` +
+            `The company will remain Rejected until the new documents are successfully submitted.`
         );
       }
     } catch (error) {
@@ -656,6 +837,7 @@ const CompanyManagement = () => {
   const viewDocument = async (document) => {
     if (!document?.filePath) {
       alert("This document is unavailable.");
+
       return;
     }
 
@@ -664,6 +846,7 @@ const CompanyManagement = () => {
 
       if (!url) {
         alert("Unable to generate a secure document link.");
+
         return;
       }
 
@@ -739,9 +922,7 @@ const CompanyManagement = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
+      {/* PAGE HEADER */}
 
       <div className="mb-6">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
@@ -779,9 +960,7 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* =====================================================
-          SUMMARY CARDS
-      ===================================================== */}
+      {/* SUMMARY CARDS */}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <div className={`border rounded-xl p-4 ${panel}`}>
@@ -823,9 +1002,7 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* =====================================================
-          FILTER / SEARCH
-      ===================================================== */}
+      {/* FILTER / SEARCH */}
 
       <div className={`border rounded-xl p-3 sm:p-4 mb-5 ${panel}`}>
         <div className="flex flex-col lg:flex-row gap-3">
@@ -853,17 +1030,19 @@ const CompanyManagement = () => {
             }`}
           >
             <option value="All">All Status</option>
+
             <option value="Pending Review">Pending Review</option>
+
             <option value="Approved">Approved</option>
+
             <option value="Rejected">Rejected</option>
+
             <option value="Suspended">Suspended</option>
           </select>
         </div>
       </div>
 
-      {/* =====================================================
-          TABLE
-      ===================================================== */}
+      {/* TABLE */}
 
       <div className={`border rounded-xl overflow-hidden ${panel}`}>
         <div className={`px-4 py-3 border-b ${border}`}>
@@ -1028,9 +1207,7 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* =====================================================
-          FOOTER INFO
-      ===================================================== */}
+      {/* FOOTER INFO */}
 
       <div className={`mt-3 text-[10px] ${muted}`}>
         Showing {filteredCompanies.length} of {companies.length} registered
@@ -1039,7 +1216,7 @@ const CompanyManagement = () => {
 
       {/* =====================================================
           COMPANY REVIEW MODAL
-      ===================================================== */}
+          ===================================================== */}
 
       {selectedCompany && !showRejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1051,9 +1228,7 @@ const CompanyManagement = () => {
           <div
             className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl ${panel}`}
           >
-            {/* =================================================
-                MODAL HEADER
-            ================================================= */}
+            {/* HEADER */}
 
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start justify-between gap-4">
@@ -1098,14 +1273,10 @@ const CompanyManagement = () => {
               </div>
             </div>
 
-            {/* =================================================
-                MODAL CONTENT
-            ================================================= */}
+            {/* CONTENT */}
 
             <div className="p-5 space-y-6">
-              {/* =================================================
-                  COMPANY DETAILS
-              ================================================= */}
+              {/* COMPANY DETAILS */}
 
               <section>
                 <h3 className={`text-sm font-bold ${heading}`}>
@@ -1206,9 +1377,7 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* =================================================
-                  DOCUMENTS
-              ================================================= */}
+              {/* DOCUMENTS */}
 
               <section>
                 <div className="flex items-end justify-between gap-3 mb-3">
@@ -1282,9 +1451,7 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* =================================================
-                  REJECTION REASON
-              ================================================= */}
+              {/* REJECTION REASON */}
 
               {selectedCompany.status === "Rejected" &&
                 selectedCompany.rejectionReason && (
@@ -1309,9 +1476,7 @@ const CompanyManagement = () => {
                   </section>
                 )}
 
-              {/* =================================================
-                  REJECTION HISTORY
-              ================================================= */}
+              {/* REJECTION HISTORY */}
 
               {selectedCompany.rejectionHistory?.length > 0 && (
                 <section>
@@ -1359,9 +1524,7 @@ const CompanyManagement = () => {
                 </section>
               )}
 
-              {/* =================================================
-                  ACCOUNT STATUS
-              ================================================= */}
+              {/* ACCOUNT STATUS */}
 
               <section
                 className={`rounded-xl border p-4 ${
@@ -1396,9 +1559,7 @@ const CompanyManagement = () => {
               </section>
             </div>
 
-            {/* =================================================
-                MODAL ACTIONS
-            ================================================= */}
+            {/* MODAL ACTIONS */}
 
             <div className={`p-5 border-t ${border}`}>
               {selectedCompany.status === "Pending Review" && (
@@ -1450,7 +1611,7 @@ const CompanyManagement = () => {
 
       {/* =====================================================
           REJECT MODAL
-      ===================================================== */}
+          ===================================================== */}
 
       {showRejectModal && selectedCompany && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -1460,6 +1621,7 @@ const CompanyManagement = () => {
               if (actionLoading) return;
 
               setShowRejectModal(false);
+
               setRejectReason("");
             }}
           />
@@ -1467,9 +1629,7 @@ const CompanyManagement = () => {
           <div
             className={`relative w-full max-w-lg rounded-2xl border shadow-2xl ${panel}`}
           >
-            {/* =================================================
-                REJECT MODAL HEADER
-            ================================================= */}
+            {/* HEADER */}
 
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start gap-3">
@@ -1494,9 +1654,7 @@ const CompanyManagement = () => {
               </div>
             </div>
 
-            {/* =================================================
-                REJECT MODAL CONTENT
-            ================================================= */}
+            {/* CONTENT */}
 
             <div className="p-5 space-y-4">
               {/* COMPANY */}
@@ -1589,7 +1747,8 @@ const CompanyManagement = () => {
                   </p>
 
                   <p className={`text-[10px] ${muted}`}>
-                    {rejectReason.length}/500
+                    {rejectReason.length}
+                    /500
                   </p>
                 </div>
               </div>
@@ -1618,9 +1777,7 @@ const CompanyManagement = () => {
               </div>
             </div>
 
-            {/* =================================================
-                REJECT MODAL ACTIONS
-            ================================================= */}
+            {/* ACTIONS */}
 
             <div className={`p-5 border-t ${border}`}>
               <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
@@ -1629,6 +1786,7 @@ const CompanyManagement = () => {
                   disabled={actionLoading}
                   onClick={() => {
                     setShowRejectModal(false);
+
                     setRejectReason("");
                   }}
                   className={`px-4 py-2.5 rounded-lg border text-xs font-semibold ${
