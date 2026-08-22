@@ -545,7 +545,6 @@ const SignUp = () => {
         />
 
         <input
-          required
           type="text"
           maxLength={2}
           placeholder="M.I."
