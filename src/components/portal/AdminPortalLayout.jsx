@@ -133,6 +133,11 @@ const AdminPortalLayout = () => {
       path: "/admin/users",
     },
     {
+      name: "School Management",
+      icon: "🏫",
+      path: "/admin/schools",
+    },
+    {
       name: "Internship Records",
       icon: "▣",
       path: "/admin/internships",
@@ -387,15 +392,15 @@ const AdminPortalLayout = () => {
   // DARK MODE
   // =========================================================
 
- const toggleDarkMode = () => {
-   setDarkMode((prev) => {
-     const nextMode = !prev;
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => {
+      const nextMode = !prev;
 
-     localStorage.setItem("sims_admin_dark_mode", String(nextMode));
+      localStorage.setItem("sims_admin_dark_mode", String(nextMode));
 
-     return nextMode;
-   });
- };
+      return nextMode;
+    });
+  };
 
   // =========================================================
   // DEMO NOTICE

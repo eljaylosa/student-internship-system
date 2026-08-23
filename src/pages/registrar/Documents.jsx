@@ -1,138 +1,51 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseRegistrar } from "../../supabaseClient";
 
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  "currentUser": {
-    "id": "USR-002",
-    "role": "registrar",
-    "email": "registrar@gmail.com",
-    "password": "password",
-    "status": "Active",
-    "profileId": "FAC-001"
-  },
-  "documents": [],
-  "students": [
-    {
-      "id": "STU-001",
-      "userId": "USR-001",
-      "fullName": "John Doe",
-      "email": "student@gmail.com",
-      "studentId": "STU-001",
-      "program": "BS Information Technology",
-      "yearLevel": "2nd Year",
-      "department": "College of Information and Communications Technology",
-      "facultyId": "FAC-001",
-      "phone": "+63 912 345 6789",
-      "address": "Limay, Bataan",
-      "gwa": "1.75"
-    }
-  ],
-  "assignments": [],
-  "documentTypes": [
-    {
-      "id": "DT-001",
-      "name": "Resume/CV",
-      "required": true
-    },
-    {
-      "id": "DT-002",
-      "name": "Acceptance Letter",
-      "required": true
-    },
-    {
-      "id": "DT-003",
-      "name": "Internship Agreement",
-      "required": true
-    },
-    {
-      "id": "DT-004",
-      "name": "Medical Certificate",
-      "required": true
-    },
-    {
-      "id": "DT-005",
-      "name": "Parent Consent",
-      "required": true
-    },
-    {
-      "id": "DT-006",
-      "name": "Insurance Form",
-      "required": false
-    }
-  ],
-  "companies": [
-    {
-      "id": "COM-001",
-      "name": "ABC Technologies",
-      "industry": "Information Technology",
-      "status": "Verified",
-      "address": "Balanga, Bataan",
-      "email": "hr@abctech.com",
-      "supervisorIds": [
-        "SUP-001"
-      ]
-    }
-  ]
-};
 const STATUS = {
-  "user": {
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive",
-    "PENDING": "Pending"
+  assignment: {
+    PENDING: "pending",
+    ACTIVE: "active",
+    COMPLETED: "completed",
+    SUSPENDED: "suspended",
+    TERMINATED: "terminated",
   },
-  "company": {
-    "PENDING": "Pending",
-    "VERIFIED": "Verified",
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive"
+
+  document: {
+    SUBMITTED: "submitted",
+    PENDING_REVIEW: "pending_review",
+    APPROVED: "approved",
+    NEEDS_REVISION: "needs_revision",
   },
-  "opportunity": {
-    "DRAFT": "Draft",
-    "ACTIVE": "Active",
-    "CLOSED": "Closed"
-  },
-  "application": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "UNDER_REVIEW": "Under Review",
-    "INFO_REQUESTED": "Information Requested",
-    "APPROVED": "Approved",
-    "REJECTED": "Rejected",
-    "WITHDRAWN": "Withdrawn"
-  },
-  "assignment": {
-    "PENDING": "Pending",
-    "ACTIVE": "Active",
-    "COMPLETED": "Completed",
-    "SUSPENDED": "Suspended",
-    "TERMINATED": "Terminated"
-  },
-  "document": {
-    "NOT_SUBMITTED": "Not Submitted",
-    "SUBMITTED": "Submitted",
-    "PENDING_REVIEW": "Pending Review",
-    "APPROVED": "Approved",
-    "NEEDS_REVISION": "Needs Revision"
-  },
-  "evaluation": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "RETURNED": "Returned",
-    "FINALIZED": "Finalized"
-  }
 };
+
+const STORAGE_BUCKET = "internship-documents";
 
 export default function Documents() {
   const { darkMode } = useOutletContext();
 
-  const state = localState;
-  const reviewDocument = (...args) => { void args; };
-  const deployAssignment = (...args) => { void args; };
+  // =========================================================
+  // STATE
+  // =========================================================
 
-  const facultyId = state.currentUser?.profileId;
+  const [registrar, setRegistrar] = useState(null);
+
+  const [students, setStudents] = useState([]);
+  const [studentUsers, setStudentUsers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [documents, setDocuments] = useState([]);
 
   const [selectedDocument, setSelectedDocument] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [deployingAssignmentId, setDeployingAssignmentId] = useState(null);
+
+  // =========================================================
+  // THEME
+  // =========================================================
 
   const card = darkMode
     ? "bg-slate-900 border-slate-700"
@@ -140,174 +53,289 @@ export default function Documents() {
 
   const mutedText = darkMode ? "text-slate-400" : "text-slate-500";
 
-  /*
-   * =========================================================
-   * ONLY SHOW DOCUMENTS BELONGING TO THIS REGISTRAR
-   * =========================================================
-   */
+  const border = darkMode ? "border-slate-700" : "border-slate-200";
 
-  const documents = state.documents.filter(
-    (item) => item.reviewerId === facultyId
-  );
+  // =========================================================
+  // LOAD PAGE
+  // =========================================================
 
-  /*
-   * =========================================================
-   * GROUP DOCUMENTS BY STUDENT
-   * =========================================================
-   */
+  useEffect(() => {
+    loadDocumentsPage();
+  }, []);
 
-  const studentGroups = useMemo(() => {
-    const groups = {};
+  const loadDocumentsPage = async () => {
+    setLoading(true);
 
-    documents.forEach((document) => {
-      if (!groups[document.studentId]) {
-        groups[document.studentId] = [];
+    try {
+      // -------------------------------------------------------
+      // CURRENT AUTH USER
+      // -------------------------------------------------------
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (authError) {
+        throw authError;
       }
 
-      groups[document.studentId].push(document);
-    });
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
 
-    return Object.entries(groups).map(([studentId, studentDocuments]) => {
-      const student = state.students.find((item) => item.id === studentId);
+      // -------------------------------------------------------
+      // REGISTRAR USER
+      // -------------------------------------------------------
 
-      const assignment = state.assignments.find(
-        (item) => item.id === studentDocuments[0]?.assignmentId
-      );
+      const { data: userData, error: userError } = await supabaseRegistrar
+        .from("users")
+        .select(
+          `
+            id,
+            email,
+            role,
+            first_name,
+            middle_name,
+            last_name,
+            status
+          `
+        )
+        .eq("id", user.id)
+        .single();
 
-      const requiredTypes = state.documentTypes.filter((item) => item.required);
+      if (userError) {
+        throw userError;
+      }
 
-      const approvedRequiredDocuments = studentDocuments.filter((document) => {
-        const type = state.documentTypes.find(
-          (item) => item.id === document.documentTypeId
-        );
+      setRegistrar(userData);
 
-        return type?.required && document.status === STATUS.document.APPROVED;
-      });
+      // -------------------------------------------------------
+      // STUDENTS
+      // -------------------------------------------------------
 
-      const allRequiredDocumentsApproved =
-        requiredTypes.length > 0 &&
-        approvedRequiredDocuments.length === requiredTypes.length;
+      const { data: studentData, error: studentError } =
+        await supabaseRegistrar.from("students").select(`
+            id,
+            student_id,
+            program,
+            year_level,
+            department,
+            phone,
+            address,
+            gwa
+          `);
 
-      const pendingDocuments = studentDocuments.filter(
-        (document) =>
-          document.status === STATUS.document.PENDING_REVIEW ||
-          document.status === STATUS.document.SUBMITTED
-      );
+      if (studentError) {
+        throw studentError;
+      }
 
-      const needsRevision = studentDocuments.filter(
-        (document) => document.status === STATUS.document.NEEDS_REVISION
-      );
+      setStudents(studentData || []);
 
-      /*
-       * =====================================================
-       * ASSIGNMENT STATUS
-       * =====================================================
-       */
+      // -------------------------------------------------------
+      // STUDENT USERS
+      //
+      // Gets names + email from users table.
+      // students.id should match users.id.
+      // -------------------------------------------------------
 
-      const deployed = assignment?.status === STATUS.assignment.ACTIVE;
+      const { data: studentUserData, error: studentUserError } =
+        await supabaseRegistrar
+          .from("users")
+          .select(
+            `
+            id,
+            email,
+            first_name,
+            middle_name,
+            last_name,
+            role,
+            status
+          `
+          )
+          .eq("role", "student");
 
-      const completed = assignment?.status === STATUS.assignment.COMPLETED;
+      if (studentUserError) {
+        throw studentUserError;
+      }
 
-      const suspended = assignment?.status === STATUS.assignment.SUSPENDED;
+      setStudentUsers(studentUserData || []);
 
-      const terminated = assignment?.status === STATUS.assignment.TERMINATED;
+      // -------------------------------------------------------
+      // ASSIGNMENTS
+      // -------------------------------------------------------
 
-      /*
-       * Deployment is finished/unavailable when the
-       * assignment is already Active, Completed, Suspended,
-       * or Terminated.
-       */
+      const { data: assignmentData, error: assignmentError } =
+        await supabaseRegistrar
+          .from("assignments")
+          .select(
+            `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at
+          `
+          )
+          .order("created_at", {
+            ascending: false,
+          });
 
-      const deploymentFinished =
-        deployed || completed || suspended || terminated;
+      if (assignmentError) {
+        throw assignmentError;
+      }
 
-      return {
-        studentId,
-        student,
-        assignment,
-        documents: studentDocuments,
-        requiredCount: requiredTypes.length,
-        approvedRequiredCount: approvedRequiredDocuments.length,
-        pendingDocuments,
-        needsRevision,
-        allRequiredDocumentsApproved,
-        deployed,
-        completed,
-        suspended,
-        terminated,
-        deploymentFinished,
-      };
-    });
-  }, [documents, state.students, state.assignments, state.documentTypes]);
+      setAssignments(assignmentData || []);
 
-  /*
-   * =========================================================
-   * APPROVE DOCUMENT
-   * =========================================================
-   */
+      // -------------------------------------------------------
+      // COMPANIES
+      //
+      // IMPORTANT:
+      // Actual company name column = company_name
+      // -------------------------------------------------------
 
-  const handleApprove = (document) => {
-    reviewDocument(
-      document.id,
-      STATUS.document.APPROVED,
-      "Verified by registrar."
+      const { data: companyData, error: companyError } =
+        await supabaseRegistrar.from("companies").select(`
+            id,
+            company_name,
+            company_email,
+            company_phone,
+            company_address,
+            industry,
+            designation,
+            status
+          `);
+
+      if (companyError) {
+        throw companyError;
+      }
+
+      setCompanies(companyData || []);
+
+      // -------------------------------------------------------
+      // DOCUMENT TYPES
+      // -------------------------------------------------------
+
+      const { data: documentTypeData, error: documentTypeError } =
+        await supabaseRegistrar
+          .from("document_types")
+          .select(
+            `
+            id,
+            name,
+            description,
+            required,
+            created_at,
+            updated_at
+          `
+          )
+          .order("created_at", {
+            ascending: true,
+          });
+
+      if (documentTypeError) {
+        throw documentTypeError;
+      }
+
+      setDocumentTypes(documentTypeData || []);
+
+      // -------------------------------------------------------
+      // DOCUMENTS
+      // -------------------------------------------------------
+
+      const { data: documentData, error: documentError } =
+        await supabaseRegistrar
+          .from("documents")
+          .select(
+            `
+            id,
+            assignment_id,
+            student_id,
+            document_type_id,
+            file_name,
+            storage_path,
+            version,
+            status,
+            notes,
+            reviewed_by,
+            reviewed_at,
+            created_at,
+            updated_at
+          `
+          )
+          .order("created_at", {
+            ascending: true,
+          });
+
+      if (documentError) {
+        throw documentError;
+      }
+
+      setDocuments(documentData || []);
+    } catch (error) {
+      console.error("Error loading Registrar Documents page:", error);
+
+      alert(error.message || "Unable to load internship documents.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+
+  const getStudent = (studentId) => {
+    return students.find((student) => student.id === studentId);
+  };
+
+  const getStudentUser = (studentId) => {
+    return studentUsers.find((user) => user.id === studentId);
+  };
+
+  const getStudentFullName = (studentId) => {
+    const user = getStudentUser(studentId);
+
+    if (!user) {
+      return "Unknown Student";
+    }
+
+    return (
+      [user.first_name, user.middle_name, user.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "Unknown Student"
     );
-
-    setSelectedDocument(null);
   };
 
-  /*
-   * =========================================================
-   * REQUEST REVISION
-   * =========================================================
-   */
-
-  const handleRevision = (document) => {
-    reviewDocument(
-      document.id,
-      STATUS.document.NEEDS_REVISION,
-      "Please upload a clearer or updated document."
-    );
-
-    setSelectedDocument(null);
+  const getAssignment = (assignmentId) => {
+    return assignments.find((assignment) => assignment.id === assignmentId);
   };
 
-  /*
-   * =========================================================
-   * DEPLOY INTERN
-   * =========================================================
-   */
-
-  const handleDeploy = (group) => {
-    if (!group.assignment) {
-      alert("No internship assignment found for this student.");
-      return;
-    }
-
-    if (!group.allRequiredDocumentsApproved) {
-      alert(
-        "All required documents must be approved before this intern can be deployed."
-      );
-      return;
-    }
-
-    /*
-     * Prevent deployment if the internship has already
-     * reached a final/current state.
-     */
-
-    if (group.deploymentFinished) {
-      return;
-    }
-
-    deployAssignment(group.assignment.id);
+  const getCompany = (companyId) => {
+    return companies.find((company) => company.id === companyId);
   };
 
-  /*
-   * =========================================================
-   * STATUS STYLE
-   * =========================================================
-   */
+  const getDocumentType = (typeId) => {
+    return documentTypes.find((type) => type.id === typeId);
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      [STATUS.document.SUBMITTED]: "Submitted",
+      [STATUS.document.PENDING_REVIEW]: "Pending Review",
+      [STATUS.document.APPROVED]: "Approved",
+      [STATUS.document.NEEDS_REVISION]: "Needs Revision",
+    };
+
+    return labels[status] || status;
+  };
 
   const getStatusClass = (status) => {
     switch (status) {
@@ -334,33 +362,358 @@ export default function Documents() {
     }
   };
 
-  /*
-   * =========================================================
-   * SUMMARY COUNTS
-   * =========================================================
-   */
+  // =========================================================
+  // GROUP DOCUMENTS BY STUDENT
+  // =========================================================
+
+  const studentGroups = useMemo(() => {
+    const groups = {};
+
+    documents.forEach((document) => {
+      if (!groups[document.student_id]) {
+        groups[document.student_id] = [];
+      }
+
+      groups[document.student_id].push(document);
+    });
+
+    return Object.entries(groups).map(([studentId, studentDocuments]) => {
+      const student = getStudent(studentId);
+      const studentUser = getStudentUser(studentId);
+
+      const assignment = getAssignment(studentDocuments[0]?.assignment_id);
+
+      const company = getCompany(assignment?.company_id);
+
+      const requiredTypes = documentTypes.filter((type) => type.required);
+
+      const approvedRequiredDocuments = studentDocuments.filter((document) => {
+        const type = getDocumentType(document.document_type_id);
+
+        return type?.required && document.status === STATUS.document.APPROVED;
+      });
+
+      const allRequiredDocumentsApproved =
+        requiredTypes.length > 0 &&
+        approvedRequiredDocuments.length === requiredTypes.length;
+
+      const pendingDocuments = studentDocuments.filter(
+        (document) =>
+          document.status === STATUS.document.PENDING_REVIEW ||
+          document.status === STATUS.document.SUBMITTED
+      );
+
+      const needsRevision = studentDocuments.filter(
+        (document) => document.status === STATUS.document.NEEDS_REVISION
+      );
+
+      const deployed = assignment?.status === STATUS.assignment.ACTIVE;
+
+      const completed = assignment?.status === STATUS.assignment.COMPLETED;
+
+      const suspended = assignment?.status === STATUS.assignment.SUSPENDED;
+
+      const terminated = assignment?.status === STATUS.assignment.TERMINATED;
+
+      const deploymentFinished =
+        deployed || completed || suspended || terminated;
+
+      return {
+        studentId,
+        student,
+        studentUser,
+        studentName: getStudentFullName(studentId),
+        assignment,
+        company,
+        documents: studentDocuments,
+        requiredCount: requiredTypes.length,
+        approvedRequiredCount: approvedRequiredDocuments.length,
+        pendingDocuments,
+        needsRevision,
+        allRequiredDocumentsApproved,
+        deployed,
+        completed,
+        suspended,
+        terminated,
+        deploymentFinished,
+      };
+    });
+  }, [
+    documents,
+    students,
+    studentUsers,
+    assignments,
+    documentTypes,
+    companies,
+  ]);
+
+  // =========================================================
+  // APPROVE DOCUMENT
+  // =========================================================
+
+  const handleApprove = async (document) => {
+    if (!registrar) {
+      alert("Registrar information could not be loaded.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Approve "${document.file_name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionLoadingId(document.id);
+
+    try {
+      const { data: updatedDocument, error } = await supabaseRegistrar
+        .from("documents")
+        .update({
+          status: STATUS.document.APPROVED,
+          notes: "Verified by Registrar.",
+          reviewed_by: registrar.id,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setDocuments((previous) =>
+        previous.map((item) =>
+          item.id === updatedDocument.id ? updatedDocument : item
+        )
+      );
+
+      setSelectedDocument(null);
+
+      alert("Document approved successfully.");
+    } catch (error) {
+      console.error("Error approving document:", error);
+
+      alert(error.message || "Unable to approve document.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // =========================================================
+  // REQUEST REVISION
+  // =========================================================
+
+  const handleRevision = async (document) => {
+    if (!registrar) {
+      alert("Registrar information could not be loaded.");
+      return;
+    }
+
+    const note = window.prompt(
+      "Enter the reason for requesting a revision:",
+      "Please upload a clearer or updated document."
+    );
+
+    if (note === null) {
+      return;
+    }
+
+    if (!note.trim()) {
+      alert("Please provide a revision note.");
+      return;
+    }
+
+    setActionLoadingId(document.id);
+
+    try {
+      const { data: updatedDocument, error } = await supabaseRegistrar
+        .from("documents")
+        .update({
+          status: STATUS.document.NEEDS_REVISION,
+          notes: note.trim(),
+          reviewed_by: registrar.id,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setDocuments((previous) =>
+        previous.map((item) =>
+          item.id === updatedDocument.id ? updatedDocument : item
+        )
+      );
+
+      setSelectedDocument(null);
+
+      alert("Revision request sent successfully.");
+    } catch (error) {
+      console.error("Error requesting document revision:", error);
+
+      alert(error.message || "Unable to request document revision.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // =========================================================
+  // VIEW DOCUMENT
+  // =========================================================
+
+  const handleViewDocument = async (document) => {
+    try {
+      if (!document.storage_path) {
+        throw new Error("This document does not have a storage path.");
+      }
+
+      const { data, error } = await supabaseRegistrar.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(document.storage_path, 60 * 10);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.signedUrl) {
+        throw new Error("Unable to create document preview URL.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Error opening document:", error);
+
+      alert(error.message || "Unable to open this document.");
+    }
+  };
+
+  // =========================================================
+  // DEPLOY INTERN
+  // =========================================================
+
+  const handleDeploy = async (group) => {
+    if (!group.assignment) {
+      alert("No internship assignment found for this student.");
+
+      return;
+    }
+
+    if (!group.allRequiredDocumentsApproved) {
+      alert(
+        "All required documents must be approved before this intern can be deployed."
+      );
+
+      return;
+    }
+
+    if (group.deploymentFinished) {
+      alert("This internship is no longer available for deployment.");
+
+      return;
+    }
+
+    const company = getCompany(group.assignment.company_id);
+
+    const confirmed = window.confirm(
+      `Deploy ${group.studentName} to ${
+        company?.company_name || "the assigned company"
+      }?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeployingAssignmentId(group.assignment.id);
+
+    try {
+      const { data: updatedAssignment, error } = await supabaseRegistrar
+        .from("assignments")
+        .update({
+          status: STATUS.assignment.ACTIVE,
+          deployed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", group.assignment.id)
+        .eq("status", STATUS.assignment.PENDING)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setAssignments((previous) =>
+        previous.map((assignment) =>
+          assignment.id === updatedAssignment.id
+            ? updatedAssignment
+            : assignment
+        )
+      );
+
+      alert("Intern deployed successfully.");
+    } catch (error) {
+      console.error("Error deploying intern:", error);
+
+      alert(error.message || "Unable to deploy intern.");
+    } finally {
+      setDeployingAssignmentId(null);
+    }
+  };
+
+  // =========================================================
+  // SUMMARY
+  // =========================================================
 
   const totalDocuments = documents.length;
 
   const pendingDocuments = documents.filter(
-    (item) =>
-      item.status === STATUS.document.PENDING_REVIEW ||
-      item.status === STATUS.document.SUBMITTED
+    (document) =>
+      document.status === STATUS.document.PENDING_REVIEW ||
+      document.status === STATUS.document.SUBMITTED
   ).length;
 
   const approvedDocuments = documents.filter(
-    (item) => item.status === STATUS.document.APPROVED
+    (document) => document.status === STATUS.document.APPROVED
   ).length;
 
   const readyForDeployment = studentGroups.filter(
     (group) => group.allRequiredDocumentsApproved && !group.deploymentFinished
   ).length;
 
-  /*
-   * =========================================================
-   * PAGE
-   * =========================================================
-   */
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div
+        className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
+          darkMode ? "text-slate-100" : "text-slate-900"
+        }`}
+      >
+        <div className={`border rounded-2xl p-10 text-center ${card}`}>
+          <div className="text-2xl mb-3">⏳</div>
+
+          <h3 className="font-bold">Loading documents...</h3>
+
+          <p className={`text-sm mt-1 ${mutedText}`}>
+            Please wait while we load student internship documents.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // PAGE
+  // =========================================================
 
   return (
     <div
@@ -368,26 +721,21 @@ export default function Documents() {
         darkMode ? "text-slate-100" : "text-slate-900"
       }`}
     >
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
+      {/* HEADER */}
 
       <div className="mb-6">
         <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
-          Registrar Adviser Portal
+          Registrar Portal
         </p>
 
         <h1 className="text-2xl font-black">Document Verification</h1>
 
         <p className={`text-sm mt-1 ${mutedText}`}>
-          Review all internship requirements before deploying students to their
-          assigned companies.
+          Review student internship requirements before deployment.
         </p>
       </div>
 
-      {/* =====================================================
-          SUMMARY
-      ===================================================== */}
+      {/* SUMMARY */}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className={`border rounded-2xl p-4 ${card}`}>
@@ -421,32 +769,25 @@ export default function Documents() {
         </div>
       </div>
 
-      {/* =====================================================
-          STUDENT DOCUMENT GROUPS
-      ===================================================== */}
+      {/* DOCUMENT LIST */}
 
       <section className={`border rounded-2xl overflow-hidden ${card}`}>
-        <div
-          className={`px-5 py-4 border-b ${
-            darkMode ? "border-slate-700" : "border-slate-200"
-          }`}
-        >
+        <div className={`px-5 py-4 border-b ${border}`}>
           <h2 className="font-bold text-sm">Student Document Verification</h2>
 
           <p className={`text-xs mt-1 ${mutedText}`}>
-            All required documents must be approved before the student can be
-            deployed to the company.
+            Approve all required documents before deploying the intern.
           </p>
         </div>
 
         {studentGroups.length === 0 ? (
-          <div className="p-8 text-center">
+          <div className="p-10 text-center">
             <div className="text-3xl mb-3">📄</div>
 
             <p className="font-semibold">No submitted documents</p>
 
             <p className={`text-sm mt-1 ${mutedText}`}>
-              Students will appear here after they submit their internship
+              Students will appear here after submitting their internship
               requirements.
             </p>
           </div>
@@ -457,9 +798,7 @@ export default function Documents() {
             }`}
           >
             {studentGroups.map((group) => {
-              const company = state.companies.find(
-                (item) => item.id === group.assignment?.companyId
-              );
+              const company = getCompany(group.assignment?.company_id);
 
               return (
                 <div
@@ -468,15 +807,13 @@ export default function Documents() {
                     darkMode ? "hover:bg-slate-800/30" : "hover:bg-slate-50"
                   }`}
                 >
-                  {/* =================================================
-                      STUDENT HEADER
-                  ================================================= */}
+                  {/* STUDENT HEADER */}
 
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-black">
-                          {group.student?.fullName || "Unknown Student"}
+                          {group.studentName}
                         </h3>
 
                         {group.completed ? (
@@ -510,21 +847,85 @@ export default function Documents() {
                         )}
                       </div>
 
-                      <p className={`text-xs mt-1 ${mutedText}`}>
-                        {group.student?.studentId || group.studentId}
-                      </p>
+                      {/* STUDENT BASIC INFO */}
+
+                      <div className="mt-2 space-y-1">
+                        <p className={`text-xs ${mutedText}`}>
+                          <span className="font-semibold">Student ID:</span>{" "}
+                          {group.student?.student_id || group.studentId}
+                        </p>
+
+                        <p className={`text-xs ${mutedText}`}>
+                          <span className="font-semibold">Program:</span>{" "}
+                          {group.student?.program || "No program"}
+                        </p>
+
+                        <p className={`text-xs ${mutedText}`}>
+                          <span className="font-semibold">Year Level:</span>{" "}
+                          {group.student?.year_level || "No year level"}
+                        </p>
+
+                        <p className={`text-xs ${mutedText}`}>
+                          <span className="font-semibold">Department:</span>{" "}
+                          {group.student?.department || "No department"}
+                        </p>
+
+                        {group.studentUser?.email && (
+                          <p className={`text-xs ${mutedText}`}>
+                            <span className="font-semibold">Email:</span>{" "}
+                            {group.studentUser.email}
+                          </p>
+                        )}
+
+                        {group.student?.phone && (
+                          <p className={`text-xs ${mutedText}`}>
+                            <span className="font-semibold">Phone:</span>{" "}
+                            {group.student.phone}
+                          </p>
+                        )}
+
+                        {group.student?.address && (
+                          <p className={`text-xs ${mutedText}`}>
+                            <span className="font-semibold">Address:</span>{" "}
+                            {group.student.address}
+                          </p>
+                        )}
+
+                        {group.student?.gwa && (
+                          <p className={`text-xs ${mutedText}`}>
+                            <span className="font-semibold">GWA:</span>{" "}
+                            {group.student.gwa}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ASSIGNMENT + COMPANY */}
 
                       {group.assignment && (
-                        <p className={`text-xs mt-1 ${mutedText}`}>
-                          Assignment: {group.assignment.id}
-                          {company?.name ? ` · ${company.name}` : ""}
-                        </p>
+                        <div className="mt-3">
+                          <p className={`text-xs ${mutedText}`}>
+                            <span className="font-semibold">Assignment:</span>{" "}
+                            {group.assignment.id}
+                          </p>
+
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            <span className="font-semibold">Company:</span>{" "}
+                            <span className="font-semibold">
+                              {company?.company_name || "Unknown Company"}
+                            </span>
+                          </p>
+
+                          {company?.industry && (
+                            <p className={`text-xs mt-1 ${mutedText}`}>
+                              <span className="font-semibold">Industry:</span>{" "}
+                              {company.industry}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
 
-                    {/* =================================================
-                        DOCUMENT COMPLETION
-                    ================================================= */}
+                    {/* DOCUMENT PROGRESS */}
 
                     <div
                       className={`border rounded-xl px-4 py-3 min-w-[220px] ${
@@ -564,18 +965,16 @@ export default function Documents() {
                     </div>
                   </div>
 
-                  {/* =================================================
-                      DOCUMENTS
-                  ================================================= */}
+                  {/* DOCUMENTS */}
 
                   <div className="mt-5 space-y-3">
                     {group.documents.map((document) => {
-                      const type = state.documentTypes.find(
-                        (item) => item.id === document.documentTypeId
-                      );
+                      const type = getDocumentType(document.document_type_id);
 
                       const isApproved =
                         document.status === STATUS.document.APPROVED;
+
+                      const isProcessing = actionLoadingId === document.id;
 
                       return (
                         <div
@@ -587,8 +986,6 @@ export default function Documents() {
                           }`}
                         >
                           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                            {/* DOCUMENT INFO */}
-
                             <div className="flex items-start gap-3 min-w-0">
                               <div
                                 className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
@@ -615,19 +1012,28 @@ export default function Documents() {
                                       document.status
                                     )}`}
                                   >
-                                    {document.status}
+                                    {getStatusLabel(document.status)}
                                   </span>
                                 </div>
 
                                 <p
                                   className={`text-xs mt-1 truncate ${mutedText}`}
                                 >
-                                  {document.fileName}
+                                  {document.file_name}
                                 </p>
 
                                 <p className={`text-[10px] mt-1 ${mutedText}`}>
-                                  Version {document.version} · {document.id}
+                                  Version {document.version}
                                 </p>
+
+                                {document.notes && (
+                                  <p className="text-xs mt-2 text-red-500">
+                                    <span className="font-bold">
+                                      Registrar note:
+                                    </span>{" "}
+                                    {document.notes}
+                                  </p>
+                                )}
                               </div>
                             </div>
 
@@ -643,21 +1049,35 @@ export default function Documents() {
                                     : "border-slate-300 hover:bg-white"
                                 }`}
                               >
-                                👁 View Document
+                                👁 Details
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleViewDocument(document)}
+                                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
+                                  darkMode
+                                    ? "border-blue-800 text-blue-400 hover:bg-blue-950"
+                                    : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                                }`}
+                              >
+                                ↗ View File
                               </button>
 
                               {!isApproved && (
                                 <>
                                   <button
                                     type="button"
+                                    disabled={isProcessing}
                                     onClick={() => handleApprove(document)}
-                                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
+                                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition"
                                   >
-                                    ✓ Approve
+                                    {isProcessing ? "Saving..." : "✓ Approve"}
                                   </button>
 
                                   <button
                                     type="button"
+                                    disabled={isProcessing}
                                     onClick={() => handleRevision(document)}
                                     className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
                                       darkMode
@@ -665,7 +1085,7 @@ export default function Documents() {
                                         : "border-red-200 text-red-600 hover:bg-red-50"
                                     }`}
                                   >
-                                    ↻ Request Revision
+                                    ↻ Revision
                                   </button>
                                 </>
                               )}
@@ -677,29 +1097,12 @@ export default function Documents() {
                               )}
                             </div>
                           </div>
-
-                          {/* REVIEW COMMENT */}
-
-                          {document.reviewComment && (
-                            <div
-                              className={`mt-3 p-3 rounded-lg text-xs ${
-                                darkMode
-                                  ? "bg-slate-900 text-slate-400"
-                                  : "bg-white text-slate-500"
-                              }`}
-                            >
-                              <span className="font-bold">Review comment:</span>{" "}
-                              {document.reviewComment}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* =================================================
-                      DEPLOYMENT ACTION
-                  ================================================= */}
+                  {/* DEPLOYMENT */}
 
                   <div
                     className={`mt-5 pt-5 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
@@ -710,79 +1113,61 @@ export default function Documents() {
                       {group.completed ? (
                         <>
                           <p className="text-sm font-bold text-purple-600">
-                            ✓ Internship completed
+                            ✓ Internship Completed
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            This student's internship has already been
-                            completed. Deployment is no longer available.
+                            This internship has already been completed.
                           </p>
                         </>
                       ) : group.deployed ? (
                         <>
                           <p className="text-sm font-bold text-emerald-600">
-                            ✓ Intern deployed successfully
+                            ✓ Intern Deployed
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            This student is now visible to the assigned company.
+                            The student is now active in their internship.
                           </p>
                         </>
                       ) : group.suspended ? (
-                        <>
-                          <p className="text-sm font-bold text-amber-600">
-                            Internship suspended
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            Deployment is unavailable while this internship is
-                            suspended.
-                          </p>
-                        </>
+                        <p className="text-sm font-bold text-amber-600">
+                          Internship Suspended
+                        </p>
                       ) : group.terminated ? (
-                        <>
-                          <p className="text-sm font-bold text-red-600">
-                            Internship terminated
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            This internship has been terminated. Deployment is
-                            no longer available.
-                          </p>
-                        </>
+                        <p className="text-sm font-bold text-red-600">
+                          Internship Terminated
+                        </p>
                       ) : group.allRequiredDocumentsApproved ? (
                         <>
                           <p className="text-sm font-bold text-blue-600">
-                            All required documents approved
+                            All Required Documents Approved
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            This intern is ready to be deployed to the company.
+                            This student is ready for deployment.
                           </p>
                         </>
                       ) : (
                         <>
                           <p className="text-sm font-semibold">
-                            Deployment unavailable
+                            Deployment Unavailable
                           </p>
 
                           <p className={`text-xs mt-1 ${mutedText}`}>
-                            Approve all required documents before deploying this
-                            intern.
+                            Approve all required documents before deployment.
                           </p>
                         </>
                       )}
                     </div>
 
-                    {/* =================================================
-                        DEPLOY BUTTON
-                        Only appears when deployment is still possible
-                    ================================================= */}
-
                     {!group.deploymentFinished && (
                       <button
                         type="button"
-                        disabled={!group.allRequiredDocumentsApproved}
+                        disabled={
+                          !group.allRequiredDocumentsApproved ||
+                          deployingAssignmentId === group.assignment?.id
+                        }
                         onClick={() => handleDeploy(group)}
                         className={`px-5 py-2.5 rounded-lg text-xs font-bold transition ${
                           group.allRequiredDocumentsApproved
@@ -792,7 +1177,9 @@ export default function Documents() {
                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                         }`}
                       >
-                        🚀 Deploy Intern
+                        {deployingAssignmentId === group.assignment?.id
+                          ? "Deploying..."
+                          : "🚀 Deploy Intern"}
                       </button>
                     )}
                   </div>
@@ -804,7 +1191,7 @@ export default function Documents() {
       </section>
 
       {/* =====================================================
-          DOCUMENT VIEWER MODAL
+          DOCUMENT DETAILS MODAL
       ===================================================== */}
 
       {selectedDocument && (
@@ -813,14 +1200,14 @@ export default function Documents() {
           onClick={() => setSelectedDocument(null)}
         >
           <div
-            className={`w-full max-w-3xl max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden ${
+            className={`w-full max-w-2xl max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden ${
               darkMode
                 ? "bg-slate-900 border-slate-700"
                 : "bg-white border-slate-200"
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            {/* MODAL HEADER */}
+            {/* HEADER */}
 
             <div
               className={`px-5 py-4 border-b flex items-center justify-between ${
@@ -829,10 +1216,12 @@ export default function Documents() {
             >
               <div className="min-w-0">
                 <h2 className="font-bold truncate">
-                  {selectedDocument.fileName}
+                  {selectedDocument.file_name}
                 </h2>
 
-                <p className={`text-xs mt-1 ${mutedText}`}>Document Preview</p>
+                <p className={`text-xs mt-1 ${mutedText}`}>
+                  Internship Document
+                </p>
               </div>
 
               <button
@@ -846,103 +1235,256 @@ export default function Documents() {
               </button>
             </div>
 
-            {/* DOCUMENT PREVIEW */}
+            {/* BODY */}
 
             <div className="p-6 overflow-y-auto max-h-[65vh]">
+              {/* STUDENT INFORMATION */}
+
+              {(() => {
+                const student = getStudent(selectedDocument.student_id);
+
+                const studentUser = getStudentUser(selectedDocument.student_id);
+
+                return (
+                  <div
+                    className={`p-5 rounded-xl border ${
+                      darkMode
+                        ? "bg-slate-800 border-slate-700"
+                        : "bg-slate-50 border-slate-200"
+                    }`}
+                  >
+                    <p className={`text-xs uppercase font-bold ${mutedText}`}>
+                      Student Information
+                    </p>
+
+                    <h3 className="text-lg font-black mt-1">
+                      {getStudentFullName(selectedDocument.student_id)}
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3 mt-4">
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Student ID
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.student_id || selectedDocument.student_id}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Email
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1 break-all">
+                          {studentUser?.email || "No email"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Program
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.program || "No program"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Year Level
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.year_level || "No year level"}
+                        </p>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Department
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.department || "No department"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Phone
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.phone || "No phone"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          GWA
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.gwa || "Not available"}
+                        </p>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <p
+                          className={`text-[10px] uppercase font-bold ${mutedText}`}
+                        >
+                          Address
+                        </p>
+
+                        <p className="text-sm font-semibold mt-1">
+                          {student?.address || "No address"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* DOCUMENT INFORMATION */}
+
               <div
-                className={`min-h-[360px] rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center p-8 ${
+                className={`p-5 rounded-xl border mt-4 ${
                   darkMode
-                    ? "border-slate-700 bg-slate-950"
-                    : "border-slate-200 bg-slate-50"
+                    ? "bg-slate-800 border-slate-700"
+                    : "bg-slate-50 border-slate-200"
                 }`}
               >
-                <div className="text-5xl mb-4">📄</div>
-
-                <h3 className="font-bold text-lg">
-                  {selectedDocument.fileName}
-                </h3>
-
-                <p className={`text-sm mt-2 max-w-md ${mutedText}`}>
-                  The uploaded document will be displayed here for faculty
-                  verification.
+                <p className={`text-xs uppercase font-bold ${mutedText}`}>
+                  Document Information
                 </p>
 
-                <p className={`text-xs mt-3 ${mutedText}`}>
-                  Actual file preview will be enabled when document storage is
-                  connected.
+                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
+                  Document Type
                 </p>
+
+                <p className="font-bold mt-1">
+                  {getDocumentType(selectedDocument.document_type_id)?.name ||
+                    "Unknown Document"}
+                </p>
+
+                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
+                  File
+                </p>
+
+                <p className="text-sm font-semibold mt-1 break-all">
+                  {selectedDocument.file_name}
+                </p>
+
+                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
+                  Version
+                </p>
+
+                <p className="text-sm font-semibold mt-1">
+                  {selectedDocument.version}
+                </p>
+
+                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
+                  Status
+                </p>
+
+                <span
+                  className={`inline-flex mt-2 px-3 py-1.5 rounded-full border text-xs font-bold ${getStatusClass(
+                    selectedDocument.status
+                  )}`}
+                >
+                  {getStatusLabel(selectedDocument.status)}
+                </span>
+
+                {selectedDocument.notes && (
+                  <>
+                    <p
+                      className={`text-xs mt-4 uppercase font-bold ${mutedText}`}
+                    >
+                      Registrar Note
+                    </p>
+
+                    <p className="text-sm mt-1 text-red-500">
+                      {selectedDocument.notes}
+                    </p>
+                  </>
+                )}
               </div>
 
-              {/* FILE DETAILS */}
+              {/* ASSIGNMENT / COMPANY */}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-                <div
-                  className={`p-3 rounded-lg ${
-                    darkMode ? "bg-slate-800" : "bg-slate-50"
-                  }`}
-                >
-                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
-                    Student
-                  </p>
+              {(() => {
+                const assignment = getAssignment(
+                  selectedDocument.assignment_id
+                );
 
-                  <p className="text-sm font-semibold mt-1">
-                    {
-                      state.students.find(
-                        (student) => student.id === selectedDocument.studentId
-                      )?.fullName
-                    }
-                  </p>
-                </div>
+                const company = getCompany(assignment?.company_id);
 
-                <div
-                  className={`p-3 rounded-lg ${
-                    darkMode ? "bg-slate-800" : "bg-slate-50"
-                  }`}
-                >
-                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
-                    Document Type
-                  </p>
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                    <div
+                      className={`p-3 rounded-lg ${
+                        darkMode ? "bg-slate-800" : "bg-slate-50"
+                      }`}
+                    >
+                      <p
+                        className={`text-[10px] uppercase font-bold ${mutedText}`}
+                      >
+                        Assignment
+                      </p>
 
-                  <p className="text-sm font-semibold mt-1">
-                    {
-                      state.documentTypes.find(
-                        (type) => type.id === selectedDocument.documentTypeId
-                      )?.name
-                    }
-                  </p>
-                </div>
+                      <p className="text-sm font-semibold mt-1 break-all">
+                        {selectedDocument.assignment_id}
+                      </p>
+                    </div>
 
-                <div
-                  className={`p-3 rounded-lg ${
-                    darkMode ? "bg-slate-800" : "bg-slate-50"
-                  }`}
-                >
-                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
-                    Version
-                  </p>
+                    <div
+                      className={`p-3 rounded-lg ${
+                        darkMode ? "bg-slate-800" : "bg-slate-50"
+                      }`}
+                    >
+                      <p
+                        className={`text-[10px] uppercase font-bold ${mutedText}`}
+                      >
+                        Company
+                      </p>
 
-                  <p className="text-sm font-semibold mt-1">
-                    {selectedDocument.version}
-                  </p>
-                </div>
+                      <p className="text-sm font-semibold mt-1">
+                        {company?.company_name || "Unknown Company"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
-                <div
-                  className={`p-3 rounded-lg ${
-                    darkMode ? "bg-slate-800" : "bg-slate-50"
-                  }`}
-                >
-                  <p className={`text-[10px] uppercase font-bold ${mutedText}`}>
-                    Status
-                  </p>
+              {/* VIEW FILE */}
 
-                  <p className="text-sm font-semibold mt-1">
-                    {selectedDocument.status}
-                  </p>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleViewDocument(selectedDocument)}
+                className="w-full mt-5 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+              >
+                ↗ Open Uploaded Document
+              </button>
             </div>
 
-            {/* MODAL ACTIONS */}
+            {/* ACTIONS */}
 
             {selectedDocument.status !== STATUS.document.APPROVED && (
               <div
@@ -952,6 +1494,7 @@ export default function Documents() {
               >
                 <button
                   type="button"
+                  disabled={actionLoadingId === selectedDocument.id}
                   onClick={() => handleRevision(selectedDocument)}
                   className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
                     darkMode
@@ -964,6 +1507,7 @@ export default function Documents() {
 
                 <button
                   type="button"
+                  disabled={actionLoadingId === selectedDocument.id}
                   onClick={() => handleApprove(selectedDocument)}
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
                 >

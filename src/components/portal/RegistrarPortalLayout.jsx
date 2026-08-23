@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { supabaseRegistrar } from "../../supabaseClient";
 
 // =========================================================
 // TEMPORARY FRONTEND NOTIFICATIONS
-// This is NOT connected to mockStore.
-// This will later be replaced with the real backend/database.
+// This is NOT connected to the database yet.
 // =========================================================
 
 const initialNotifications = [
@@ -49,7 +49,258 @@ const RegistrarPortalLayout = () => {
   const location = useLocation();
 
   // =========================================================
-  // LOGOUT PLACEHOLDER
+  // REGISTRAR PROFILE
+  // =========================================================
+
+  const [registrarProfile, setRegistrarProfile] = useState({
+    id: null,
+    first_name: "",
+    middle_name: "",
+    last_name: "",
+    email: "",
+    employee_id: "",
+    department: "",
+    position: "",
+    specialization: "",
+    phone: "",
+    address: "",
+    profile_photo_url: "",
+  });
+
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // =========================================================
+  // LOAD CURRENT REGISTRAR PROFILE
+  // =========================================================
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRegistrarProfile = async () => {
+      try {
+        setProfileLoading(true);
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (authError) {
+          console.error("Error getting authenticated user:", authError);
+          return;
+        }
+
+        if (!user) {
+          console.warn("No authenticated user found.");
+          return;
+        }
+
+        // -----------------------------------------------------
+        // Get common account information from users
+        // -----------------------------------------------------
+
+        const { data: userData, error: userError } = await supabaseRegistrar
+          .from("users")
+          .select(
+            `
+              id,
+              email,
+              first_name,
+              middle_name,
+              last_name,
+              role,
+              status
+            `
+          )
+          .eq("id", user.id)
+          .single();
+
+        if (userError) {
+          console.error("Error loading users record:", userError);
+        }
+
+        // -----------------------------------------------------
+        // Get registrar-specific information
+        // -----------------------------------------------------
+
+        const { data: registrarData, error: registrarError } = await supabaseRegistrar
+          .from("registrars")
+          .select(
+            `
+              id,
+              employee_id,
+              department,
+              position,
+              specialization,
+              phone,
+              address,
+              profile_photo_url
+            `
+          )
+          .eq("id", user.id)
+          .single();
+
+        if (registrarError) {
+          console.error("Error loading registrar record:", registrarError);
+        }
+
+        if (!isMounted) return;
+
+        setRegistrarProfile({
+          id: user.id,
+
+          first_name: userData?.first_name || "",
+          middle_name: userData?.middle_name || "",
+          last_name: userData?.last_name || "",
+          email: userData?.email || user.email || "",
+
+          employee_id: registrarData?.employee_id || "",
+          department: registrarData?.department || "",
+          position: registrarData?.position || "",
+          specialization: registrarData?.specialization || "",
+          phone: registrarData?.phone || "",
+          address: registrarData?.address || "",
+          profile_photo_url: registrarData?.profile_photo_url || "",
+        });
+      } catch (error) {
+        console.error("Unexpected error loading registrar profile:", error);
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    loadRegistrarProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // REGISTRAR DISPLAY NAME
+  // =========================================================
+
+  const getRegistrarFullName = () => {
+    const firstName = registrarProfile.first_name?.trim() || "";
+    const middleName = registrarProfile.middle_name?.trim() || "";
+    const lastName = registrarProfile.last_name?.trim() || "";
+
+    return [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
+  };
+
+  const registrarFullName = getRegistrarFullName() || "Registrar Admin";
+
+  // =========================================================
+  // REGISTRAR INITIALS
+  // Used only when there is no profile photo.
+  // =========================================================
+
+  const getRegistrarInitials = () => {
+    const firstName = registrarProfile.first_name?.trim() || "";
+    const lastName = registrarProfile.last_name?.trim() || "";
+
+    if (firstName && lastName) {
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+    }
+
+    if (firstName) {
+      return firstName.substring(0, 2).toUpperCase();
+    }
+
+    if (lastName) {
+      return lastName.substring(0, 2).toUpperCase();
+    }
+
+    return "RA";
+  };
+
+  const registrarInitials = getRegistrarInitials();
+
+  // =========================================================
+  // PROFILE PHOTO URL
+  //
+  // profile_photo_url should contain the storage path
+  // inside the `profile-photos` bucket.
+  //
+  // Example:
+  //  user-id/profile.jpg
+  //
+  // We generate a signed URL so this also works if the bucket
+  // is private.
+  // =========================================================
+
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfilePhoto = async () => {
+      const photoPath = registrarProfile.profile_photo_url;
+
+      if (!photoPath) {
+        setProfilePhotoUrl("");
+        return;
+      }
+
+      try {
+        // -----------------------------------------------------
+        // If the database already contains a full URL,
+        // use it directly.
+        // -----------------------------------------------------
+
+        if (
+          photoPath.startsWith("http://") ||
+          photoPath.startsWith("https://")
+        ) {
+          if (isMounted) {
+            setProfilePhotoUrl(photoPath);
+          }
+
+          return;
+        }
+
+        // -----------------------------------------------------
+        // Otherwise treat it as a storage path.
+        // Bucket: profile-photos
+        // -----------------------------------------------------
+
+        const { data, error } = await supabaseRegistrar.storage
+          .from("profile-photos")
+          .createSignedUrl(photoPath, 60 * 60);
+
+        if (error) {
+          console.error("Error generating profile photo URL:", error);
+
+          if (isMounted) {
+            setProfilePhotoUrl("");
+          }
+
+          return;
+        }
+
+        if (isMounted) {
+          setProfilePhotoUrl(data?.signedUrl || "");
+        }
+      } catch (error) {
+        console.error("Unexpected profile photo error:", error);
+
+        if (isMounted) {
+          setProfilePhotoUrl("");
+        }
+      }
+    };
+
+    loadProfilePhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [registrarProfile.profile_photo_url]);
+
+  // =========================================================
+  // TEMPORARY LOGOUT PLACEHOLDER
   // =========================================================
 
   const logout = (...args) => {
@@ -384,7 +635,13 @@ const RegistrarPortalLayout = () => {
   // LOGOUT
   // =========================================================
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabaseRegistrar.auth.signOut();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+
     logout();
 
     setIsProfileOpen(false);
@@ -688,8 +945,6 @@ const RegistrarPortalLayout = () => {
                         : "bg-white border-slate-200"
                     }`}
                   >
-                    {/* HEADER */}
-
                     <div
                       className={`px-4 py-3 border-b flex items-center justify-between ${
                         darkMode ? "border-slate-700" : "border-slate-200"
@@ -719,8 +974,6 @@ const RegistrarPortalLayout = () => {
                         </button>
                       )}
                     </div>
-
-                    {/* LIST */}
 
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.length === 0 ? (
@@ -795,8 +1048,6 @@ const RegistrarPortalLayout = () => {
                       )}
                     </div>
 
-                    {/* VIEW ALL */}
-
                     <button
                       type="button"
                       onClick={() => navigateTo("/registrar/notifications")}
@@ -812,7 +1063,9 @@ const RegistrarPortalLayout = () => {
                 )}
               </div>
 
-              {/* PROFILE */}
+              {/* =================================================
+                  PROFILE
+              ================================================= */}
 
               <div className="relative" ref={profileMenuRef}>
                 <button
@@ -825,25 +1078,42 @@ const RegistrarPortalLayout = () => {
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
+                  {/* PROFILE PHOTO */}
+
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                    className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm ${
                       darkMode
                         ? "bg-white text-slate-900"
                         : "bg-slate-900 text-white"
                     }`}
                   >
-                    RA
+                    {profilePhotoUrl ? (
+                      <img
+                        src={profilePhotoUrl}
+                        alt={registrarFullName}
+                        className="w-full h-full object-cover"
+                        onError={() => {
+                          setProfilePhotoUrl("");
+                        }}
+                      />
+                    ) : (
+                      <span>{profileLoading ? "..." : registrarInitials}</span>
+                    )}
                   </div>
 
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">Registrar Admin</p>
+                  {/* NAME */}
+
+                  <div className="hidden sm:block text-left max-w-44">
+                    <p className="text-sm font-semibold truncate">
+                      {profileLoading ? "Loading..." : registrarFullName}
+                    </p>
 
                     <p
-                      className={`text-xs ${
+                      className={`text-xs truncate ${
                         darkMode ? "text-slate-400" : "text-slate-400"
                       }`}
                     >
-                      Registrar Account
+                      {registrarProfile.position || "Registrar Account"}
                     </p>
                   </div>
 
@@ -858,7 +1128,7 @@ const RegistrarPortalLayout = () => {
 
                 {isProfileOpen && (
                   <div
-                    className={`absolute right-0 top-14 w-60 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
+                    className={`absolute right-0 top-14 w-64 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
                       darkMode
                         ? "bg-slate-800 border-slate-700"
                         : "bg-white border-slate-200"
@@ -871,15 +1141,55 @@ const RegistrarPortalLayout = () => {
                         darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
-                      <p className="text-sm font-bold">Registrar Admin</p>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm ${
+                            darkMode
+                              ? "bg-white text-slate-900"
+                              : "bg-slate-900 text-white"
+                          }`}
+                        >
+                          {profilePhotoUrl ? (
+                            <img
+                              src={profilePhotoUrl}
+                              alt={registrarFullName}
+                              className="w-full h-full object-cover"
+                              onError={() => {
+                                setProfilePhotoUrl("");
+                              }}
+                            />
+                          ) : (
+                            <span>{registrarInitials}</span>
+                          )}
+                        </div>
 
-                      <p
-                        className={`text-xs mt-1 ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
-                      >
-                        Registrar Account
-                      </p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">
+                            {registrarFullName}
+                          </p>
+
+                          <p
+                            className={`text-xs mt-1 truncate ${
+                              darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
+                            {registrarProfile.email || "Registrar Account"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {registrarProfile.employee_id && (
+                        <p
+                          className={`text-[11px] mt-3 ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
+                          Employee ID:{" "}
+                          <span className="font-semibold">
+                            {registrarProfile.employee_id}
+                          </span>
+                        </p>
+                      )}
                     </div>
 
                     {/* PROFILE */}
@@ -991,6 +1301,10 @@ const RegistrarPortalLayout = () => {
                 selectedNotification,
                 openNotification,
                 closeNotificationModal,
+
+                registrarProfile,
+                profilePhotoUrl,
+                registrarFullName,
               }}
             />
           </main>

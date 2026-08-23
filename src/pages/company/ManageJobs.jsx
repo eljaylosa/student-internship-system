@@ -1,109 +1,167 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseCompany } from "../../supabaseClient";
 
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  "currentUser": {
-    "id": "USR-002",
-    "role": "registrar",
-    "email": "registrar@gmail.com",
-    "password": "password",
-    "status": "Active",
-    "profileId": "FAC-001"
-  },
-  "opportunities": [
-    {
-      "id": "OPP-001",
-      "companyId": "COM-001",
-      "supervisorId": "SUP-001",
-      "title": "Web Developer Intern",
-      "description": "Build and improve internal web experiences with the engineering team.",
-      "location": "Balanga, Bataan",
-      "positionType": "On-site",
-      "availability": "June - August 2026",
-      "requirements": [
-        "HTML/CSS",
-        "JavaScript",
-        "Git"
-      ],
-      "status": "Active",
-      "openings": 3
-    }
-  ]
-};
 const STATUS = {
-  "user": {
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive",
-    "PENDING": "Pending"
+  opportunity: {
+    DRAFT: "draft",
+    ACTIVE: "active",
+    CLOSED: "closed",
   },
-  "company": {
-    "PENDING": "Pending",
-    "VERIFIED": "Verified",
-    "ACTIVE": "Active",
-    "INACTIVE": "Inactive"
-  },
-  "opportunity": {
-    "DRAFT": "Draft",
-    "ACTIVE": "Active",
-    "CLOSED": "Closed"
-  },
-  "application": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "UNDER_REVIEW": "Under Review",
-    "INFO_REQUESTED": "Information Requested",
-    "APPROVED": "Approved",
-    "REJECTED": "Rejected",
-    "WITHDRAWN": "Withdrawn"
-  },
-  "assignment": {
-    "PENDING": "Pending",
-    "ACTIVE": "Active",
-    "COMPLETED": "Completed",
-    "SUSPENDED": "Suspended",
-    "TERMINATED": "Terminated"
-  },
-  "document": {
-    "NOT_SUBMITTED": "Not Submitted",
-    "SUBMITTED": "Submitted",
-    "PENDING_REVIEW": "Pending Review",
-    "APPROVED": "Approved",
-    "NEEDS_REVISION": "Needs Revision"
-  },
-  "evaluation": {
-    "DRAFT": "Draft",
-    "SUBMITTED": "Submitted",
-    "RETURNED": "Returned",
-    "FINALIZED": "Finalized"
-  }
 };
 
 export default function ManageJobs() {
   const { darkMode } = useOutletContext();
 
-  const state = localState;
-  const createOpportunity = (...args) => { void args; };
-  const updateOpportunity = (...args) => { void args; };
-  const deleteOpportunity = (...args) => { void args; };
+  // =========================================================
+  // STATE
+  // =========================================================
 
-  const companyId = "COM-001";
-  const supervisorId = state.currentUser?.profileId || "SUP-001";
+  const [company, setCompany] = useState(null);
+  const [opportunities, setOpportunities] = useState([]);
 
-  const opportunities = state.opportunities.filter(
-    (item) => item.companyId === companyId
-  );
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
     description: "",
     location: "",
-    availability: "",
+    internshipStart: "",
+    internshipEnd: "",
     openings: 1,
   });
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+
+  // =========================================================
+  // LOAD COMPANY + OPPORTUNITIES
+  // =========================================================
+
+  useEffect(() => {
+    loadCompanyAndOpportunities();
+  }, []);
+
+  const loadCompanyAndOpportunities = async () => {
+    setLoading(true);
+
+    try {
+      // -------------------------------------------------------
+      // GET CURRENT AUTHENTICATED USER
+      // -------------------------------------------------------
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseCompany.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      // -------------------------------------------------------
+      // FIND COMPANY BELONGING TO CURRENT USER
+      // -------------------------------------------------------
+
+      const { data: companyData, error: companyError } = await supabaseCompany
+        .from("companies")
+        .select("id, company_name, user_id, status")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (companyError) {
+        throw companyError;
+      }
+
+      if (!companyData) {
+        throw new Error("No company record was found for your account.");
+      }
+
+      setCompany(companyData);
+
+      // -------------------------------------------------------
+      // LOAD COMPANY OPPORTUNITIES
+      // -------------------------------------------------------
+
+      const { data: opportunityData, error: opportunityError } =
+        await supabaseCompany
+          .from("opportunities")
+          .select("*")
+          .eq("company_id", companyData.id)
+          .order("created_at", {
+            ascending: false,
+          });
+
+      if (opportunityError) {
+        throw opportunityError;
+      }
+
+      setOpportunities(opportunityData || []);
+    } catch (error) {
+      console.error("Error loading company opportunities:", error);
+
+      alert(error.message || "Unable to load your internship opportunities.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================================================
+  // DATE HELPERS
+  // =========================================================
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "Not specified";
+
+    const date = new Date(`${dateString}T00:00:00`);
+
+    if (Number.isNaN(date.getTime())) {
+      return dateString;
+    }
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatDateRange = (start, end, fallbackAvailability = "") => {
+    if (start && end) {
+      return `${formatDate(start)} - ${formatDate(end)}`;
+    }
+
+    if (fallbackAvailability) {
+      return fallbackAvailability;
+    }
+
+    return "Not specified";
+  };
+
+  const validateInternshipDates = (start, end) => {
+    if (!start) {
+      return "Please select the internship start date.";
+    }
+
+    if (!end) {
+      return "Please select the internship end date.";
+    }
+
+    if (end < start) {
+      return "Internship end date cannot be before the start date.";
+    }
+
+    return null;
+  };
+
+  // =========================================================
+  // STYLES
+  // =========================================================
 
   const card = darkMode
     ? "bg-slate-900 border-slate-700"
@@ -116,6 +174,10 @@ export default function ManageJobs() {
   const muted = darkMode ? "text-slate-400" : "text-slate-500";
 
   const border = darkMode ? "border-slate-700" : "border-slate-200";
+
+  // =========================================================
+  // STATUS STYLE
+  // =========================================================
 
   const getStatusStyle = (status) => {
     if (status === STATUS.opportunity.ACTIVE) {
@@ -135,12 +197,16 @@ export default function ManageJobs() {
       : "bg-amber-50 text-amber-700 border-amber-200";
   };
 
-  /* -----------------------------------------
-     CREATE
-  ----------------------------------------- */
+  // =========================================================
+  // CREATE OPPORTUNITY
+  // =========================================================
 
-  const create = (event) => {
+  const create = async (event) => {
     event.preventDefault();
+
+    if (!company) {
+      return alert("Company information is not available.");
+    }
 
     if (!form.title.trim()) {
       return alert("Please enter an internship title.");
@@ -154,33 +220,75 @@ export default function ManageJobs() {
       return alert("Please enter the internship location.");
     }
 
-    if (!form.availability.trim()) {
-      return alert("Please enter the internship availability.");
+    const dateError = validateInternshipDates(
+      form.internshipStart,
+      form.internshipEnd
+    );
+
+    if (dateError) {
+      return alert(dateError);
     }
 
     if (Number(form.openings) < 1) {
       return alert("There must be at least 1 opening.");
     }
 
-    createOpportunity({
-      ...form,
-      companyId,
-      supervisorId,
-      openings: Number(form.openings),
-    });
+    setSubmitting(true);
 
-    setForm({
-      title: "",
-      description: "",
-      location: "",
-      availability: "",
-      openings: 1,
-    });
+    try {
+      const availability = `${form.internshipStart} - ${form.internshipEnd}`;
+
+      const { data, error } = await supabaseCompany
+        .from("opportunities")
+        .insert({
+          company_id: company.id,
+          title: form.title.trim(),
+          description: form.description.trim(),
+          location: form.location.trim(),
+
+          // NEW DATE FIELDS
+          internship_start: form.internshipStart,
+          internship_end: form.internshipEnd,
+
+          // KEEP OLD FIELD FOR COMPATIBILITY
+          availability,
+
+          openings: Number(form.openings),
+          position_type: "On-site",
+          requirements: [],
+          status: STATUS.opportunity.DRAFT,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setOpportunities((previous) => [data, ...previous]);
+
+      setForm({
+        title: "",
+        description: "",
+        location: "",
+        internshipStart: "",
+        internshipEnd: "",
+        openings: 1,
+      });
+
+      alert("Internship opportunity created as a draft.");
+    } catch (error) {
+      console.error("Create opportunity error:", error);
+
+      alert(error.message || "Unable to create the internship opportunity.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  /* -----------------------------------------
-     START EDIT
-  ----------------------------------------- */
+  // =========================================================
+  // START EDIT
+  // =========================================================
 
   const startEdit = (opportunity) => {
     setEditingId(opportunity.id);
@@ -189,75 +297,208 @@ export default function ManageJobs() {
       title: opportunity.title || "",
       description: opportunity.description || "",
       location: opportunity.location || "",
-      availability: opportunity.availability || "",
+
+      internshipStart: opportunity.internship_start || "",
+      internshipEnd: opportunity.internship_end || "",
+
       openings: opportunity.openings || 1,
     });
   };
 
-  /* -----------------------------------------
-     SAVE EDIT
-  ----------------------------------------- */
+  // =========================================================
+  // SAVE EDIT
+  // =========================================================
 
-  const saveEdit = (id) => {
-    if (!editForm.title.trim()) {
+  const saveEdit = async (id) => {
+    if (!editForm.title?.trim()) {
       return alert("Please enter an internship title.");
     }
 
-    if (!editForm.description.trim()) {
+    if (!editForm.description?.trim()) {
       return alert("Please enter a description.");
     }
 
-    if (!editForm.location.trim()) {
+    if (!editForm.location?.trim()) {
       return alert("Please enter the internship location.");
     }
 
-    if (!editForm.availability.trim()) {
-      return alert("Please enter the internship availability.");
+    const dateError = validateInternshipDates(
+      editForm.internshipStart,
+      editForm.internshipEnd
+    );
+
+    if (dateError) {
+      return alert(dateError);
     }
 
     if (Number(editForm.openings) < 1) {
       return alert("There must be at least 1 opening.");
     }
 
-    updateOpportunity(id, {
-      title: editForm.title,
-      description: editForm.description,
-      location: editForm.location,
-      availability: editForm.availability,
-      openings: Number(editForm.openings),
-    });
+    setSubmitting(true);
 
-    setEditingId(null);
-    setEditForm({});
+    try {
+      const availability = `${editForm.internshipStart} - ${editForm.internshipEnd}`;
+
+      const { data, error } = await supabaseCompany
+        .from("opportunities")
+        .update({
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          location: editForm.location.trim(),
+
+          // NEW DATE FIELDS
+          internship_start: editForm.internshipStart,
+          internship_end: editForm.internshipEnd,
+
+          // KEEP OLD FIELD UPDATED
+          availability,
+
+          openings: Number(editForm.openings),
+        })
+        .eq("id", id)
+        .eq("company_id", company.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setOpportunities((previous) =>
+        previous.map((opportunity) =>
+          opportunity.id === id ? data : opportunity
+        )
+      );
+
+      setEditingId(null);
+      setEditForm({});
+
+      alert("Opportunity updated successfully.");
+    } catch (error) {
+      console.error("Update opportunity error:", error);
+
+      alert(error.message || "Unable to update the opportunity.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  /* -----------------------------------------
-     DELETE
-  ----------------------------------------- */
+  // =========================================================
+  // UPDATE STATUS
+  // =========================================================
 
-  const handleDelete = (opportunity) => {
+  const updateStatus = async (id, status) => {
+    if (!company) return;
+
+    setSubmitting(true);
+
+    try {
+      const { data, error } = await supabaseCompany
+        .from("opportunities")
+        .update({
+          status,
+        })
+        .eq("id", id)
+        .eq("company_id", company.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setOpportunities((previous) =>
+        previous.map((opportunity) =>
+          opportunity.id === id ? data : opportunity
+        )
+      );
+    } catch (error) {
+      console.error("Update opportunity status error:", error);
+
+      alert(error.message || "Unable to update the opportunity status.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // =========================================================
+  // DELETE
+  // =========================================================
+
+  const handleDelete = async (opportunity) => {
     const confirmed = window.confirm(
       `Delete "${opportunity.title}"?\n\nThis action cannot be undone.`
     );
 
     if (!confirmed) return;
 
-    deleteOpportunity(opportunity.id);
+    setSubmitting(true);
 
-    if (editingId === opportunity.id) {
-      setEditingId(null);
-      setEditForm({});
+    try {
+      const { error } = await supabaseCompany
+        .from("opportunities")
+        .delete()
+        .eq("id", opportunity.id)
+        .eq("company_id", company.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setOpportunities((previous) =>
+        previous.filter((item) => item.id !== opportunity.id)
+      );
+
+      if (editingId === opportunity.id) {
+        setEditingId(null);
+        setEditForm({});
+      }
+    } catch (error) {
+      console.error("Delete opportunity error:", error);
+
+      alert(error.message || "Unable to delete the opportunity.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  /* -----------------------------------------
-     CANCEL EDIT
-  ----------------------------------------- */
+  // =========================================================
+  // CANCEL EDIT
+  // =========================================================
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm({});
   };
+
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div
+        className={`p-8 max-w-[1200px] mx-auto ${
+          darkMode ? "text-slate-100" : "text-slate-900"
+        }`}
+      >
+        <div className={`border rounded-2xl p-10 text-center ${card}`}>
+          <div className="text-2xl mb-3">⏳</div>
+
+          <h3 className="font-bold">Loading opportunities...</h3>
+
+          <p className={`text-sm mt-1 ${muted}`}>
+            Please wait while we load your company data.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // RETURN
+  // =========================================================
 
   return (
     <div
@@ -265,9 +506,9 @@ export default function ManageJobs() {
         darkMode ? "text-slate-100" : "text-slate-900"
       }`}
     >
-      {/* =========================================
+      {/* =====================================================
           PAGE HEADER
-      ========================================= */}
+      ===================================================== */}
 
       <div className="mb-8">
         <p className="text-xs uppercase tracking-widest font-bold text-slate-400 mb-1">
@@ -284,9 +525,9 @@ export default function ManageJobs() {
         </p>
       </div>
 
-      {/* =========================================
+      {/* =====================================================
           CREATE OPPORTUNITY
-      ========================================= */}
+      ===================================================== */}
 
       <section className={`border rounded-2xl mb-8 ${card}`}>
         <div className={`px-5 py-4 border-b ${border}`}>
@@ -356,27 +597,6 @@ export default function ManageJobs() {
               />
             </div>
 
-            {/* PERIOD */}
-
-            <div>
-              <label className="block text-sm font-semibold mb-2">
-                Internship Period <span className="text-red-500">*</span>
-              </label>
-
-              <input
-                type="text"
-                className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${input}`}
-                placeholder="e.g. June - August 2026"
-                value={form.availability}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    availability: event.target.value,
-                  })
-                }
-              />
-            </div>
-
             {/* OPENINGS */}
 
             <div>
@@ -400,6 +620,47 @@ export default function ManageJobs() {
               <p className={`text-xs mt-1.5 ${muted}`}>
                 How many interns can you accept?
               </p>
+            </div>
+
+            {/* INTERNSHIP START */}
+
+            <div>
+              <label className="block text-sm font-semibold mb-2">
+                Internship Start <span className="text-red-500">*</span>
+              </label>
+
+              <input
+                type="date"
+                className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${input}`}
+                value={form.internshipStart}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    internshipStart: event.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* INTERNSHIP END */}
+
+            <div>
+              <label className="block text-sm font-semibold mb-2">
+                Internship End <span className="text-red-500">*</span>
+              </label>
+
+              <input
+                type="date"
+                min={form.internshipStart || undefined}
+                className={`w-full border rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${input}`}
+                value={form.internshipEnd}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    internshipEnd: event.target.value,
+                  })
+                }
+              />
             </div>
 
             {/* DESCRIPTION */}
@@ -428,22 +689,23 @@ export default function ManageJobs() {
             className={`mt-6 pt-5 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${border}`}
           >
             <p className={`text-xs ${muted}`}>
-              You can edit the opportunity before publishing it.
+              You can edit the opportunity before or after publishing.
             </p>
 
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition"
+              disabled={submitting}
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold transition"
             >
-              Create Draft
+              {submitting ? "Creating..." : "Create Draft"}
             </button>
           </div>
         </form>
       </section>
 
-      {/* =========================================
-          OPPORTUNITIES HEADER
-      ========================================= */}
+      {/* =====================================================
+          OPPORTUNITIES
+      ===================================================== */}
 
       <section>
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
@@ -461,9 +723,7 @@ export default function ManageJobs() {
           </div>
         </div>
 
-        {/* =========================================
-            EMPTY STATE
-        ========================================= */}
+        {/* EMPTY */}
 
         {opportunities.length === 0 ? (
           <div className={`border rounded-2xl p-10 text-center ${card}`}>
@@ -480,14 +740,20 @@ export default function ManageJobs() {
             {opportunities.map((opportunity) => {
               const isEditing = editingId === opportunity.id;
 
+              const internshipPeriod = formatDateRange(
+                opportunity.internship_start,
+                opportunity.internship_end,
+                opportunity.availability
+              );
+
               return (
                 <article
                   key={opportunity.id}
                   className={`border rounded-2xl p-5 ${card}`}
                 >
-                  {/* =========================================
-                      CARD HEADER
-                  ========================================= */}
+                  {/* =================================================
+                      HEADER
+                  ================================================= */}
 
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>
@@ -501,7 +767,8 @@ export default function ManageJobs() {
                             opportunity.status
                           )}`}
                         >
-                          {opportunity.status}
+                          {opportunity.status.charAt(0).toUpperCase() +
+                            opportunity.status.slice(1)}
                         </span>
                       </div>
 
@@ -510,88 +777,98 @@ export default function ManageJobs() {
                       </p>
                     </div>
 
-                    {/* =========================================
-                        ACTIONS
-                    ========================================= */}
+                    {/* ACTIONS */}
 
                     <div className="flex flex-wrap gap-2">
-                      {/* DRAFT ACTIONS */}
-
-                      {opportunity.status === STATUS.opportunity.DRAFT && (
-                        <>
-                          {!isEditing && (
-                            <button
-                              type="button"
-                              className="px-4 py-2 rounded-lg border text-xs font-semibold transition hover:bg-slate-50 dark:hover:bg-slate-800"
-                              onClick={() => startEdit(opportunity)}
-                            >
-                              Edit Draft
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition"
-                            onClick={() =>
-                              updateOpportunity(opportunity.id, {
-                                status: STATUS.opportunity.ACTIVE,
-                              })
-                            }
-                          >
-                            Publish
-                          </button>
-
-                          <button
-                            type="button"
-                            className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold transition"
-                            onClick={() => handleDelete(opportunity)}
-                          >
-                            Delete
-                          </button>
-                        </>
+                      {!isEditing && (
+                        <button
+                          type="button"
+                          disabled={submitting}
+                          className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
+                            darkMode
+                              ? "border-slate-600 hover:bg-slate-800"
+                              : "border-slate-300 hover:bg-slate-50"
+                          }`}
+                          onClick={() => startEdit(opportunity)}
+                        >
+                          Edit
+                        </button>
                       )}
 
-                      {/* ACTIVE ACTION */}
+                      {/* DRAFT → PUBLISH */}
+
+                      {opportunity.status === STATUS.opportunity.DRAFT && (
+                        <button
+                          type="button"
+                          disabled={submitting}
+                          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition"
+                          onClick={() =>
+                            updateStatus(
+                              opportunity.id,
+                              STATUS.opportunity.ACTIVE
+                            )
+                          }
+                        >
+                          Publish
+                        </button>
+                      )}
+
+                      {/* ACTIVE → CLOSE */}
 
                       {opportunity.status === STATUS.opportunity.ACTIVE && (
                         <button
                           type="button"
+                          disabled={submitting}
                           className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
                             darkMode
                               ? "border-slate-600 hover:bg-slate-800"
                               : "border-slate-300 hover:bg-slate-50"
                           }`}
                           onClick={() =>
-                            updateOpportunity(opportunity.id, {
-                              status: STATUS.opportunity.CLOSED,
-                            })
+                            updateStatus(
+                              opportunity.id,
+                              STATUS.opportunity.CLOSED
+                            )
                           }
                         >
                           Close Opportunity
                         </button>
                       )}
 
-                      {/* CLOSED ACTION */}
+                      {/* CLOSED → REOPEN */}
 
                       {opportunity.status === STATUS.opportunity.CLOSED && (
                         <button
                           type="button"
-                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                          disabled={submitting}
+                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold transition"
                           onClick={() =>
-                            updateOpportunity(opportunity.id, {
-                              status: STATUS.opportunity.ACTIVE,
-                            })
+                            updateStatus(
+                              opportunity.id,
+                              STATUS.opportunity.ACTIVE
+                            )
                           }
                         >
                           Reopen
                         </button>
                       )}
+
+                      {/* DELETE */}
+
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-semibold transition"
+                        onClick={() => handleDelete(opportunity)}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
 
-                  {/* =========================================
+                  {/* =================================================
                       EDIT FORM
-                  ========================================= */}
+                  ================================================= */}
 
                   {isEditing && (
                     <div
@@ -603,15 +880,22 @@ export default function ManageJobs() {
                     >
                       <div className="flex items-center justify-between mb-5">
                         <div>
-                          <h4 className="font-bold text-sm">Edit Draft</h4>
+                          <h4 className="font-bold text-sm">
+                            Edit Opportunity
+                          </h4>
 
                           <p className={`text-xs mt-1 ${muted}`}>
-                            Make your changes before publishing.
+                            Update the internship details and schedule.
                           </p>
                         </div>
 
-                        <span className="text-xs font-bold text-amber-600">
-                          Draft
+                        <span
+                          className={`px-2.5 py-1 rounded-full border text-[11px] font-bold ${getStatusStyle(
+                            opportunity.status
+                          )}`}
+                        >
+                          {opportunity.status.charAt(0).toUpperCase() +
+                            opportunity.status.slice(1)}
                         </span>
                       </div>
 
@@ -656,26 +940,6 @@ export default function ManageJobs() {
                           />
                         </div>
 
-                        {/* PERIOD */}
-
-                        <div>
-                          <label className="block text-xs font-bold mb-2">
-                            Internship Period
-                          </label>
-
-                          <input
-                            type="text"
-                            className={`w-full border rounded-lg px-3 py-2.5 text-sm ${input}`}
-                            value={editForm.availability}
-                            onChange={(event) =>
-                              setEditForm({
-                                ...editForm,
-                                availability: event.target.value,
-                              })
-                            }
-                          />
-                        </div>
-
                         {/* OPENINGS */}
 
                         <div>
@@ -692,6 +956,47 @@ export default function ManageJobs() {
                               setEditForm({
                                 ...editForm,
                                 openings: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+
+                        {/* INTERNSHIP START */}
+
+                        <div>
+                          <label className="block text-xs font-bold mb-2">
+                            Internship Start
+                          </label>
+
+                          <input
+                            type="date"
+                            className={`w-full border rounded-lg px-3 py-2.5 text-sm ${input}`}
+                            value={editForm.internshipStart}
+                            onChange={(event) =>
+                              setEditForm({
+                                ...editForm,
+                                internshipStart: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+
+                        {/* INTERNSHIP END */}
+
+                        <div>
+                          <label className="block text-xs font-bold mb-2">
+                            Internship End
+                          </label>
+
+                          <input
+                            type="date"
+                            min={editForm.internshipStart || undefined}
+                            className={`w-full border rounded-lg px-3 py-2.5 text-sm ${input}`}
+                            value={editForm.internshipEnd}
+                            onChange={(event) =>
+                              setEditForm({
+                                ...editForm,
+                                internshipEnd: event.target.value,
                               })
                             }
                           />
@@ -725,6 +1030,7 @@ export default function ManageJobs() {
                       >
                         <button
                           type="button"
+                          disabled={submitting}
                           className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
                             darkMode
                               ? "border-slate-600 hover:bg-slate-700"
@@ -737,24 +1043,27 @@ export default function ManageJobs() {
 
                         <button
                           type="button"
-                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
+                          disabled={submitting}
+                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold"
                           onClick={() => saveEdit(opportunity.id)}
                         >
-                          Save Changes
+                          {submitting ? "Saving..." : "Save Changes"}
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* =========================================
+                  {/* =================================================
                       DETAILS
-                  ========================================= */}
+                  ================================================= */}
 
                   {!isEditing && (
                     <>
                       <div
                         className={`grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-5 border-t ${border}`}
                       >
+                        {/* LOCATION */}
+
                         <div>
                           <p
                             className={`text-[11px] uppercase font-bold ${muted}`}
@@ -767,6 +1076,8 @@ export default function ManageJobs() {
                           </p>
                         </div>
 
+                        {/* INTERNSHIP PERIOD */}
+
                         <div>
                           <p
                             className={`text-[11px] uppercase font-bold ${muted}`}
@@ -775,9 +1086,11 @@ export default function ManageJobs() {
                           </p>
 
                           <p className="text-sm font-medium mt-1">
-                            {opportunity.availability || "Not specified"}
+                            {internshipPeriod}
                           </p>
                         </div>
+
+                        {/* OPENINGS */}
 
                         <div>
                           <p

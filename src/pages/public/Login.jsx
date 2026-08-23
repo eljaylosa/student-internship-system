@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../../supabaseClient";
+import {
+  supabaseStudent,
+  supabaseRegistrar,
+  supabaseCompany,
+} from "../../supabaseClient";
 
 const Login = () => {
   // =========================================================
@@ -35,6 +39,37 @@ const Login = () => {
   const navigate = useNavigate();
 
   // =========================================================
+  // GET ROLE-SPECIFIC SUPABASE CLIENT
+  // =========================================================
+  //
+  // IMPORTANT:
+  // Each portal uses its own Supabase auth storage.
+  //
+  // Student   → sims-student-auth
+  // Registrar → sims-registrar-auth
+  // Company   → sims-company-auth
+  //
+  // This allows different accounts to stay logged in
+  // simultaneously in different browser tabs.
+  // =========================================================
+
+  const getSupabaseClient = (role) => {
+    switch (role) {
+      case "student":
+        return supabaseStudent;
+
+      case "registrar":
+        return supabaseRegistrar;
+
+      case "company":
+        return supabaseCompany;
+
+      default:
+        return null;
+    }
+  };
+
+  // =========================================================
   // UPDATE FORM
   // =========================================================
 
@@ -50,24 +85,6 @@ const Login = () => {
 
   // =========================================================
   // LOGIN
-  // =========================================================
-  //
-  // Flow:
-  //
-  // Email + Password
-  //       ↓
-  // Supabase Auth
-  //       ↓
-  // Authenticated user
-  //       ↓
-  // public.users
-  //       ↓
-  // Check status
-  //       ↓
-  // Check role
-  //       ↓
-  // Redirect
-  //
   // =========================================================
 
   const handleSubmit = async (e) => {
@@ -87,15 +104,26 @@ const Login = () => {
       return;
     }
 
+    // =======================================================
+    // GET ROLE-SPECIFIC CLIENT
+    // =======================================================
+
+    const supabaseClient = getSupabaseClient(activeRole);
+
+    if (!supabaseClient) {
+      alert("Invalid portal selected.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
       // =====================================================
-      // 1. AUTHENTICATE THROUGH SUPABASE AUTH
+      // 1. AUTHENTICATE THROUGH ROLE-SPECIFIC SUPABASE CLIENT
       // =====================================================
 
       const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
+        await supabaseClient.auth.signInWithPassword({
           email,
           password,
         });
@@ -117,13 +145,14 @@ const Login = () => {
       console.log("User authenticated successfully:", {
         id: authenticatedUser.id,
         email: authenticatedUser.email,
+        portal: activeRole,
       });
 
       // =====================================================
       // 2. FETCH OFFICIAL USER RECORD
       // =====================================================
 
-      const { data: userRecord, error: userError } = await supabase
+      const { data: userRecord, error: userError } = await supabaseClient
         .from("users")
         .select(
           `
@@ -142,9 +171,7 @@ const Login = () => {
       if (userError) {
         console.error("Users table error:", userError);
 
-        // Sign out because the authenticated account does
-        // not have a valid SIMS user record.
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
 
         alert(
           "Unable to load your SIMS account information. Please try again."
@@ -163,7 +190,7 @@ const Login = () => {
           authenticatedUser.id
         );
 
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
 
         alert(
           "Your account has not been activated in SIMS yet. Please contact the administrator."
@@ -186,7 +213,7 @@ const Login = () => {
           status: userRecord.status,
         });
 
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
 
         if (accountStatus === "pending") {
           alert(
@@ -217,7 +244,7 @@ const Login = () => {
           databaseRole,
         });
 
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
 
         let expectedPortal = "the selected portal";
 
@@ -258,7 +285,7 @@ const Login = () => {
         default:
           console.error("Unsupported user role:", databaseRole);
 
-          await supabase.auth.signOut();
+          await supabaseClient.auth.signOut();
 
           alert(
             "Your account has an unsupported SIMS role. Please contact the administrator."
@@ -277,6 +304,7 @@ const Login = () => {
         role: userRecord.role,
         status: userRecord.status,
         destination,
+        storageKey: `sims-${activeRole}-auth`,
       });
 
       navigate(destination, {
@@ -381,11 +409,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      {/* Main Login Area */}
-
       <main className="flex-1 flex flex-col items-center justify-center py-30 px-4 max-w-3xl mx-auto w-full">
-        {/* Page Heading */}
-
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
             Login to Your Account
@@ -396,8 +420,6 @@ const Login = () => {
             space.
           </p>
         </div>
-
-        {/* Role Tabs */}
 
         <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
           {portals.map((portal) => (
@@ -417,18 +439,12 @@ const Login = () => {
           ))}
         </div>
 
-        {/* Active Login Card */}
-
         <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full transition-all duration-300">
-          {/* Portal Icon */}
-
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
               {activePortal.icon}
             </div>
           </div>
-
-          {/* Portal Header */}
 
           <h3 className="font-bold text-xl text-slate-800 text-center mb-1">
             {activePortal.label}
@@ -438,11 +454,7 @@ const Login = () => {
             {activeRole} Gateway
           </p>
 
-          {/* Login Form */}
-
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                 Email Address
@@ -460,8 +472,6 @@ const Login = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
               />
             </div>
-
-            {/* Password */}
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
@@ -481,8 +491,6 @@ const Login = () => {
               />
             </div>
 
-            {/* Sign In Button */}
-
             <button
               type="submit"
               disabled={isSubmitting}
@@ -492,8 +500,6 @@ const Login = () => {
                 ? "Signing In..."
                 : `Sign In as ${activePortal.label}`}
             </button>
-
-            {/* Forgot Password */}
 
             <div className="text-center">
               <button
@@ -509,8 +515,6 @@ const Login = () => {
             </div>
           </form>
 
-          {/* Sign Up Redirect */}
-
           <div className="border-t border-slate-100 mt-8 pt-6 text-center">
             <p className="text-sm text-slate-500">
               Don't have an account?{" "}
@@ -523,8 +527,6 @@ const Login = () => {
             </p>
           </div>
         </div>
-
-        {/* Footer */}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
           © 2026 SIMS |{" "}

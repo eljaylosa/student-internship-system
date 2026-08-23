@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 
@@ -8,6 +8,56 @@ const SignUp = () => {
   const [activeRole, setActiveRole] = useState("student");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /*
+   * =========================================================
+   * SCHOOLS
+   * =========================================================
+   */
+
+  const [schools, setSchools] = useState([]);
+  const [isLoadingSchools, setIsLoadingSchools] = useState(true);
+  const [schoolLoadError, setSchoolLoadError] = useState("");
+
+  /*
+   * Load all active schools from Supabase.
+   */
+  useEffect(() => {
+    const loadSchools = async () => {
+      try {
+        setIsLoadingSchools(true);
+        setSchoolLoadError("");
+
+        const { data, error } = await supabase
+          .from("schools")
+          .select("id, name, code")
+          .eq("status", "active")
+          .order("name", { ascending: true });
+
+        if (error) {
+          console.error("Error loading schools:", error);
+
+          setSchoolLoadError(
+            "Unable to load the available schools. Please try again."
+          );
+
+          return;
+        }
+
+        setSchools(data || []);
+      } catch (error) {
+        console.error("School loading error:", error);
+
+        setSchoolLoadError(
+          "Unable to load the available schools. Please try again."
+        );
+      } finally {
+        setIsLoadingSchools(false);
+      }
+    };
+
+    loadSchools();
+  }, []);
+
   const [forms, setForms] = useState({
     student: {
       firstName: "",
@@ -15,6 +65,7 @@ const SignUp = () => {
       lastName: "",
       studentId: "",
       email: "",
+      schoolId: "",
       department: "",
       program: "",
       yearLevel: "",
@@ -32,6 +83,7 @@ const SignUp = () => {
       lastName: "",
       employeeId: "",
       email: "",
+      schoolId: "",
       department: "",
       position: "",
       phone: "",
@@ -79,8 +131,11 @@ const SignUp = () => {
   };
 
   /*
-   * Upload a verification document to Supabase Storage.
+   * =========================================================
+   * FILE TO BASE64
+   * =========================================================
    */
+
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       if (!file) {
@@ -107,14 +162,12 @@ const SignUp = () => {
   };
 
   /*
-   * Submit Student / Registrar registration.
+   * =========================================================
+   * SUBMIT STUDENT / REGISTRAR REGISTRATION
+   * =========================================================
    */
-  const submitCreateRequest = async (currentForm) => {
-    /*
-     * Convert uploaded documents into data that can be
-     * securely sent to the Edge Function.
-     */
 
+  const submitCreateRequest = async (currentForm) => {
     let corFile = null;
     let studentIdFile = null;
 
@@ -135,7 +188,10 @@ const SignUp = () => {
 
     /*
      * Call the Edge Function.
+     *
+     * schoolId is now included for Student + Registrar.
      */
+
     const { data, error } = await supabase.functions.invoke(
       "create-registration-request",
       {
@@ -154,6 +210,14 @@ const SignUp = () => {
           lastName: currentForm.lastName.trim(),
 
           phone: currentForm.phone.trim(),
+
+          /*
+           * SCHOOL
+           */
+          schoolId:
+            activeRole === "student" || activeRole === "registrar"
+              ? currentForm.schoolId
+              : null,
 
           studentId:
             activeRole === "student" ? currentForm.studentId.trim() : null,
@@ -197,6 +261,12 @@ const SignUp = () => {
 
     return data;
   };
+
+  /*
+   * =========================================================
+   * SUBMIT COMPANY REGISTRATION
+   * =========================================================
+   */
 
   const submitCompanyRegistration = async (currentForm) => {
     const businessRegistration = await fileToBase64(
@@ -254,6 +324,12 @@ const SignUp = () => {
     return data;
   };
 
+  /*
+   * =========================================================
+   * HANDLE SUBMIT
+   * =========================================================
+   */
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -264,6 +340,7 @@ const SignUp = () => {
     /*
      * PASSWORD VALIDATION
      */
+
     if (currentForm.password !== currentForm.confirmPassword) {
       alert("Passwords do not match.");
       return;
@@ -280,11 +357,33 @@ const SignUp = () => {
     }
 
     /*
-     * COMPANY
+     * =======================================================
+     * SCHOOL VALIDATION
+     * =======================================================
      *
-     * Company remains separate because CompanyManagement.jsx
-     * handles companies.
+     * Only Student and Registrar need a school.
      */
+
+    if (activeRole === "student" || activeRole === "registrar") {
+      if (!currentForm.schoolId) {
+        alert("Please select your school before continuing.");
+        return;
+      }
+
+      if (schools.length === 0) {
+        alert(
+          "There are currently no active schools available for registration."
+        );
+        return;
+      }
+    }
+
+    /*
+     * =======================================================
+     * COMPANY
+     * =======================================================
+     */
+
     if (activeRole === "company") {
       if (!currentForm.businessRegistration) {
         alert("Please upload your business registration document.");
@@ -305,7 +404,9 @@ const SignUp = () => {
           "Company registration submitted successfully. Your account is now pending review by the administrator."
         );
 
-        navigate("/login", { replace: true });
+        navigate("/login", {
+          replace: true,
+        });
       } catch (error) {
         console.error("Company registration error:", error);
 
@@ -321,8 +422,11 @@ const SignUp = () => {
     }
 
     /*
+     * =======================================================
      * STUDENT DOCUMENT VALIDATION
+     * =======================================================
      */
+
     if (activeRole === "student") {
       if (!currentForm.cor) {
         alert("Please upload your Certificate of Registration (COR).");
@@ -336,8 +440,11 @@ const SignUp = () => {
     }
 
     /*
+     * =======================================================
      * REGISTRAR DOCUMENT VALIDATION
+     * =======================================================
      */
+
     if (activeRole === "registrar") {
       if (!currentForm.employeeIdDocument) {
         alert("Please upload your University / Employee ID.");
@@ -363,7 +470,9 @@ const SignUp = () => {
           : "Registration submitted successfully. Your Registrar Adviser account is now pending review by the administrator."
       );
 
-      navigate("/login", { replace: true });
+      navigate("/login", {
+        replace: true,
+      });
     } catch (error) {
       console.error("Registration error:", error);
 
@@ -375,6 +484,12 @@ const SignUp = () => {
       setIsSubmitting(false);
     }
   };
+
+  /*
+   * =========================================================
+   * PORTALS
+   * =========================================================
+   */
 
   const portals = [
     {
@@ -453,6 +568,12 @@ const SignUp = () => {
 
   const currentForm = forms[activeRole];
 
+  /*
+   * =========================================================
+   * STYLES
+   * =========================================================
+   */
+
   const inputClass =
     "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition";
 
@@ -463,6 +584,12 @@ const SignUp = () => {
 
   const fileInputClass =
     "w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-semibold hover:file:bg-slate-200";
+
+  /*
+   * =========================================================
+   * PASSWORD STRENGTH
+   * =========================================================
+   */
 
   const getPasswordStrength = (password) => {
     let strength = 0;
@@ -517,6 +644,12 @@ const SignUp = () => {
     };
   };
 
+  /*
+   * =========================================================
+   * NAME FIELDS
+   * =========================================================
+   */
+
   const renderNameFields = () => (
     <div>
       <label className={labelClass}>Full Name</label>
@@ -566,6 +699,75 @@ const SignUp = () => {
     </div>
   );
 
+  /*
+   * =========================================================
+   * SCHOOL DROPDOWN
+   * =========================================================
+   */
+
+  const renderSchoolField = () => {
+    if (activeRole !== "student" && activeRole !== "registrar") {
+      return null;
+    }
+
+    return (
+      <div>
+        <label className={labelClass}>
+          School
+          <span className="text-red-500 ml-1">*</span>
+        </label>
+
+        <select
+          required
+          value={currentForm.schoolId}
+          onChange={(event) =>
+            handleChange(activeRole, "schoolId", event.target.value)
+          }
+          disabled={isLoadingSchools || schools.length === 0}
+          className={`${inputClass} cursor-pointer ${
+            isLoadingSchools || schools.length === 0
+              ? "cursor-not-allowed opacity-60"
+              : ""
+          }`}
+        >
+          <option value="" disabled>
+            {isLoadingSchools
+              ? "Loading schools..."
+              : schools.length === 0
+              ? "No schools available"
+              : "Select your school"}
+          </option>
+
+          {schools.map((school) => (
+            <option key={school.id} value={school.id}>
+              {school.name}
+              {school.code ? ` (${school.code})` : ""}
+            </option>
+          ))}
+        </select>
+
+        {schoolLoadError ? (
+          <p className="text-[10px] text-red-500 mt-1.5">{schoolLoadError}</p>
+        ) : schools.length === 0 && !isLoadingSchools ? (
+          <p className="text-[10px] text-red-500 mt-1.5">
+            No active schools have been registered yet. Please contact the
+            administrator.
+          </p>
+        ) : (
+          <p className="text-[10px] text-slate-400 mt-1.5">
+            Select the school where you are currently enrolled or employed.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  /*
+   * =========================================================
+   * PASSWORD FIELDS
+   * =========================================================
+   */
+
   const renderPasswordFields = () => {
     const strength = currentForm.password
       ? getPasswordStrength(currentForm.password)
@@ -605,7 +807,9 @@ const SignUp = () => {
               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${strength.color}`}
-                  style={{ width: strength.width }}
+                  style={{
+                    width: strength.width,
+                  }}
                 />
               </div>
 
@@ -642,6 +846,12 @@ const SignUp = () => {
       </>
     );
   };
+
+  /*
+   * =========================================================
+   * VERIFICATION NOTICE
+   * =========================================================
+   */
 
   const renderVerificationNotice = () => {
     if (activeRole === "company") {
@@ -706,32 +916,17 @@ const SignUp = () => {
     );
   };
 
+  /*
+   * =========================================================
+   * RENDER
+   * =========================================================
+   */
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      {/* NAVIGATION */}
-      {/* <header className="bg-slate-900 border-b border-slate-800 text-white px-8 py-4 flex justify-between items-center shadow-md">
-        <Link
-          to="/"
-          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition font-bold"
-        >
-          Home
-        </Link>
-
-        <div className="text-sm md:text-base font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200 text-center">
-          STUDENT INTERNSHIP MANAGEMENT SYSTEM
-        </div>
-
-        <Link
-          to="/login"
-          className="text-xs uppercase tracking-widest text-slate-400 hover:text-white transition font-bold"
-        >
-          Login
-        </Link>
-      </header> */}
-
-      {/* MAIN */}
       <main className="flex-1 flex flex-col items-center py-30 px-4 max-w-3xl mx-auto w-full">
         {/* PAGE HEADER */}
+
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
             Create Your Account
@@ -744,6 +939,7 @@ const SignUp = () => {
         </div>
 
         {/* ROLE TABS */}
+
         <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
           {portals.map((portal) => (
             <button
@@ -762,8 +958,10 @@ const SignUp = () => {
         </div>
 
         {/* FORM CARD */}
+
         <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full">
           {/* PORTAL ICON */}
+
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
               {activePortal.icon}
@@ -782,6 +980,7 @@ const SignUp = () => {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* PERSONAL INFORMATION */}
+
             <section className={sectionClass}>
               <div className="mb-5">
                 <h4 className="text-sm font-bold text-slate-800">
@@ -797,6 +996,7 @@ const SignUp = () => {
                 {renderNameFields()}
 
                 {/* EMAIL */}
+
                 <div>
                   <label className={labelClass}>Email Address</label>
 
@@ -818,6 +1018,7 @@ const SignUp = () => {
                 </div>
 
                 {/* PHONE */}
+
                 <div>
                   <label className={labelClass}>Mobile Number</label>
 
@@ -836,6 +1037,7 @@ const SignUp = () => {
             </section>
 
             {/* STUDENT INFORMATION */}
+
             {activeRole === "student" && (
               <>
                 <section className={sectionClass}>
@@ -850,6 +1052,12 @@ const SignUp = () => {
                   </div>
 
                   <div className="space-y-5">
+                    {/* SCHOOL */}
+
+                    {renderSchoolField()}
+
+                    {/* STUDENT ID */}
+
                     <div>
                       <label className={labelClass}>Student ID</label>
 
@@ -868,6 +1076,8 @@ const SignUp = () => {
                         className={inputClass}
                       />
                     </div>
+
+                    {/* DEPARTMENT */}
 
                     <div>
                       <label className={labelClass}>College / Department</label>
@@ -888,6 +1098,8 @@ const SignUp = () => {
                       />
                     </div>
 
+                    {/* PROGRAM */}
+
                     <div>
                       <label className={labelClass}>Program</label>
 
@@ -902,6 +1114,8 @@ const SignUp = () => {
                         className={inputClass}
                       />
                     </div>
+
+                    {/* YEAR LEVEL */}
 
                     <div>
                       <label className={labelClass}>Year Level</label>
@@ -921,17 +1135,27 @@ const SignUp = () => {
                         <option value="" disabled>
                           Select Year Level
                         </option>
+
                         <option value="1st Year">1st Year</option>
+
                         <option value="2nd Year">2nd Year</option>
+
                         <option value="3rd Year">3rd Year</option>
+
                         <option value="4th Year">4th Year</option>
+
                         <option value="5th Year">5th Year</option>
+
                         <option value="6th Year">6th Year</option>
+
                         <option value="7th Year">7th Year</option>
+
                         <option value="Graduate / Master's">
                           Graduate / Master's
                         </option>
+
                         <option value="Doctoral / PhD">Doctoral / PhD</option>
+
                         <option value="Other">Other</option>
                       </select>
                     </div>
@@ -939,6 +1163,7 @@ const SignUp = () => {
                 </section>
 
                 {/* STUDENT DOCUMENTS */}
+
                 <section className={sectionClass}>
                   <div className="mb-5">
                     <h4 className="text-sm font-bold text-slate-800">
@@ -998,6 +1223,7 @@ const SignUp = () => {
             )}
 
             {/* REGISTRAR INFORMATION */}
+
             {activeRole === "registrar" && (
               <>
                 <section className={sectionClass}>
@@ -1012,6 +1238,12 @@ const SignUp = () => {
                   </div>
 
                   <div className="space-y-5">
+                    {/* SCHOOL */}
+
+                    {renderSchoolField()}
+
+                    {/* EMPLOYEE ID */}
+
                     <div>
                       <label className={labelClass}>Employee ID</label>
 
@@ -1031,6 +1263,8 @@ const SignUp = () => {
                       />
                     </div>
 
+                    {/* DEPARTMENT */}
+
                     <div>
                       <label className={labelClass}>College / Department</label>
 
@@ -1049,6 +1283,8 @@ const SignUp = () => {
                         className={inputClass}
                       />
                     </div>
+
+                    {/* POSITION */}
 
                     <div>
                       <label className={labelClass}>
@@ -1074,6 +1310,7 @@ const SignUp = () => {
                 </section>
 
                 {/* REGISTRAR DOCUMENTS */}
+
                 <section className={sectionClass}>
                   <div className="mb-5">
                     <h4 className="text-sm font-bold text-slate-800">
@@ -1134,6 +1371,7 @@ const SignUp = () => {
             )}
 
             {/* COMPANY INFORMATION */}
+
             {activeRole === "company" && (
               <>
                 <section className={sectionClass}>
@@ -1270,6 +1508,8 @@ const SignUp = () => {
                   </div>
                 </section>
 
+                {/* COMPANY REPRESENTATIVE */}
+
                 <section className={sectionClass}>
                   <div className="mb-5">
                     <h4 className="text-sm font-bold text-slate-800">
@@ -1296,6 +1536,8 @@ const SignUp = () => {
                     />
                   </div>
                 </section>
+
+                {/* COMPANY DOCUMENTS */}
 
                 <section className={sectionClass}>
                   <div className="mb-5">
@@ -1370,9 +1612,11 @@ const SignUp = () => {
             )}
 
             {/* VERIFICATION NOTICE */}
+
             {renderVerificationNotice()}
 
             {/* SECURITY */}
+
             <section className={sectionClass}>
               <div className="mb-5">
                 <h4 className="text-sm font-bold text-slate-800">
@@ -1388,6 +1632,7 @@ const SignUp = () => {
             </section>
 
             {/* TERMS */}
+
             <div className="flex items-start gap-3 pt-1">
               <input
                 type="checkbox"
@@ -1419,6 +1664,7 @@ const SignUp = () => {
             </div>
 
             {/* SUBMIT */}
+
             <button
               type="submit"
               disabled={isSubmitting}
@@ -1439,6 +1685,7 @@ const SignUp = () => {
           </form>
 
           {/* LOGIN */}
+
           <div className="border-t border-slate-100 mt-8 pt-6 text-center">
             <p className="text-sm text-slate-500">
               Already have an account?{" "}
@@ -1453,6 +1700,7 @@ const SignUp = () => {
         </div>
 
         {/* FOOTER */}
+
         <footer className="mt-8 text-center text-xs text-slate-400">
           © 2026 SIMS |{" "}
           <Link to="/privacy" className="hover:text-slate-700">

@@ -94,6 +94,7 @@ import AdminReports from "./pages/admin/Reports.jsx";
 import AdminSystemNotification from "./pages/admin/SystemNotification.jsx";
 import AdminSystemSettings from "./pages/admin/SystemSettings.jsx";
 import AdminAuditLogs from "./pages/admin/AuditLogs.jsx";
+import ManageSchools from "./pages/admin/ManageSchools.jsx";
 
 // =========================================================
 // LAYOUTS
@@ -329,6 +330,7 @@ function AppContent() {
           <Route path="companies" element={<AdminCompanyManagement />} />
           <Route path="internships" element={<AdminInternshipRecords />} />
           <Route path="documents" element={<AdminDocumentManagement />} />
+          <Route path="schools" element={<ManageSchools />} />
           <Route path="information" element={<AdminInformationManagement />} />
           <Route path="evaluations" element={<AdminEvaluationManagement />} />
           <Route path="reports" element={<AdminReports />} />

@@ -24,13 +24,6 @@ const ReviewCreateRequests = () => {
   // =========================================================
   // NORMALIZE SUPABASE REQUEST
   // =========================================================
-  // Supabase uses snake_case.
-  // React UI uses camelCase.
-  //
-  // Every request entering React state passes through this
-  // function so the rest of the component always works with
-  // one consistent data structure.
-  // =========================================================
 
   const formatRequest = (request) => {
     if (!request) return null;
@@ -118,23 +111,6 @@ const ReviewCreateRequests = () => {
       }
 
       console.log("📊 Number of requests:", data?.length || 0);
-
-      // =====================================================
-      // IMPORTANT:
-      // Normalize every Supabase row before storing it.
-      //
-      // BEFORE:
-      // request.first_name
-      // request.last_name
-      // request.student_id
-      // request.created_at
-      //
-      // AFTER:
-      // request.firstName
-      // request.lastName
-      // request.studentId
-      // request.createdAt
-      // =====================================================
 
       const formattedRequests = (data || []).map(formatRequest).filter(Boolean);
 
@@ -267,6 +243,10 @@ const ReviewCreateRequests = () => {
 
       // =====================================================
       // CALL APPROVE REGISTRATION EDGE FUNCTION
+      //
+      // IMPORTANT:
+      // The deployed Edge Function is:
+      // approve-registration
       // =====================================================
 
       const { data, error } = await supabase.functions.invoke(
@@ -315,8 +295,11 @@ const ReviewCreateRequests = () => {
             ...selectedRequest,
             status: "approved",
             rejectionReason: null,
+            reviewedBy: data.reviewerId ?? null,
             reviewedAt: new Date().toISOString(),
           };
+
+      console.log("📦 UPDATED APPROVED REQUEST:", formattedRequest);
 
       // =====================================================
       // SEND APPROVAL EMAIL
@@ -367,6 +350,7 @@ const ReviewCreateRequests = () => {
       );
 
       console.log("✅ Registration approval completed successfully.");
+
       console.log("👤 Auth/User ID:", data.userId);
     } catch (error) {
       console.error("💥 Unexpected approval error:", error);
@@ -394,169 +378,137 @@ const ReviewCreateRequests = () => {
   // =========================================================
 
   const handleReject = async () => {
-  const reason = rejectionReason.trim();
+    const reason = rejectionReason.trim();
 
-  if (!reason || !selectedRequest || actionLoading) {
-    return;
-  }
-
-  try {
-    setActionLoading(true);
-
-    console.log(
-      "🚫 Rejecting registration request:",
-      selectedRequest.id
-    );
-
-    // =====================================================
-    // CALL REJECTION EDGE FUNCTION
-    // =====================================================
-
-    const { data, error } = await supabase.functions.invoke(
-      "reject-registration",
-      {
-        body: {
-          requestId: selectedRequest.id,
-          rejectionReason: reason,
-        },
-      }
-    );
-
-    console.log("📦 REJECT FUNCTION RESPONSE:", data);
-    console.log("❌ REJECT FUNCTION ERROR:", error);
-
-    if (error) {
-      console.error(
-        "Rejection Edge Function error:",
-        error
-      );
-
-      showNotification(
-        `Failed to reject request: ${error.message}`,
-        "error"
-      );
-
+    if (!reason || !selectedRequest || actionLoading) {
       return;
     }
 
-    // =====================================================
-    // HANDLE EDGE FUNCTION ERROR RESPONSE
-    // =====================================================
+    try {
+      setActionLoading(true);
 
-    if (!data?.success) {
-      showNotification(
-        data?.error ||
-          "Failed to reject registration request.",
-        "error"
+      console.log("🚫 Rejecting registration request:", selectedRequest.id);
+
+      // =====================================================
+      // CALL REJECTION EDGE FUNCTION
+      // =====================================================
+
+      const { data, error } = await supabase.functions.invoke(
+        "reject-registration",
+        {
+          body: {
+            requestId: selectedRequest.id,
+            rejectionReason: reason,
+          },
+        }
       );
 
-      return;
-    }
+      console.log("📦 REJECT FUNCTION RESPONSE:", data);
 
-    // =====================================================
-    // FORMAT UPDATED REQUEST
-    // =====================================================
+      console.log("❌ REJECT FUNCTION ERROR:", error);
 
-    const formattedRequest = data.request
-      ? formatRequest(data.request)
-      : {
-          ...selectedRequest,
-          status: "rejected",
-          rejectionReason: reason,
-          reviewedBy: data.reviewerId ?? null,
-          reviewedAt: new Date().toISOString(),
-        };
+      if (error) {
+        console.error("Rejection Edge Function error:", error);
 
-    console.log(
-      "📦 UPDATED REQUEST:",
-      formattedRequest
-    );
+        showNotification(`Failed to reject request: ${error.message}`, "error");
 
-    // =====================================================
-    // SEND REJECTION EMAIL
-    // =====================================================
-
-    const {
-      data: emailData,
-      error: emailError,
-    } = await supabase.functions.invoke(
-      "send-registration-email",
-      {
-        body: {
-          email: formattedRequest.email,
-          name: getFullName(formattedRequest),
-          type: "rejected",
-          reason: reason,
-        },
+        return;
       }
-    );
 
-    if (emailError) {
-      console.error(
-        "📧 Rejection email error:",
-        emailError
+      // =====================================================
+      // HANDLE EDGE FUNCTION ERROR RESPONSE
+      // =====================================================
+
+      if (!data?.success) {
+        showNotification(
+          data?.error || "Failed to reject registration request.",
+          "error"
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // FORMAT UPDATED REQUEST
+      // =====================================================
+
+      const formattedRequest = data.request
+        ? formatRequest(data.request)
+        : {
+            ...selectedRequest,
+            status: "rejected",
+            rejectionReason: reason,
+            reviewedBy: data.reviewerId ?? null,
+            reviewedAt: new Date().toISOString(),
+          };
+
+      console.log("📦 UPDATED REQUEST:", formattedRequest);
+
+      // =====================================================
+      // SEND REJECTION EMAIL
+      // =====================================================
+
+      const { data: emailData, error: emailError } =
+        await supabase.functions.invoke("send-registration-email", {
+          body: {
+            email: formattedRequest.email,
+            name: getFullName(formattedRequest),
+            type: "rejected",
+            reason: reason,
+          },
+        });
+
+      if (emailError) {
+        console.error("📧 Rejection email error:", emailError);
+
+        showNotification(
+          `Request rejected, but the rejection email could not be sent: ${emailError.message}`,
+          "error"
+        );
+      } else {
+        console.log("📧 Rejection email sent:", emailData);
+      }
+
+      // =====================================================
+      // UPDATE LOCAL STATE
+      // =====================================================
+
+      setRequests((currentRequests) =>
+        currentRequests.map((request) =>
+          request.id === formattedRequest.id ? formattedRequest : request
+        )
       );
+
+      setSelectedRequest(formattedRequest);
+
+      // =====================================================
+      // CLOSE MODALS
+      // =====================================================
+
+      setShowRejectModal(false);
+      setShowReviewModal(false);
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
 
       showNotification(
-        `Request rejected, but the rejection email could not be sent: ${emailError.message}`,
+        `${getFullName(formattedRequest)}'s registration has been rejected.`,
         "error"
       );
-    } else {
-      console.log(
-        "📧 Rejection email sent:",
-        emailData
+
+      console.log("✅ Registration rejection completed successfully.");
+    } catch (error) {
+      console.error("💥 Unexpected rejection error:", error);
+
+      showNotification(
+        "An unexpected error occurred while rejecting the request.",
+        "error"
       );
+    } finally {
+      setActionLoading(false);
     }
-
-    // =====================================================
-    // UPDATE LOCAL STATE
-    // =====================================================
-
-    setRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === formattedRequest.id
-          ? formattedRequest
-          : request
-      )
-    );
-
-    setSelectedRequest(formattedRequest);
-
-    // =====================================================
-    // CLOSE MODALS
-    // =====================================================
-
-    setShowRejectModal(false);
-    setShowReviewModal(false);
-
-    // =====================================================
-    // SUCCESS
-    // =====================================================
-
-    showNotification(
-      `${getFullName(
-        formattedRequest
-      )}'s registration has been rejected.`,
-      "error"
-    );
-
-    console.log(
-      "✅ Registration rejection completed successfully."
-    );
-  } catch (error) {
-    console.error(
-      "💥 Unexpected rejection error:",
-      error
-    );
-
-    showNotification(
-      "An unexpected error occurred while rejecting the request.",
-      "error"
-    );
-  } finally {
-    setActionLoading(false);
-  }
-};
+  };
 
   // =========================================================
   // HELPERS
@@ -893,10 +845,13 @@ const ReviewCreateRequests = () => {
 
     const isStudent = selectedRequest.role?.toLowerCase() === "student";
 
+    const isRegistrar = selectedRequest.role?.toLowerCase() === "registrar";
+
     const isPending = selectedRequest.status?.toLowerCase() === "pending";
 
     const studentDocuments = {
       cor: getDocumentData(selectedRequest, "cor"),
+
       studentIdDocument: getDocumentData(selectedRequest, "studentIdDocument"),
     };
 
@@ -905,6 +860,7 @@ const ReviewCreateRequests = () => {
         selectedRequest,
         "employeeIdDocument"
       ),
+
       appointmentLetter: getDocumentData(selectedRequest, "appointmentLetter"),
     };
 
@@ -1096,7 +1052,7 @@ const ReviewCreateRequests = () => {
 
             {/* REGISTRAR INFORMATION */}
 
-            {!isStudent && (
+            {isRegistrar && (
               <section
                 className={`border-t pt-6 ${
                   darkMode ? "border-slate-700" : "border-slate-100"
@@ -1181,7 +1137,7 @@ const ReviewCreateRequests = () => {
                       studentDocuments.studentIdDocument
                     )}
                   </>
-                ) : (
+                ) : isRegistrar ? (
                   <>
                     {renderDocumentRow(
                       "University / Employee ID",
@@ -1193,6 +1149,16 @@ const ReviewCreateRequests = () => {
                       registrarDocuments.appointmentLetter
                     )}
                   </>
+                ) : (
+                  <div
+                    className={`rounded-xl border p-4 text-xs ${
+                      darkMode
+                        ? "bg-slate-800 border-slate-700 text-slate-400"
+                        : "bg-slate-50 border-slate-100 text-slate-500"
+                    }`}
+                  >
+                    No supported registration role was found for this request.
+                  </div>
                 )}
               </div>
             </section>

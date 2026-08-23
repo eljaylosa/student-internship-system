@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { supabaseCompany } from "../../supabaseClient";
 
 // =========================================================
 // TEMPORARY FRONTEND NOTIFICATIONS
-// This is NOT connected to mockStore.
-// This will later be replaced with the real backend/database.
+// This is NOT connected to the database yet.
 // =========================================================
 
 const initialNotifications = [
@@ -45,7 +45,81 @@ const CompanyPortalLayout = () => {
   const location = useLocation();
 
   // =========================================================
-  // LOGOUT PLACEHOLDER
+  // COMPANY PROFILE
+  // =========================================================
+
+  const [companyName, setCompanyName] = useState("Company Account");
+  const [companyLoading, setCompanyLoading] = useState(true);
+
+  // =========================================================
+  // FETCH LOGGED-IN COMPANY
+  // =========================================================
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCompany = async () => {
+      try {
+        setCompanyLoading(true);
+
+        // Get currently authenticated user
+        const {
+          data: { user },
+          error: userError,
+        } = await supabaseCompany.auth.getUser();
+
+        if (userError) {
+          throw userError;
+        }
+
+        if (!user) {
+          if (isMounted) {
+            setCompanyName("Company Account");
+            setCompanyLoading(false);
+          }
+
+          return;
+        }
+
+        // Fetch company using auth user's ID
+        const { data, error } = await supabaseCompany
+          .from("companies")
+          .select("company_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        if (isMounted) {
+          if (data?.company_name) {
+            setCompanyName(data.company_name);
+          } else {
+            setCompanyName("Company Account");
+          }
+
+          setCompanyLoading(false);
+        }
+      } catch (error) {
+        console.error("Error fetching company:", error);
+
+        if (isMounted) {
+          setCompanyName("Company Account");
+          setCompanyLoading(false);
+        }
+      }
+    };
+
+    fetchCompany();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // LOGOUT
   // =========================================================
 
   const logout = (...args) => {
@@ -359,7 +433,9 @@ const CompanyPortalLayout = () => {
         return true;
       }
 
-      return item.children?.some((child) => child.path === location.pathname);
+      return item.children?.some(
+        (child) => child.path === location.pathname
+      );
     });
 
     if (!currentItem) {
@@ -377,7 +453,13 @@ const CompanyPortalLayout = () => {
   // LOGOUT
   // =========================================================
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabaseCompany.auth.signOut();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+
     logout();
 
     setIsProfileOpen(false);
@@ -394,6 +476,29 @@ const CompanyPortalLayout = () => {
   const toggleDarkMode = () => {
     setDarkMode((prev) => !prev);
   };
+
+  // =========================================================
+  // COMPANY INITIALS
+  // =========================================================
+
+  const getCompanyInitials = (name) => {
+    if (!name || name === "Company Account") {
+      return "C";
+    }
+
+    const words = name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (words.length === 1) {
+      return words[0].substring(0, 2).toUpperCase();
+    }
+
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  };
+
+  const companyInitials = getCompanyInitials(companyName);
 
   // =========================================================
   // RETURN
@@ -681,8 +786,6 @@ const CompanyPortalLayout = () => {
                         : "bg-white border-slate-200"
                     }`}
                   >
-                    {/* HEADER */}
-
                     <div
                       className={`px-4 py-3 border-b flex items-center justify-between ${
                         darkMode ? "border-slate-700" : "border-slate-200"
@@ -712,8 +815,6 @@ const CompanyPortalLayout = () => {
                         </button>
                       )}
                     </div>
-
-                    {/* LIST */}
 
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.length === 0 ? (
@@ -788,8 +889,6 @@ const CompanyPortalLayout = () => {
                       )}
                     </div>
 
-                    {/* VIEW ALL */}
-
                     <button
                       type="button"
                       onClick={() => navigateTo("/company/notifications")}
@@ -805,7 +904,7 @@ const CompanyPortalLayout = () => {
                 )}
               </div>
 
-              {/* PROFILE */}
+              {/* PROFILE / COMPANY */}
 
               <div className="relative" ref={profileMenuRef}>
                 <button
@@ -818,6 +917,8 @@ const CompanyPortalLayout = () => {
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
+                  {/* COMPANY INITIALS */}
+
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
                       darkMode
@@ -825,11 +926,15 @@ const CompanyPortalLayout = () => {
                         : "bg-slate-900 text-white"
                     }`}
                   >
-                    AC
+                    {companyInitials}
                   </div>
 
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">Acme Corporation</p>
+                  {/* COMPANY NAME */}
+
+                  <div className="hidden sm:block text-left max-w-52">
+                    <p className="text-sm font-semibold truncate">
+                      {companyLoading ? "Loading..." : companyName}
+                    </p>
 
                     <p
                       className={`text-xs ${
@@ -857,14 +962,16 @@ const CompanyPortalLayout = () => {
                         : "bg-white border-slate-200"
                     }`}
                   >
-                    {/* PROFILE INFO */}
+                    {/* COMPANY INFO */}
 
                     <div
                       className={`px-4 py-4 border-b ${
                         darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
-                      <p className="text-sm font-bold">Acme Corporation</p>
+                      <p className="text-sm font-bold truncate">
+                        {companyLoading ? "Loading..." : companyName}
+                      </p>
 
                       <p
                         className={`text-xs mt-1 ${
@@ -875,7 +982,7 @@ const CompanyPortalLayout = () => {
                       </p>
                     </div>
 
-                    {/* PROFILE */}
+                    {/* COMPANY PROFILE */}
 
                     <button
                       type="button"
@@ -918,7 +1025,9 @@ const CompanyPortalLayout = () => {
                         <div className="flex items-center gap-3">
                           <span>{darkMode ? "☀️" : "🌙"}</span>
 
-                          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
+                          <span>
+                            {darkMode ? "Light Mode" : "Dark Mode"}
+                          </span>
                         </div>
 
                         <div
@@ -984,6 +1093,8 @@ const CompanyPortalLayout = () => {
                 selectedNotification,
                 openNotification,
                 closeNotificationModal,
+
+                companyName,
               }}
             />
           </main>
@@ -1149,13 +1260,15 @@ const CompanyPortalLayout = () => {
                   <button
                     type="button"
                     onClick={() => {
+                      const now = new Date().toISOString();
+
                       markNotificationRead(selectedNotification.id);
 
                       setSelectedNotification((previous) =>
                         previous
                           ? {
                               ...previous,
-                              readAt: new Date().toISOString(),
+                              readAt: now,
                             }
                           : previous
                       );
@@ -1195,3 +1308,4 @@ const CompanyPortalLayout = () => {
 };
 
 export default CompanyPortalLayout;
+
