@@ -7,6 +7,7 @@ const SignUp = () => {
 
   const [activeRole, setActiveRole] = useState("student");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSupportingInfo, setShowSupportingInfo] = useState(false);
 
   /*
    * =========================================================
@@ -1590,6 +1591,156 @@ const SignUp = () => {
                         Supporting Document
                         <span className="ml-1 text-slate-400 font-medium normal-case">
                           (Optional)
+                        </span>
+                        <span className="relative inline-flex ml-1 group">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowSupportingInfo((prev) => !prev)
+                            }
+                            className="flex items-center justify-center w-4 h-4 rounded-full border border-slate-400 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-help"
+                            aria-label="Show supporting document examples"
+                          >
+                            ?
+                          </button>
+
+                          <span
+                            className={`
+        absolute left-1/2 bottom-full mb-2 -translate-x-1/2
+        w-80 sm:w-96 max-h-80 overflow-y-auto
+        px-4 py-3 rounded-lg bg-slate-800 text-white
+        text-xs font-normal normal-case leading-relaxed
+        shadow-lg z-50
+        transition-all duration-200
+        ${
+          showSupportingInfo
+            ? "opacity-100 visible"
+            : "opacity-0 invisible pointer-events-none"
+        }
+        md:group-hover:opacity-100 md:group-hover:visible
+      `}
+                          >
+                            <span className="block font-semibold text-sm mb-2">
+                              Supporting Document Examples
+                            </span>
+
+                            <ol className="list-decimal list-inside space-y-1.5 text-slate-200">
+                              <li>
+                                <span className="font-medium text-white">
+                                  Company Profile / Company Information Sheet
+                                </span>{" "}
+                                — basic company details, services, address,
+                                contact person
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Mayor’s Permit / Business Permit
+                                </span>{" "}
+                                — if hindi ito already your required Business
+                                Permit
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  DTI Certificate of Business Name Registration
+                                </span>{" "}
+                                — for sole proprietorship
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  SEC Certificate of Registration / Articles of
+                                  Incorporation
+                                </span>{" "}
+                                — for corporations
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  BIR Certificate of Registration (Form 2303)
+                                </span>{" "}
+                                — if not already required
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Barangay Business Clearance
+                                </span>
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Organizational Chart
+                                </span>{" "}
+                                — useful for larger companies
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Proof of Office/Business Address
+                                </span>{" "}
+                                — lease agreement, utility bill, etc.
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Company Accreditation/Certification
+                                </span>{" "}
+                                — if applicable
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Government-issued accreditation or license
+                                </span>{" "}
+                                — if the company's industry requires one
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Authorization Letter
+                                </span>{" "}
+                                — if the person registering isn't the
+                                owner/company head
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Company ID of Authorized Representative
+                                </span>
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Partnership Agreement
+                                </span>{" "}
+                                — for partnerships
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Board Resolution / Secretary's Certificate
+                                </span>{" "}
+                                — if needed to establish authorization
+                              </li>
+
+                              <li>
+                                <span className="font-medium text-white">
+                                  Other official company documents
+                                </span>{" "}
+                                relevant to verification
+                              </li>
+                            </ol>
+
+                            <span className="block mt-3 pt-2 border-t border-slate-600 text-slate-300 italic">
+                              These documents are optional. Upload only
+                              documents that are applicable and may help verify
+                              your company.
+                            </span>
+
+                            <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                          </span>
                         </span>
                       </label>
 
