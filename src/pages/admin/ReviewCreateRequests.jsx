@@ -37,6 +37,10 @@ const ReviewCreateRequests = () => {
 
       status: (request.status ?? "pending").toLowerCase(),
 
+      schoolId: request.school_id ?? request.schoolId ?? null,
+      schoolName:
+        request.school?.name ?? request.school_name ?? request.schoolName ?? "",
+
       firstName: request.first_name ?? request.firstName ?? "",
       middleInitial: request.middle_initial ?? request.middleInitial ?? "",
       lastName: request.last_name ?? request.lastName ?? "",
@@ -92,17 +96,21 @@ const ReviewCreateRequests = () => {
     try {
       console.log("🔍 Loading create_requests...");
 
-      const { data, error } = await supabase
+      // =====================================================
+      // LOAD REGISTRATION REQUESTS
+      // =====================================================
+
+      const { data: requestData, error: requestError } = await supabase
         .from("create_requests")
         .select("*")
         .order("created_at", { ascending: false });
 
-      console.log("📦 SUPABASE RAW DATA:", data);
-      console.log("❌ SUPABASE ERROR:", error);
+      console.log("📦 SUPABASE RAW REQUEST DATA:", requestData);
+      console.log("❌ SUPABASE REQUEST ERROR:", requestError);
 
-      if (error) {
+      if (requestError) {
         showNotification(
-          `Failed to load registration requests: ${error.message}`,
+          `Failed to load registration requests: ${requestError.message}`,
           "error"
         );
 
@@ -110,11 +118,73 @@ const ReviewCreateRequests = () => {
         return;
       }
 
-      console.log("📊 Number of requests:", data?.length || 0);
+      // =====================================================
+      // LOAD SCHOOLS
+      // =====================================================
 
-      const formattedRequests = (data || []).map(formatRequest).filter(Boolean);
+      const { data: schoolData, error: schoolError } = await supabase
+        .from("schools")
+        .select("id, name, code");
 
-      console.log("✅ FORMATTED REQUESTS:", formattedRequests);
+      console.log("🏫 SUPABASE SCHOOL DATA:", schoolData);
+      console.log("❌ SUPABASE SCHOOL ERROR:", schoolError);
+
+      if (schoolError) {
+        showNotification(
+          `Failed to load schools: ${schoolError.message}`,
+          "error"
+        );
+
+        setRequests([]);
+        return;
+      }
+
+      // =====================================================
+      // CREATE SCHOOL LOOKUP MAP
+      // =====================================================
+
+      const schoolMap = new Map(
+        (schoolData || []).map((school) => [
+          school.id,
+          {
+            id: school.id,
+            name: school.name,
+            code: school.code,
+          },
+        ])
+      );
+
+      console.log("🏫 SCHOOL LOOKUP MAP:", schoolMap);
+
+      // =====================================================
+      // FORMAT REQUESTS + ATTACH SCHOOL INFORMATION
+      // =====================================================
+
+      const formattedRequests = (requestData || [])
+        .map((request) => {
+          const formatted = formatRequest(request);
+
+          if (!formatted) {
+            return null;
+          }
+
+          const school = request.school_id
+            ? schoolMap.get(request.school_id)
+            : null;
+
+          return {
+            ...formatted,
+
+            schoolId: request.school_id ?? null,
+
+            schoolName: school?.name || "",
+
+            schoolCode: school?.code || "",
+          };
+        })
+        .filter(Boolean);
+
+      console.log("✅ FORMATTED REQUESTS WITH SCHOOLS:", formattedRequests);
 
       setRequests(formattedRequests);
     } catch (error) {
@@ -186,11 +256,15 @@ const ReviewCreateRequests = () => {
         role === "student" ? request.studentId || "" : request.employeeId || "";
 
       const email = request.email?.toLowerCase() || "";
+      const schoolName = request.schoolName?.toLowerCase() || "";
+      const schoolCode = request.schoolCode?.toLowerCase() || "";
 
       return (
         fullName.includes(searchValue) ||
         email.includes(searchValue) ||
-        identifier.toLowerCase().includes(searchValue)
+        identifier.toLowerCase().includes(searchValue) ||
+        schoolName.includes(searchValue) ||
+        schoolCode.includes(searchValue)
       );
     });
   }, [requests, activeFilter, searchTerm]);
@@ -989,6 +1063,18 @@ const ReviewCreateRequests = () => {
                 />
 
                 <InfoItem
+                  label="School"
+                  value={
+                    selectedRequest.schoolName
+                      ? selectedRequest.schoolCode
+                        ? `${selectedRequest.schoolName} (${selectedRequest.schoolCode})`
+                        : selectedRequest.schoolName
+                      : "School not specified"
+                  }
+                  darkMode={darkMode}
+                />
+
+                <InfoItem
                   label="Submitted"
                   value={formatDateTime(selectedRequest.createdAt)}
                   darkMode={darkMode}
@@ -1026,6 +1112,18 @@ const ReviewCreateRequests = () => {
                   <InfoItem
                     label="Student ID"
                     value={selectedRequest.studentId}
+                    darkMode={darkMode}
+                  />
+
+                  <InfoItem
+                    label="School"
+                    value={
+                      selectedRequest.schoolName
+                        ? selectedRequest.schoolCode
+                          ? `${selectedRequest.schoolName} (${selectedRequest.schoolCode})`
+                          : selectedRequest.schoolName
+                        : "School not specified"
+                    }
                     darkMode={darkMode}
                   />
 
@@ -1081,6 +1179,18 @@ const ReviewCreateRequests = () => {
                   <InfoItem
                     label="Employee ID"
                     value={selectedRequest.employeeId}
+                    darkMode={darkMode}
+                  />
+
+                  <InfoItem
+                    label="School"
+                    value={
+                      selectedRequest.schoolName
+                        ? selectedRequest.schoolCode
+                          ? `${selectedRequest.schoolName} (${selectedRequest.schoolCode})`
+                          : selectedRequest.schoolName
+                        : "School not specified"
+                    }
                     darkMode={darkMode}
                   />
 
@@ -1624,7 +1734,7 @@ const ReviewCreateRequests = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search name, email, or ID..."
+                  placeholder="Search name, email, or ID, or school..."
                   className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs transition ${
                     darkMode
                       ? "bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500"
@@ -1687,6 +1797,14 @@ const ReviewCreateRequests = () => {
                         }`}
                       >
                         Role
+                      </th>
+
+                      <th
+                        className={`text-left px-4 py-3.5 text-[10px] font-bold uppercase tracking-wider ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
+                        School
                       </th>
 
                       <th
@@ -1778,6 +1896,31 @@ const ReviewCreateRequests = () => {
                           >
                             {getRoleLabel(request.role)}
                           </span>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="min-w-0">
+                            <p
+                              className={`text-xs font-semibold truncate max-w-[220px] ${
+                                darkMode ? "text-slate-300" : "text-slate-600"
+                              }`}
+                              title={
+                                request.schoolName || "School not specified"
+                              }
+                            >
+                              {request.schoolName || "School not specified"}
+                            </p>
+
+                            {request.schoolCode && (
+                              <p
+                                className={`text-[9px] mt-0.5 ${
+                                  darkMode ? "text-slate-500" : "text-slate-400"
+                                }`}
+                              >
+                                {request.schoolCode}
+                              </p>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-4 py-4">
@@ -1882,6 +2025,18 @@ const ReviewCreateRequests = () => {
                       <MobileInfo
                         label="Role"
                         value={getRoleLabel(request.role)}
+                        darkMode={darkMode}
+                      />
+
+                      <MobileInfo
+                        label="School"
+                        value={
+                          request.schoolName
+                            ? request.schoolCode
+                              ? `${request.schoolName} (${request.schoolCode})`
+                              : request.schoolName
+                            : "School not specified"
+                        }
                         darkMode={darkMode}
                       />
 

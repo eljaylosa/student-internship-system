@@ -183,10 +183,31 @@ export default function Application() {
       setApplications(applicationData || []);
 
       // -------------------------------------------------------
-      // ASSIGNMENT
+      // LOAD ASSIGNMENT
+      // -------------------------------------------------------
+      // An assignment means the student already has an internship
+      // placement. Therefore, the student must not create another
+      // application.
+      //
+      // We only need to know whether an assignment exists.
       // -------------------------------------------------------
 
-      setAssignment(null);
+      const { data: assignmentData, error: assignmentError } =
+        await supabaseStudent
+          .from("assignments")
+          .select("*")
+          .eq("student_id", user.id)
+          .order("created_at", {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle();
+
+      if (assignmentError) {
+        throw assignmentError;
+      }
+
+      setAssignment(assignmentData || null);
     } catch (error) {
       console.error("Error loading student internship data:", error);
 
@@ -223,6 +244,30 @@ export default function Application() {
       application.opportunity_id === opportunityId &&
       application.status !== STATUS.application.REJECTED
   );
+
+  // =========================================================
+  // GLOBAL INTERNSHIP STATUS
+  // =========================================================
+  //
+  // A student is considered to have an active/final placement
+  // when:
+  //
+  // 1. Any application is APPROVED
+  // OR
+  // 2. An assignment already exists
+  //
+  // Submitted / Under Review / Info Requested / Rejected /
+  // Withdrawn / Draft do NOT block applications to other
+  // opportunities.
+  // =========================================================
+
+  const hasApprovedApplication = applications.some(
+    (application) => application.status === STATUS.application.APPROVED
+  );
+
+  const hasActiveAssignment = Boolean(assignment);
+
+  const hasActiveInternship = hasApprovedApplication || hasActiveAssignment;
 
   // =========================================================
   // FORMAT DATE
@@ -479,6 +524,19 @@ export default function Application() {
       return;
     }
 
+    // -------------------------------------------------------
+    // IMPORTANT:
+    // Applying again must NOT bypass the global internship
+    // restriction.
+    // -------------------------------------------------------
+
+    if (hasActiveInternship) {
+      alert(
+        "You already have an approved internship placement. You cannot apply to another opportunity."
+      );
+      return;
+    }
+
     setOpportunityId(opportunity.id);
     setCoverLetter("");
     setIsReapplying(true);
@@ -505,8 +563,19 @@ export default function Application() {
       return;
     }
 
-    // If this is an information-requested application,
-    // use the dedicated resubmission flow instead.
+    // -------------------------------------------------------
+    // EXISTING APPLICATION MAINTENANCE
+    // -------------------------------------------------------
+    //
+    // These existing application flows remain allowed even if
+    // the student has multiple applications:
+    //
+    // - Information Requested → Resubmit
+    // - Draft → Submit
+    //
+    // They are NOT new applications.
+    // -------------------------------------------------------
+
     if (
       existingApplication?.status === STATUS.application.INFO_REQUESTED &&
       !isReapplying
@@ -515,7 +584,6 @@ export default function Application() {
       return;
     }
 
-    // Draft applications are updated instead of creating another row.
     if (
       existingApplication?.status === STATUS.application.DRAFT &&
       !isReapplying
@@ -524,7 +592,25 @@ export default function Application() {
       return;
     }
 
-    // Submitted/under review/approved applications cannot be duplicated.
+    // -------------------------------------------------------
+    // GLOBAL INTERNSHIP RESTRICTION
+    // -------------------------------------------------------
+    //
+    // This MUST happen before the normal duplicate/reapply
+    // checks so "Apply Again" cannot bypass it.
+    // -------------------------------------------------------
+
+    if (hasActiveInternship) {
+      alert(
+        "You already have an approved internship placement. You cannot apply to another opportunity."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // DUPLICATE APPLICATION FOR SAME OPPORTUNITY
+    // -------------------------------------------------------
+
     if (
       existingApplication &&
       ![
@@ -559,6 +645,50 @@ export default function Application() {
 
       if (!user) {
         throw new Error("You are not logged in.");
+      }
+
+      // -------------------------------------------------------
+      // FINAL CLIENT-SIDE SAFETY CHECK
+      // -------------------------------------------------------
+      //
+      // Re-check applications and assignments immediately before
+      // creating a new application.
+      //
+      // This protects against stale frontend state.
+      // -------------------------------------------------------
+
+      const { data: latestApplications, error: latestApplicationsError } =
+        await supabaseStudent
+          .from("applications")
+          .select("id, status")
+          .eq("student_id", user.id);
+
+      if (latestApplicationsError) {
+        throw latestApplicationsError;
+      }
+
+      const { data: latestAssignment, error: latestAssignmentError } =
+        await supabaseStudent
+          .from("assignments")
+          .select("id")
+          .eq("student_id", user.id)
+          .limit(1)
+          .maybeSingle();
+
+      if (latestAssignmentError) {
+        throw latestAssignmentError;
+      }
+
+      const latestHasApprovedApplication = (latestApplications || []).some(
+        (application) => application.status === STATUS.application.APPROVED
+      );
+
+      const latestHasAssignment = Boolean(latestAssignment);
+
+      if (latestHasApprovedApplication || latestHasAssignment) {
+        throw new Error(
+          "You already have an approved internship placement. You cannot apply to another opportunity."
+        );
       }
 
       // -------------------------------------------------------
@@ -700,41 +830,27 @@ export default function Application() {
       return;
     }
 
-    // A rejected application must use Apply Again.
-    if (existingApplication?.status === STATUS.application.REJECTED) {
-      alert("Please use 'Apply Again' to create a new application.");
-      return;
-    }
+    // -------------------------------------------------------
+    // EXISTING DRAFT CAN STILL BE UPDATED
+    // -------------------------------------------------------
 
-    // Information requested must use resubmit.
-    if (existingApplication?.status === STATUS.application.INFO_REQUESTED) {
-      alert(
-        "Please use 'Resubmit Application' after updating your application."
-      );
-      return;
-    }
+    if (existingApplication?.status === STATUS.application.DRAFT) {
+      setIsSubmitting(true);
 
-    setIsSubmitting(true);
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseStudent.auth.getUser();
 
-    try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabaseStudent.auth.getUser();
+        if (authError) {
+          throw authError;
+        }
 
-      if (authError) {
-        throw authError;
-      }
+        if (!user) {
+          throw new Error("You are not logged in.");
+        }
 
-      if (!user) {
-        throw new Error("You are not logged in.");
-      }
-
-      // -------------------------------------------------------
-      // EXISTING DRAFT
-      // -------------------------------------------------------
-
-      if (existingApplication?.status === STATUS.application.DRAFT) {
         const { data: updatedApplication, error: updateError } =
           await supabaseStudent
             .from("applications")
@@ -758,34 +874,137 @@ export default function Application() {
               : application
           )
         );
-      } else {
-        // -----------------------------------------------------
-        // CREATE NEW DRAFT
-        // -----------------------------------------------------
 
-        const { data: newDraft, error: insertError } = await supabaseStudent
+        alert("Application draft updated successfully.");
+      } catch (error) {
+        console.error("Error updating application draft:", error);
+
+        alert(error.message || "Unable to update your application draft.");
+      } finally {
+        setIsSubmitting(false);
+      }
+
+      return;
+    }
+
+    // -------------------------------------------------------
+    // REJECTED APPLICATION
+    // -------------------------------------------------------
+
+    if (existingApplication?.status === STATUS.application.REJECTED) {
+      // A rejected application is allowed to create a new draft
+      // only if the student has not already been approved/deployed.
+      if (hasActiveInternship) {
+        alert(
+          "You already have an approved internship placement. You cannot create another application."
+        );
+        return;
+      }
+
+      alert("Please use 'Apply Again' to create a new application.");
+      return;
+    }
+
+    // -------------------------------------------------------
+    // INFORMATION REQUESTED
+    // -------------------------------------------------------
+
+    if (existingApplication?.status === STATUS.application.INFO_REQUESTED) {
+      alert(
+        "Please use 'Resubmit Application' after updating your application."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // GLOBAL INTERNSHIP RESTRICTION
+    // -------------------------------------------------------
+
+    if (hasActiveInternship) {
+      alert(
+        "You already have an approved internship placement. You cannot apply to another opportunity."
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      // -------------------------------------------------------
+      // FINAL CHECK BEFORE CREATING A NEW DRAFT
+      // -------------------------------------------------------
+
+      const { data: latestApplications, error: latestApplicationsError } =
+        await supabaseStudent
           .from("applications")
-          .insert({
-            student_id: user.id,
-            opportunity_id: selectedOpportunity.id,
-            cover_letter: coverLetter.trim(),
-            status: STATUS.application.DRAFT,
-          })
-          .select()
-          .single();
+          .select("id, status")
+          .eq("student_id", user.id);
 
-        if (insertError) {
-          if (insertError.code === "23505") {
-            throw new Error(
-              "An application already exists for this opportunity."
-            );
-          }
+      if (latestApplicationsError) {
+        throw latestApplicationsError;
+      }
 
-          throw insertError;
+      const { data: latestAssignment, error: latestAssignmentError } =
+        await supabaseStudent
+          .from("assignments")
+          .select("id")
+          .eq("student_id", user.id)
+          .limit(1)
+          .maybeSingle();
+
+      if (latestAssignmentError) {
+        throw latestAssignmentError;
+      }
+
+      const latestHasApprovedApplication = (latestApplications || []).some(
+        (application) => application.status === STATUS.application.APPROVED
+      );
+
+      if (latestHasApprovedApplication || latestAssignment) {
+        throw new Error(
+          "You already have an approved internship placement. You cannot create another application."
+        );
+      }
+
+      // -------------------------------------------------------
+      // CREATE NEW DRAFT
+      // -------------------------------------------------------
+
+      const { data: newDraft, error: insertError } = await supabaseStudent
+        .from("applications")
+        .insert({
+          student_id: user.id,
+          opportunity_id: selectedOpportunity.id,
+          cover_letter: coverLetter.trim(),
+          status: STATUS.application.DRAFT,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          throw new Error(
+            "An application already exists for this opportunity."
+          );
         }
 
-        setApplications((previous) => [newDraft, ...previous]);
+        throw insertError;
       }
+
+      setApplications((previous) => [newDraft, ...previous]);
 
       alert("Application draft saved successfully.");
     } catch (error) {
@@ -905,6 +1124,51 @@ export default function Application() {
             </span>
           </div>
 
+          {/* =================================================
+              ACTIVE INTERNSHIP NOTICE
+          ================================================= */}
+
+          {hasActiveInternship && (
+            <div
+              className={`mb-5 border rounded-xl p-4 ${
+                darkMode
+                  ? "border-emerald-800 bg-emerald-950/30"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="text-lg">✅</div>
+
+                <div>
+                  <p className="text-xs font-bold text-emerald-600">
+                    Internship Placement Already Approved
+                  </p>
+
+                  <p
+                    className={`text-xs mt-1 ${
+                      darkMode ? "text-emerald-200" : "text-emerald-800"
+                    }`}
+                  >
+                    You already have an approved internship placement. You
+                    cannot submit or create another application for a different
+                    opportunity.
+                  </p>
+
+                  {assignment && (
+                    <p
+                      className={`text-[10px] mt-2 ${
+                        darkMode ? "text-emerald-300" : "text-emerald-700"
+                      }`}
+                    >
+                      Assignment status:{" "}
+                      <strong>{formatStatus(assignment.status)}</strong>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {opportunities.length === 0 ? (
             <div
               className={`border rounded-xl p-8 text-center ${
@@ -939,6 +1203,7 @@ export default function Application() {
                     .filter((item) => item.opportunity_id === opportunity.id)
                     .sort((a, b) => {
                       const dateA = new Date(a.created_at || 0).getTime();
+
                       const dateB = new Date(b.created_at || 0).getTime();
 
                       return dateB - dateA;
@@ -1298,92 +1563,144 @@ export default function Application() {
                     )}
 
                   {/* =================================================
+                      GLOBAL BLOCK FOR OTHER OPPORTUNITIES
+                  ================================================= */}
+
+                  {hasActiveInternship &&
+                    !existingApplication &&
+                    !isReapplying && (
+                      <div
+                        className={`border rounded-xl p-5 ${
+                          darkMode
+                            ? "border-emerald-800 bg-emerald-950/20"
+                            : "border-emerald-200 bg-emerald-50"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-xl">🔒</div>
+
+                          <div>
+                            <p className="text-sm font-bold text-emerald-600">
+                              New Applications Are Closed
+                            </p>
+
+                            <p
+                              className={`text-xs mt-1 ${
+                                darkMode
+                                  ? "text-emerald-200"
+                                  : "text-emerald-800"
+                              }`}
+                            >
+                              You already have an approved internship placement.
+                              You may no longer submit a new application to
+                              another opportunity.
+                            </p>
+
+                            {hasApprovedApplication && (
+                              <p className="text-[10px] text-emerald-600 mt-2 font-semibold">
+                                Approved application found.
+                              </p>
+                            )}
+
+                            {assignment && (
+                              <p className="text-[10px] text-emerald-600 mt-1 font-semibold">
+                                Internship assignment found.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* =================================================
                       EDITABLE FORM
                   ================================================= */}
 
-                  {(!existingApplication ||
-                    existingApplication.status === STATUS.application.DRAFT ||
-                    existingApplication.status ===
-                      STATUS.application.INFO_REQUESTED ||
-                    isReapplying) && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-semibold mb-1">
-                          {isReapplying
-                            ? "New Application Cover Letter"
-                            : existingApplication?.status ===
-                              STATUS.application.INFO_REQUESTED
-                            ? "Update Cover Letter"
-                            : "Cover Letter"}
-                        </label>
+                  {!hasActiveInternship &&
+                    (!existingApplication ||
+                      existingApplication.status === STATUS.application.DRAFT ||
+                      existingApplication.status ===
+                        STATUS.application.INFO_REQUESTED ||
+                      isReapplying) && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-semibold mb-1">
+                            {isReapplying
+                              ? "New Application Cover Letter"
+                              : existingApplication?.status ===
+                                STATUS.application.INFO_REQUESTED
+                              ? "Update Cover Letter"
+                              : "Cover Letter"}
+                          </label>
 
-                        <textarea
-                          rows="5"
-                          className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
-                          value={coverLetter}
-                          onChange={(event) =>
-                            setCoverLetter(event.target.value)
-                          }
-                          placeholder="Explain your interest in this opportunity."
-                          disabled={isSubmitting}
-                        />
-                      </div>
+                          <textarea
+                            rows="5"
+                            className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
+                            value={coverLetter}
+                            onChange={(event) =>
+                              setCoverLetter(event.target.value)
+                            }
+                            placeholder="Explain your interest in this opportunity."
+                            disabled={isSubmitting}
+                          />
+                        </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        {!isReapplying &&
-                          existingApplication?.status !==
-                            STATUS.application.INFO_REQUESTED && (
+                        <div className="flex flex-wrap gap-2">
+                          {!isReapplying &&
+                            existingApplication?.status !==
+                              STATUS.application.INFO_REQUESTED && (
+                              <button
+                                type="button"
+                                className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
+                                  isSubmitting
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : ""
+                                }`}
+                                onClick={handleSaveDraft}
+                                disabled={isSubmitting}
+                              >
+                                {isSubmitting ? "Saving..." : "Save Draft"}
+                              </button>
+                            )}
+
+                          {existingApplication?.status ===
+                            STATUS.application.INFO_REQUESTED &&
+                          !isReapplying ? (
                             <button
                               type="button"
-                              className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
+                              className={`px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold ${
                                 isSubmitting
                                   ? "opacity-50 cursor-not-allowed"
-                                  : ""
+                                  : "hover:bg-blue-700"
                               }`}
-                              onClick={handleSaveDraft}
+                              onClick={handleResubmitInformation}
                               disabled={isSubmitting}
                             >
-                              {isSubmitting ? "Saving..." : "Save Draft"}
+                              {isSubmitting
+                                ? "Resubmitting..."
+                                : "Resubmit Application"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className={`px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold ${
+                                isSubmitting
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:bg-slate-800"
+                              }`}
+                              onClick={handleSubmitApplication}
+                              disabled={isSubmitting}
+                            >
+                              {isSubmitting
+                                ? "Submitting..."
+                                : isReapplying
+                                ? "Submit New Application"
+                                : "Submit Application"}
                             </button>
                           )}
-
-                        {existingApplication?.status ===
-                          STATUS.application.INFO_REQUESTED && !isReapplying ? (
-                          <button
-                            type="button"
-                            className={`px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold ${
-                              isSubmitting
-                                ? "opacity-50 cursor-not-allowed"
-                                : "hover:bg-blue-700"
-                            }`}
-                            onClick={handleResubmitInformation}
-                            disabled={isSubmitting}
-                          >
-                            {isSubmitting
-                              ? "Resubmitting..."
-                              : "Resubmit Application"}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className={`px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold ${
-                              isSubmitting
-                                ? "opacity-50 cursor-not-allowed"
-                                : "hover:bg-slate-800"
-                            }`}
-                            onClick={handleSubmitApplication}
-                            disabled={isSubmitting}
-                          >
-                            {isSubmitting
-                              ? "Submitting..."
-                              : isReapplying
-                              ? "Submit New Application"
-                              : "Submit Application"}
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  )}
+                        </div>
+                      </>
+                    )}
                 </div>
               )}
             </>
@@ -1557,8 +1874,14 @@ export default function Application() {
               <strong>Internship Assignment {assignment.id}</strong>
 
               <p className="mt-1">
-                {assignment.startDate} to {assignment.endDate} ·{" "}
-                {assignment.status}
+                {assignment.start_date
+                  ? formatDate(assignment.start_date)
+                  : "Start date not specified"}{" "}
+                to{" "}
+                {assignment.end_date
+                  ? formatDate(assignment.end_date)
+                  : "End date not specified"}{" "}
+                · {formatStatus(assignment.status)}
               </p>
             </div>
           )}
