@@ -45,6 +45,8 @@ import StudentInfo from "./pages/student/Info.jsx";
 import StudentMessages from "./pages/student/Messages.jsx";
 import StudentSettings from "./pages/student/Settings.jsx";
 import StudentEvaluation from "./pages/student/Evaluation.jsx";
+import ViewStatus from "./pages/student/ViewStatus";
+import Certificate from "./pages/student/Certificate";
 
 // =========================================================
 // REGISTRAR PORTAL
@@ -224,10 +226,15 @@ function AppContent() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
 
+          <Route
+            path="/student/certificate/:certificateId"
+            element={<Certificate />}
+          />
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="application" element={<StudentApplication />} />
           <Route path="documents" element={<StudentDocuments />} />
+          <Route path="status" element={<ViewStatus />} />
           <Route path="templates" element={<StudentDocumentTemplate />} />
           <Route path="notifications" element={<StudentNotification />} />
           <Route path="info" element={<StudentInfo />} />

@@ -112,12 +112,11 @@ const StudentPortalLayout = () => {
       // GET STUDENT INFORMATION
       // -----------------------------------------
 
-      const { data: studentData, error: studentError } =
-        await supabaseStudent
-          .from("students")
-          .select("program, profile_photo_url")
-          .eq("id", user.id)
-          .maybeSingle();
+      const { data: studentData, error: studentError } = await supabaseStudent
+        .from("students")
+        .select("program, profile_photo_url")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (studentError) {
         throw studentError;
@@ -142,9 +141,7 @@ const StudentPortalLayout = () => {
       let profilePhoto = null;
 
       if (studentData?.profile_photo_url) {
-        profilePhoto = await getProfilePhotoUrl(
-          studentData.profile_photo_url
-        );
+        profilePhoto = await getProfilePhotoUrl(studentData.profile_photo_url);
       }
 
       // -----------------------------------------
@@ -199,9 +196,7 @@ const StudentPortalLayout = () => {
       const signedMarker = `/storage/v1/object/sign/${STORAGE_BUCKET}/`;
 
       if (storagePath.includes(signedMarker)) {
-        storagePath = storagePath
-          .split(signedMarker)[1]
-          .split("?")[0];
+        storagePath = storagePath.split(signedMarker)[1].split("?")[0];
       }
 
       // -----------------------------------------
@@ -261,10 +256,7 @@ const StudentPortalLayout = () => {
         .createSignedUrl(storagePath, 60 * 60);
 
       if (error) {
-        console.error(
-          "Error creating profile photo signed URL:",
-          error
-        );
+        console.error("Error creating profile photo signed URL:", error);
 
         return null;
       }
@@ -315,9 +307,7 @@ const StudentPortalLayout = () => {
   // NOTIFICATION STATE
   // =========================================================
 
-  const [notifications, setNotifications] = useState(
-    initialNotifications
-  );
+  const [notifications, setNotifications] = useState(initialNotifications);
 
   const [selectedNotification, setSelectedNotification] = useState(null);
 
@@ -335,8 +325,7 @@ const StudentPortalLayout = () => {
         notification.id === notificationId
           ? {
               ...notification,
-              readAt:
-                notification.readAt || new Date().toISOString(),
+              readAt: notification.readAt || new Date().toISOString(),
             }
           : notification
       )
@@ -356,9 +345,7 @@ const StudentPortalLayout = () => {
 
   const deleteNotification = (notificationId) => {
     setNotifications((previous) =>
-      previous.filter(
-        (notification) => notification.id !== notificationId
-      )
+      previous.filter((notification) => notification.id !== notificationId)
     );
 
     setSelectedNotification((current) =>
@@ -371,8 +358,7 @@ const StudentPortalLayout = () => {
 
     setSelectedNotification({
       ...notification,
-      readAt:
-        notification.readAt || new Date().toISOString(),
+      readAt: notification.readAt || new Date().toISOString(),
     });
 
     setIsNotificationOpen(false);
@@ -387,9 +373,7 @@ const StudentPortalLayout = () => {
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("studentPortalDarkMode") === "true"
-    );
+    return localStorage.getItem("studentPortalDarkMode") === "true";
   });
 
   useEffect(() => {
@@ -399,10 +383,7 @@ const StudentPortalLayout = () => {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem(
-      "studentPortalDarkMode",
-      darkMode
-    );
+    localStorage.setItem("studentPortalDarkMode", darkMode);
   }, [darkMode]);
 
   // =========================================================
@@ -463,16 +444,10 @@ const StudentPortalLayout = () => {
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -500,6 +475,11 @@ const StudentPortalLayout = () => {
       name: "Upload Documents",
       icon: "📁",
       path: "/student/documents",
+    },
+    {
+      name: "View Status",
+      icon: "📊",
+      path: "/student/status",
     },
     {
       name: "Evaluations",
@@ -561,10 +541,7 @@ const StudentPortalLayout = () => {
     const minWidth = 240;
     const maxWidth = 360;
 
-    const newWidth = Math.min(
-      Math.max(e.clientX, minWidth),
-      maxWidth
-    );
+    const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
 
     setSidebarWidth(newWidth);
   };
@@ -603,9 +580,7 @@ const StudentPortalLayout = () => {
   };
 
   const isChildActive = (children) => {
-    return children?.some(
-      (child) => location.pathname === child.path
-    );
+    return children?.some((child) => location.pathname === child.path);
   };
 
   // =========================================================
@@ -618,9 +593,7 @@ const StudentPortalLayout = () => {
         return true;
       }
 
-      return item.children?.some(
-        (child) => child.path === location.pathname
-      );
+      return item.children?.some((child) => child.path === location.pathname);
     });
 
     if (!currentItem) {
@@ -663,25 +636,16 @@ const StudentPortalLayout = () => {
   const getInitials = (name) => {
     if (!name) return "ST";
 
-    const parts = name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+    const parts = name.trim().split(/\s+/).filter(Boolean);
 
     if (parts.length === 1) {
-      return parts[0]
-        .substring(0, 2)
-        .toUpperCase();
+      return parts[0].substring(0, 2).toUpperCase();
     }
 
-    return `${parts[0][0]}${
-      parts[parts.length - 1][0]
-    }`.toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   };
 
-  const profileInitials = getInitials(
-    studentProfile.fullName
-  );
+  const profileInitials = getInitials(studentProfile.fullName);
 
   // =========================================================
   // RETURN
@@ -690,9 +654,7 @@ const StudentPortalLayout = () => {
   return (
     <div
       className={`min-h-screen transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
       <div className="flex min-h-screen">
@@ -712,31 +674,23 @@ const StudentPortalLayout = () => {
 
           <div
             className={`h-20 px-6 flex items-center border-b ${
-              darkMode
-                ? "border-slate-700"
-                : "border-slate-100"
+              darkMode ? "border-slate-700" : "border-slate-100"
             }`}
           >
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
-                darkMode
-                  ? "bg-white text-slate-900"
-                  : "bg-slate-900 text-white"
+                darkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
               }`}
             >
               S
             </div>
 
             <div className="ml-3">
-              <h1 className="font-bold text-lg tracking-tight">
-                SIMS
-              </h1>
+              <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
 
               <p
                 className={`text-xs ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-400"
+                  darkMode ? "text-slate-400" : "text-slate-400"
                 }`}
               >
                 Student Environment
@@ -749,14 +703,11 @@ const StudentPortalLayout = () => {
           <div className="flex-1 overflow-y-auto px-3 py-4">
             <nav className="space-y-1">
               {sidebarItems.map((item) => {
-                const hasChildren =
-                  item.children?.length > 0;
-                const isExpanded =
-                  expandedMenus[item.name];
+                const hasChildren = item.children?.length > 0;
+                const isExpanded = expandedMenus[item.name];
 
                 const active =
-                  isPathActive(item.path) ||
-                  isChildActive(item.children);
+                  isPathActive(item.path) || isChildActive(item.children);
 
                 return (
                   <div key={item.name}>
@@ -794,18 +745,14 @@ const StudentPortalLayout = () => {
                           {item.icon}
                         </span>
 
-                        <span className="truncate">
-                          {item.name}
-                        </span>
+                        <span className="truncate">{item.name}</span>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {item.badge && (
                           <span
                             className={`w-2 h-2 rounded-full ${
-                              active
-                                ? "bg-current"
-                                : "bg-blue-500"
+                              active ? "bg-current" : "bg-blue-500"
                             }`}
                           />
                         )}
@@ -813,9 +760,7 @@ const StudentPortalLayout = () => {
                         {hasChildren && (
                           <span
                             className={`text-xs transition-transform duration-200 ${
-                              isExpanded
-                                ? "rotate-180"
-                                : ""
+                              isExpanded ? "rotate-180" : ""
                             }`}
                           >
                             ▼
@@ -828,23 +773,18 @@ const StudentPortalLayout = () => {
                       <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
                         <div
                           className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode
-                              ? "bg-slate-700"
-                              : "bg-slate-200"
+                            darkMode ? "bg-slate-700" : "bg-slate-200"
                           }`}
                         />
 
                         {item.children.map((child) => {
-                          const childActive =
-                            isPathActive(child.path);
+                          const childActive = isPathActive(child.path);
 
                           return (
                             <button
                               key={child.name}
                               type="button"
-                              onClick={() =>
-                                navigateTo(child.path)
-                              }
+                              onClick={() => navigateTo(child.path)}
                               className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left ${
                                 childActive
                                   ? darkMode
@@ -869,9 +809,7 @@ const StudentPortalLayout = () => {
                                 {child.icon}
                               </span>
 
-                              <span className="truncate">
-                                {child.name}
-                              </span>
+                              <span className="truncate">{child.name}</span>
                             </button>
                           );
                         })}
@@ -887,9 +825,7 @@ const StudentPortalLayout = () => {
 
           <div
             className={`p-4 border-t ${
-              darkMode
-                ? "border-slate-700"
-                : "border-slate-100"
+              darkMode ? "border-slate-700" : "border-slate-100"
             }`}
           >
             <button
@@ -948,9 +884,7 @@ const StudentPortalLayout = () => {
               <div className="min-w-0">
                 <p
                   className={`text-sm ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-400"
+                    darkMode ? "text-slate-400" : "text-slate-400"
                   }`}
                 >
                   Student Portal
@@ -967,22 +901,15 @@ const StudentPortalLayout = () => {
             <div className="flex items-center gap-1 sm:gap-3 ml-auto">
               {/* NOTIFICATIONS */}
 
-              <div
-                className="relative"
-                ref={notificationRef}
-              >
+              <div className="relative" ref={notificationRef}>
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen(
-                      (prev) => !prev
-                    );
+                    setIsNotificationOpen((prev) => !prev);
                     setIsProfileOpen(false);
                   }}
                   className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition ${
-                    darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
                   <span className="text-lg">🔔</span>
@@ -990,14 +917,10 @@ const StudentPortalLayout = () => {
                   {unreadCount > 0 && (
                     <span
                       className={`absolute top-1 right-1 min-w-4 h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full border-2 ${
-                        darkMode
-                          ? "border-slate-900"
-                          : "border-white"
+                        darkMode ? "border-slate-900" : "border-white"
                       }`}
                     >
-                      {unreadCount > 9
-                        ? "9+"
-                        : unreadCount}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
@@ -1012,21 +935,15 @@ const StudentPortalLayout = () => {
                   >
                     <div
                       className={`px-4 py-3 border-b flex items-center justify-between ${
-                        darkMode
-                          ? "border-slate-700"
-                          : "border-slate-200"
+                        darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
                       <div>
-                        <h3 className="text-sm font-bold">
-                          Notifications
-                        </h3>
+                        <h3 className="text-sm font-bold">Notifications</h3>
 
                         <p
                           className={`text-xs mt-0.5 ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
                           {unreadCount > 0
@@ -1038,9 +955,7 @@ const StudentPortalLayout = () => {
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={
-                            markAllNotificationsRead
-                          }
+                          onClick={markAllNotificationsRead}
                           className="text-[10px] font-bold text-blue-500 hover:underline"
                         >
                           Mark all read
@@ -1051,97 +966,79 @@ const StudentPortalLayout = () => {
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="p-6 text-center">
-                          <div className="text-2xl mb-2">
-                            🔔
-                          </div>
+                          <div className="text-2xl mb-2">🔔</div>
 
                           <p
                             className={`text-xs ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             No notifications
                           </p>
                         </div>
                       ) : (
-                        notifications.map(
-                          (notification) => (
-                            <button
-                              key={notification.id}
-                              type="button"
-                              onClick={() =>
-                                openNotification(
-                                  notification
-                                )
-                              }
-                              className={`w-full text-left px-4 py-3 border-b transition ${
-                                darkMode
-                                  ? "border-slate-700 hover:bg-slate-700"
-                                  : "border-slate-100 hover:bg-slate-50"
-                              }`}
-                            >
-                              <div className="flex gap-3">
-                                <div className="pt-1.5">
+                        notifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => openNotification(notification)}
+                            className={`w-full text-left px-4 py-3 border-b transition ${
+                              darkMode
+                                ? "border-slate-700 hover:bg-slate-700"
+                                : "border-slate-100 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              <div className="pt-1.5">
+                                <span
+                                  className={`block w-2 h-2 rounded-full ${
+                                    notification.readAt
+                                      ? darkMode
+                                        ? "bg-slate-600"
+                                        : "bg-slate-300"
+                                      : "bg-blue-500"
+                                  }`}
+                                />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-bold truncate">
+                                    {notification.title}
+                                  </p>
+
                                   <span
-                                    className={`block w-2 h-2 rounded-full ${
-                                      notification.readAt
-                                        ? darkMode
-                                          ? "bg-slate-600"
-                                          : "bg-slate-300"
-                                        : "bg-blue-500"
-                                    }`}
-                                  />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-bold truncate">
-                                      {
-                                        notification.title
-                                      }
-                                    </p>
-
-                                    <span
-                                      className={`text-[10px] whitespace-nowrap ${
-                                        darkMode
-                                          ? "text-slate-500"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {new Date(
-                                        notification.createdAt
-                                      ).toLocaleDateString()}
-                                    </span>
-                                  </div>
-
-                                  <p
-                                    className={`text-xs mt-1 line-clamp-2 ${
+                                    className={`text-[10px] whitespace-nowrap ${
                                       darkMode
-                                        ? "text-slate-400"
-                                        : "text-slate-500"
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
                                     }`}
                                   >
-                                    {
-                                      notification.message
-                                    }
-                                  </p>
+                                    {new Date(
+                                      notification.createdAt
+                                    ).toLocaleDateString()}
+                                  </span>
                                 </div>
+
+                                <p
+                                  className={`text-xs mt-1 line-clamp-2 ${
+                                    darkMode
+                                      ? "text-slate-400"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  {notification.message}
+                                </p>
                               </div>
-                            </button>
-                          )
-                        )
+                            </div>
+                          </button>
+                        ))
                       )}
                     </div>
 
                     <button
                       type="button"
-                      onClick={() =>
-                        navigateTo(
-                          "/student/notifications"
-                        )
-                      }
+                      onClick={() => navigateTo("/student/notifications")}
                       className={`w-full py-3 text-xs font-bold ${
                         darkMode
                           ? "text-blue-400 hover:bg-slate-700"
@@ -1156,22 +1053,15 @@ const StudentPortalLayout = () => {
 
               {/* PROFILE */}
 
-              <div
-                className="relative"
-                ref={profileMenuRef}
-              >
+              <div className="relative" ref={profileMenuRef}>
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen(
-                      (prev) => !prev
-                    );
+                    setIsProfileOpen((prev) => !prev);
                     setIsNotificationOpen(false);
                   }}
                   className={`flex items-center gap-3 px-2 py-1.5 rounded-xl ${
-                    darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
                   {/* PROFILE PHOTO */}
@@ -1186,21 +1076,15 @@ const StudentPortalLayout = () => {
                     {studentProfile.profilePhoto ? (
                       <img
                         src={studentProfile.profilePhoto}
-                        alt={
-                          studentProfile.fullName
-                        }
+                        alt={studentProfile.fullName}
                         className="w-full h-full object-cover"
                         onError={() => {
-                          console.error(
-                            "Profile image failed to load."
-                          );
+                          console.error("Profile image failed to load.");
 
-                          setStudentProfile(
-                            (prev) => ({
-                              ...prev,
-                              profilePhoto: null,
-                            })
-                          );
+                          setStudentProfile((prev) => ({
+                            ...prev,
+                            profilePhoto: null,
+                          }));
                         }}
                       />
                     ) : (
@@ -1217,23 +1101,18 @@ const StudentPortalLayout = () => {
 
                     <p
                       className={`text-xs ${
-                        darkMode
-                          ? "text-slate-400"
-                          : "text-slate-400"
+                        darkMode ? "text-slate-400" : "text-slate-400"
                       }`}
                     >
                       {isStudentLoading
                         ? "Loading..."
-                        : studentProfile.program ||
-                          "Student"}
+                        : studentProfile.program || "Student"}
                     </p>
                   </div>
 
                   <span
                     className={`text-xs transition-transform ${
-                      isProfileOpen
-                        ? "rotate-180"
-                        : ""
+                      isProfileOpen ? "rotate-180" : ""
                     }`}
                   >
                     ▼
@@ -1252,9 +1131,7 @@ const StudentPortalLayout = () => {
 
                     <div
                       className={`px-4 py-4 border-b ${
-                        darkMode
-                          ? "border-slate-700"
-                          : "border-slate-200"
+                        darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1267,12 +1144,8 @@ const StudentPortalLayout = () => {
                         >
                           {studentProfile.profilePhoto ? (
                             <img
-                              src={
-                                studentProfile.profilePhoto
-                              }
-                              alt={
-                                studentProfile.fullName
-                              }
+                              src={studentProfile.profilePhoto}
+                              alt={studentProfile.fullName}
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -1282,20 +1155,15 @@ const StudentPortalLayout = () => {
 
                         <div className="min-w-0">
                           <p className="text-sm font-bold truncate">
-                            {
-                              studentProfile.fullName
-                            }
+                            {studentProfile.fullName}
                           </p>
 
                           <p
                             className={`text-xs mt-1 truncate ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
-                            {studentProfile.program ||
-                              "Student Account"}
+                            {studentProfile.program || "Student Account"}
                           </p>
                         </div>
                       </div>
@@ -1305,15 +1173,9 @@ const StudentPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        navigateTo(
-                          "/student/profile"
-                        )
-                      }
+                      onClick={() => navigateTo("/student/profile")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                        darkMode
-                          ? "hover:bg-slate-700"
-                          : "hover:bg-slate-50"
+                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
                     >
                       <span>👤</span>
@@ -1324,15 +1186,9 @@ const StudentPortalLayout = () => {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        navigateTo(
-                          "/student/settings"
-                        )
-                      }
+                      onClick={() => navigateTo("/student/settings")}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                        darkMode
-                          ? "hover:bg-slate-700"
-                          : "hover:bg-slate-50"
+                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                       }`}
                     >
                       <span>⚙️</span>
@@ -1343,46 +1199,30 @@ const StudentPortalLayout = () => {
 
                     <div
                       className={`border-t ${
-                        darkMode
-                          ? "border-slate-700"
-                          : "border-slate-200"
+                        darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
                       <button
                         type="button"
                         onClick={toggleDarkMode}
                         className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left ${
-                          darkMode
-                            ? "hover:bg-slate-700"
-                            : "hover:bg-slate-50"
+                          darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <span>
-                            {darkMode
-                              ? "☀️"
-                              : "🌙"}
-                          </span>
+                          <span>{darkMode ? "☀️" : "🌙"}</span>
 
-                          <span>
-                            {darkMode
-                              ? "Light Mode"
-                              : "Dark Mode"}
-                          </span>
+                          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
                         </div>
 
                         <div
                           className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
-                            darkMode
-                              ? "bg-blue-600"
-                              : "bg-slate-300"
+                            darkMode ? "bg-blue-600" : "bg-slate-300"
                           }`}
                         >
                           <div
                             className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                              darkMode
-                                ? "translate-x-4"
-                                : "translate-x-0"
+                              darkMode ? "translate-x-4" : "translate-x-0"
                             }`}
                           />
                         </div>
@@ -1393,9 +1233,7 @@ const StudentPortalLayout = () => {
 
                     <div
                       className={`border-t ${
-                        darkMode
-                          ? "border-slate-700"
-                          : "border-slate-200"
+                        darkMode ? "border-slate-700" : "border-slate-200"
                       }`}
                     >
                       <button
@@ -1423,9 +1261,7 @@ const StudentPortalLayout = () => {
 
           <main
             className={`min-w-0 min-h-[calc(100vh-5rem)] transition-colors duration-300 ${
-              darkMode
-                ? "bg-slate-950"
-                : "bg-slate-50"
+              darkMode ? "bg-slate-950" : "bg-slate-50"
             }`}
           >
             <Outlet
@@ -1469,9 +1305,7 @@ const StudentPortalLayout = () => {
 
             <div
               className={`px-6 py-5 border-b flex items-start justify-between ${
-                darkMode
-                  ? "border-slate-700"
-                  : "border-slate-200"
+                darkMode ? "border-slate-700" : "border-slate-200"
               }`}
             >
               <div className="flex gap-3">
@@ -1500,9 +1334,7 @@ const StudentPortalLayout = () => {
                 type="button"
                 onClick={closeNotificationModal}
                 className={`w-8 h-8 rounded-lg text-xl text-slate-400 ${
-                  darkMode
-                    ? "hover:bg-slate-800"
-                    : "hover:bg-slate-100"
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
                 ×
@@ -1514,9 +1346,7 @@ const StudentPortalLayout = () => {
             <div className="px-6 py-6">
               <p
                 className={`text-sm leading-relaxed ${
-                  darkMode
-                    ? "text-slate-300"
-                    : "text-slate-600"
+                  darkMode ? "text-slate-300" : "text-slate-600"
                 }`}
               >
                 {selectedNotification.message}
@@ -1536,32 +1366,23 @@ const StudentPortalLayout = () => {
                 </p>
 
                 <p className="text-sm font-semibold mt-1">
-                  {
-                    selectedNotification.relatedEntityType
-                  }
+                  {selectedNotification.relatedEntityType}
                 </p>
 
                 <p
                   className={`text-xs mt-1 ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
-                  ID:{" "}
-                  {selectedNotification.relatedEntityId}
+                  ID: {selectedNotification.relatedEntityId}
                 </p>
 
                 <p
                   className={`text-xs mt-2 ${
-                    darkMode
-                      ? "text-slate-500"
-                      : "text-slate-400"
+                    darkMode ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  {new Date(
-                    selectedNotification.createdAt
-                  ).toLocaleString()}
+                  {new Date(selectedNotification.createdAt).toLocaleString()}
                 </p>
               </div>
 
@@ -1574,9 +1395,7 @@ const StudentPortalLayout = () => {
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-                      navigateTo(
-                        "/student/application"
-                      );
+                      navigateTo("/student/application");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
                   >
@@ -1590,9 +1409,7 @@ const StudentPortalLayout = () => {
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-                      navigateTo(
-                        "/student/documents"
-                      );
+                      navigateTo("/student/documents");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
                   >
@@ -1618,19 +1435,15 @@ const StudentPortalLayout = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      markNotificationRead(
-                        selectedNotification.id
-                      );
+                      markNotificationRead(selectedNotification.id);
 
-                      setSelectedNotification(
-                        (previous) =>
-                          previous
-                            ? {
-                                ...previous,
-                                readAt:
-                                  new Date().toISOString(),
-                              }
-                            : previous
+                      setSelectedNotification((previous) =>
+                        previous
+                          ? {
+                              ...previous,
+                              readAt: new Date().toISOString(),
+                            }
+                          : previous
                       );
                     }}
                     className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
@@ -1646,9 +1459,7 @@ const StudentPortalLayout = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    deleteNotification(
-                      selectedNotification.id
-                    );
+                    deleteNotification(selectedNotification.id);
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                     darkMode
@@ -1668,4 +1479,3 @@ const StudentPortalLayout = () => {
 };
 
 export default StudentPortalLayout;
-

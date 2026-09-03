@@ -1,256 +1,409 @@
-import React, { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
+import { supabaseCompany } from "../../supabaseClient";
 
 // =========================================================
-// TEMPORARY PAGE-LOCAL DEMO DATA
+// COMPANY INTERNS PAGE
 // =========================================================
-// This page intentionally has no mockStore dependency yet.
 //
-// IMPORTANT:
-// Attendance tracking is NOT implemented because it is part
-// of the current system limitations.
+// Shows:
+// - Officially deployed interns
+// - Active interns
+// - Completed interns
+// - Search
+// - Status filtering
+// - Sorting
+// - School
+// - Position
+// - Year level
+// - Internship assignment information
+// - Mark internship as completed
+// - Evaluate completed interns
 //
-// This page only handles:
-// - Viewing officially deployed interns
-// - Searching interns
-// - Filtering interns
-// - Sorting interns
-// - Viewing internship assignment information
-// - Marking an internship as completed
+// Assignment lifecycle:
+//
+// pending + deployed_at != null
+//        ↓
+// Company Accept
+//        ↓
+// active
+//        ↓
+// Company Mark as Completed
+//        ↓
+// completed
+//        ↓
+// Evaluate Intern
+//
 // =========================================================
 
-const localState = {
-  companies: [
-    {
-      id: "COM-001",
-      name: "ABC Technologies",
-      industry: "Information Technology",
-      status: "Verified",
-      address: "Balanga, Bataan",
-      email: "hr@abctech.com",
-      supervisorIds: ["SUP-001"],
-    },
-  ],
-
-  // =========================================================
-  // DEMO ASSIGNMENTS
-  // =========================================================
-  //
-  // These are added temporarily so you can see how the page
-  // behaves with multiple interns.
-  //
-  // deployedAt !== null means officially deployed.
-  // =========================================================
-
-  assignments: [
-    {
-      id: "ASN-001",
-      companyId: "COM-001",
-      studentId: "STU-001",
-      status: "Active",
-      deployedAt: "2026-05-25",
-      startDate: "2026-06-01",
-      endDate: "2026-08-31",
-    },
-    {
-      id: "ASN-002",
-      companyId: "COM-001",
-      studentId: "STU-002",
-      status: "Active",
-      deployedAt: "2026-06-02",
-      startDate: "2026-06-03",
-      endDate: "2026-09-02",
-    },
-    {
-      id: "ASN-003",
-      companyId: "COM-001",
-      studentId: "STU-003",
-      status: "Active",
-      deployedAt: "2026-06-10",
-      startDate: "2026-06-15",
-      endDate: "2026-09-15",
-    },
-    {
-      id: "ASN-004",
-      companyId: "COM-001",
-      studentId: "STU-004",
-      status: "Completed",
-      deployedAt: "2026-02-01",
-      startDate: "2026-02-05",
-      endDate: "2026-05-05",
-    },
-    {
-      id: "ASN-005",
-      companyId: "COM-001",
-      studentId: "STU-005",
-      status: "Completed",
-      deployedAt: "2026-01-15",
-      startDate: "2026-01-20",
-      endDate: "2026-04-20",
-    },
-  ],
-
-  students: [
-    {
-      id: "STU-001",
-      userId: "USR-001",
-      fullName: "John Doe",
-      email: "student@gmail.com",
-      studentId: "2024-00123",
-      program: "BS Information Technology",
-      yearLevel: "2nd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 912 345 6789",
-      address: "Limay, Bataan",
-      gwa: "1.75",
-    },
-
-    {
-      id: "STU-002",
-      userId: "USR-002",
-      fullName: "Maria Santos",
-      email: "maria.santos@gmail.com",
-      studentId: "2024-00124",
-      program: "BS Information Technology",
-      yearLevel: "2nd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 913 456 7890",
-      address: "Balanga, Bataan",
-      gwa: "1.50",
-    },
-
-    {
-      id: "STU-003",
-      userId: "USR-003",
-      fullName: "Kevin Garcia",
-      email: "kevin.garcia@gmail.com",
-      studentId: "2023-00456",
-      program: "BS Computer Science",
-      yearLevel: "3rd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 914 567 8901",
-      address: "Orion, Bataan",
-      gwa: "1.80",
-    },
-
-    {
-      id: "STU-004",
-      userId: "USR-004",
-      fullName: "Angela Cruz",
-      email: "angela.cruz@gmail.com",
-      studentId: "2023-00457",
-      program: "BS Information Technology",
-      yearLevel: "3rd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 915 678 9012",
-      address: "Pilar, Bataan",
-      gwa: "1.65",
-    },
-
-    {
-      id: "STU-005",
-      userId: "USR-005",
-      fullName: "Mark Reyes",
-      email: "mark.reyes@gmail.com",
-      studentId: "2022-00789",
-      program: "BS Information Technology",
-      yearLevel: "4th Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 916 789 0123",
-      address: "Dinalupihan, Bataan",
-      gwa: "1.90",
-    },
-  ],
+const ASSIGNMENT_STATUS = {
+  PENDING: "pending",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  TERMINATED: "terminated",
 };
 
-// =========================================================
-// COMPONENT
-// =========================================================
+const COMPLETED_STATUS = ASSIGNMENT_STATUS.COMPLETED;
 
 export default function Interns() {
   const { darkMode } = useOutletContext();
-
-  const state = localState;
+  const navigate = useNavigate();
 
   // =========================================================
-  // SEARCH / FILTER / SORT
+  // STATE
   // =========================================================
+
+  const [assignments, setAssignments] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
+  const [schools, setSchools] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+  const [error, setError] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sortBy, setSortBy] = useState("name-asc");
 
   // =========================================================
-  // COMPANY
+  // LOAD ASSIGNED INTERNS
   // =========================================================
 
-  const company = state.companies.find((item) => item.id === "COM-001");
+  const loadInterns = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      // -------------------------------------------------------
+      // GET AUTHENTICATED COMPANY USER
+      // -------------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseCompany.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user) {
+        throw new Error("Your company session has expired.");
+      }
+
+      // -------------------------------------------------------
+      // FIND COMPANY
+      // -------------------------------------------------------
+
+      const { data: company, error: companyError } = await supabaseCompany
+        .from("companies")
+        .select(
+          `
+            id,
+            company_name,
+            status
+          `
+        )
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (companyError) {
+        throw companyError;
+      }
+
+      if (!company) {
+        throw new Error(
+          "Unable to find the company account associated with your login."
+        );
+      }
+
+      if (company.status !== "active") {
+        throw new Error("Your company account is not currently active.");
+      }
+
+      // -------------------------------------------------------
+      // GET COMPANY ASSIGNMENTS
+      // -------------------------------------------------------
+      //
+      // Only:
+      // - active
+      // - completed
+      //
+      // Pending assignments are handled in Manage Applications.
+      // Terminated assignments are excluded.
+      //
+      // deployed_at must exist because this page is specifically
+      // for officially deployed interns.
+      // -------------------------------------------------------
+
+      const { data: assignmentRows, error: assignmentError } =
+        await supabaseCompany
+          .from("assignments")
+          .select(
+            `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at
+          `
+          )
+          .eq("company_id", company.id)
+          .in("status", [ASSIGNMENT_STATUS.ACTIVE, ASSIGNMENT_STATUS.COMPLETED])
+          .not("deployed_at", "is", null)
+          .order("deployed_at", {
+            ascending: false,
+          });
+
+      if (assignmentError) {
+        throw assignmentError;
+      }
+
+      const safeAssignments = assignmentRows || [];
+
+      setAssignments(safeAssignments);
+
+      // -------------------------------------------------------
+      // GET STUDENTS
+      // -------------------------------------------------------
+
+      const studentIds = [
+        ...new Set(
+          safeAssignments
+            .map((assignment) => assignment.student_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      if (studentIds.length === 0) {
+        setStudents([]);
+        setOpportunities([]);
+        setSchools([]);
+        return;
+      }
+
+      const { data: studentRows, error: studentsError } = await supabaseCompany
+        .from("students")
+        .select(
+          `
+            id,
+            student_id,
+            phone,
+            address,
+            emergency_contact,
+            program,
+            year_level,
+            department,
+            gwa,
+            school_id,
+            users (
+              id,
+              email,
+              first_name,
+              middle_name,
+              last_name
+            )
+          `
+        )
+        .in("id", studentIds);
+
+      if (studentsError) {
+        throw studentsError;
+      }
+
+      const mappedStudents = (studentRows || []).map((student) => {
+        const userInfo = Array.isArray(student.users)
+          ? student.users[0]
+          : student.users;
+
+        const fullName = [
+          userInfo?.first_name,
+          userInfo?.middle_name,
+          userInfo?.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        return {
+          id: student.id,
+          studentId: student.student_id,
+          phone: student.phone,
+          address: student.address,
+          emergencyContact: student.emergency_contact,
+          program: student.program,
+          yearLevel: student.year_level,
+          department: student.department,
+          gwa: student.gwa,
+          schoolId: student.school_id,
+          email: userInfo?.email || "",
+          fullName: fullName || "Unknown Student",
+        };
+      });
+
+      setStudents(mappedStudents);
+
+      // -------------------------------------------------------
+      // GET OPPORTUNITIES
+      // -------------------------------------------------------
+
+      const opportunityIds = [
+        ...new Set(
+          safeAssignments
+            .map((assignment) => assignment.opportunity_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      if (opportunityIds.length > 0) {
+        const { data: opportunityRows, error: opportunitiesError } =
+          await supabaseCompany
+            .from("opportunities")
+            .select(
+              `
+                id,
+                title,
+                description,
+                location,
+                position_type,
+                internship_start_date,
+                internship_end_date,
+                internship_start,
+                internship_end
+              `
+            )
+            .in("id", opportunityIds);
+
+        if (opportunitiesError) {
+          throw opportunitiesError;
+        }
+
+        setOpportunities(opportunityRows || []);
+      } else {
+        setOpportunities([]);
+      }
+
+      // -------------------------------------------------------
+      // GET SCHOOLS
+      // -------------------------------------------------------
+
+      const schoolIds = [
+        ...new Set(
+          mappedStudents.map((student) => student.schoolId).filter(Boolean)
+        ),
+      ];
+
+      if (schoolIds.length > 0) {
+        const { data: schoolRows, error: schoolsError } = await supabaseCompany
+          .from("schools")
+          .select(
+            `
+                id,
+                name,
+                code,
+                status
+              `
+          )
+          .in("id", schoolIds);
+
+        if (schoolsError) {
+          throw schoolsError;
+        }
+
+        setSchools(schoolRows || []);
+      } else {
+        setSchools([]);
+      }
+    } catch (err) {
+      console.error("Error loading assigned interns:", err);
+
+      setError(err?.message || "Unable to load assigned interns.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // =========================================================
-  // GET DEPLOYED ASSIGNMENTS
+  // INITIAL LOAD
   // =========================================================
 
-  const assignments = useMemo(() => {
-    return state.assignments.filter(
-      (item) =>
-        item.companyId === company?.id &&
-        ["Active", "Completed"].includes(item.status) &&
-        item.deployedAt !== null
+  useEffect(() => {
+    loadInterns();
+  }, []);
+
+  // =========================================================
+  // FIND STUDENT
+  // =========================================================
+
+  const getStudent = (studentId) => {
+    return students.find((student) => student.id === studentId);
+  };
+
+  // =========================================================
+  // FIND OPPORTUNITY
+  // =========================================================
+
+  const getOpportunity = (opportunityId) => {
+    return opportunities.find(
+      (opportunity) => opportunity.id === opportunityId
     );
-  }, [company?.id]);
+  };
 
   // =========================================================
-  // SUMMARY COUNTS
+  // FIND SCHOOL
   // =========================================================
 
-  const activeCount = assignments.filter(
-    (item) => item.status === "Active"
-  ).length;
-
-  const completedCount = assignments.filter(
-    (item) => item.status === "Completed"
-  ).length;
-
-  const totalCount = assignments.length;
+  const getSchool = (schoolId) => {
+    return schools.find((school) => school.id === schoolId);
+  };
 
   // =========================================================
-  // FILTER + SEARCH + SORT
+  // FILTER ASSIGNMENTS
   // =========================================================
 
   const filteredAssignments = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     const filtered = assignments.filter((assignment) => {
-      const student = state.students.find(
-        (item) => item.id === assignment.studentId
-      );
+      const student = getStudent(assignment.student_id);
+      const opportunity = getOpportunity(assignment.opportunity_id);
+      const school = getSchool(student?.schoolId);
 
       if (!student) return false;
 
       const matchesSearch =
         !normalizedSearch ||
         student.fullName.toLowerCase().includes(normalizedSearch) ||
-        student.studentId.toLowerCase().includes(normalizedSearch) ||
-        student.program.toLowerCase().includes(normalizedSearch) ||
-        student.email.toLowerCase().includes(normalizedSearch);
+        (student.studentId || "").toLowerCase().includes(normalizedSearch) ||
+        (student.program || "").toLowerCase().includes(normalizedSearch) ||
+        (student.yearLevel || "").toLowerCase().includes(normalizedSearch) ||
+        (student.email || "").toLowerCase().includes(normalizedSearch) ||
+        (student.department || "").toLowerCase().includes(normalizedSearch) ||
+        (opportunity?.title || "").toLowerCase().includes(normalizedSearch) ||
+        (school?.name || "").toLowerCase().includes(normalizedSearch);
+
+      const displayStatus =
+        assignment.status === ASSIGNMENT_STATUS.ACTIVE
+          ? "Active"
+          : assignment.status === ASSIGNMENT_STATUS.COMPLETED
+          ? "Completed"
+          : assignment.status;
 
       const matchesStatus =
-        statusFilter === "All" || assignment.status === statusFilter;
+        statusFilter === "All" || displayStatus === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
 
     return [...filtered].sort((a, b) => {
-      const studentA =
-        state.students.find((item) => item.id === a.studentId) || {};
-
-      const studentB =
-        state.students.find((item) => item.id === b.studentId) || {};
+      const studentA = getStudent(a.student_id) || {};
+      const studentB = getStudent(b.student_id) || {};
 
       if (sortBy === "name-asc") {
         return (studentA.fullName || "").localeCompare(studentB.fullName || "");
@@ -261,24 +414,124 @@ export default function Interns() {
       }
 
       if (sortBy === "newest") {
-        return new Date(b.deployedAt || 0) - new Date(a.deployedAt || 0);
+        return new Date(b.deployed_at || 0) - new Date(a.deployed_at || 0);
       }
 
       if (sortBy === "oldest") {
-        return new Date(a.deployedAt || 0) - new Date(b.deployedAt || 0);
+        return new Date(a.deployed_at || 0) - new Date(b.deployed_at || 0);
       }
 
       if (sortBy === "start-latest") {
-        return new Date(b.startDate || 0) - new Date(a.startDate || 0);
+        return new Date(b.start_date || 0) - new Date(a.start_date || 0);
       }
 
       if (sortBy === "start-earliest") {
-        return new Date(a.startDate || 0) - new Date(b.startDate || 0);
+        return new Date(a.start_date || 0) - new Date(b.start_date || 0);
       }
 
       return 0;
     });
-  }, [assignments, searchTerm, statusFilter, sortBy]);
+  }, [
+    assignments,
+    students,
+    opportunities,
+    schools,
+    searchTerm,
+    statusFilter,
+    sortBy,
+  ]);
+
+  // =========================================================
+  // SUMMARY COUNTS
+  // =========================================================
+
+  const activeCount = assignments.filter(
+    (assignment) => assignment.status === ASSIGNMENT_STATUS.ACTIVE
+  ).length;
+
+  const completedCount = assignments.filter(
+    (assignment) => assignment.status === ASSIGNMENT_STATUS.COMPLETED
+  ).length;
+
+  const totalCount = assignments.length;
+
+  // =========================================================
+  // MARK INTERNSHIP AS COMPLETED
+  // =========================================================
+
+  const handleCompleteInternship = async (assignmentId, studentName) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to mark ${studentName}'s internship as completed?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setProcessingId(assignmentId);
+      setError("");
+
+      const now = new Date().toISOString();
+
+      // -------------------------------------------------------
+      // UPDATE REAL DATABASE ASSIGNMENT
+      // -------------------------------------------------------
+
+      const { data: updatedAssignment, error: updateError } =
+        await supabaseCompany
+          .from("assignments")
+          .update({
+            status: COMPLETED_STATUS,
+            updated_at: now,
+          })
+          .eq("id", assignmentId)
+          .eq("status", ASSIGNMENT_STATUS.ACTIVE)
+          .select(
+            `
+              id,
+              status,
+              updated_at
+            `
+          )
+          .maybeSingle();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      if (!updatedAssignment) {
+        throw new Error(
+          "The internship could not be marked as completed. It may have already been processed or your company account does not have permission to update it."
+        );
+      }
+
+      // -------------------------------------------------------
+      // RELOAD DATA
+      // -------------------------------------------------------
+
+      await loadInterns();
+
+      alert("Internship marked as completed. You can now evaluate the intern.");
+    } catch (err) {
+      console.error("Error completing internship:", err);
+
+      setError(err?.message || "Unable to mark the internship as completed.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // =========================================================
+  // GO TO EVALUATION
+  // =========================================================
+
+  const handleEvaluateIntern = (assignmentId) => {
+    navigate("/company/evaluate", {
+      state: {
+        assignmentId,
+        evaluationTab: "company_to_student",
+      },
+    });
+  };
 
   // =========================================================
   // THEME CLASSES
@@ -297,29 +550,42 @@ export default function Interns() {
     : "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400";
 
   // =========================================================
-  // COMPLETE INTERNSHIP
+  // LOADING
   // =========================================================
 
-  const handleCompleteInternship = (assignmentId, studentName) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to mark ${studentName}'s internship as completed?`
+  if (loading) {
+    return (
+      <div
+        className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
+          darkMode ? "text-slate-100" : "text-slate-900"
+        }`}
+      >
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+            Company Portal
+          </p>
+
+          <h1 className="text-2xl font-black">Assigned Interns</h1>
+
+          <p className={`text-sm mt-1 ${muted}`}>
+            Loading officially deployed interns...
+          </p>
+        </div>
+
+        <section className={`border rounded-2xl p-8 ${card}`}>
+          <div className="text-center">
+            <div className="text-3xl mb-3 animate-pulse">👥</div>
+
+            <p className={`font-semibold ${heading}`}>Loading interns...</p>
+
+            <p className={`text-sm mt-1 ${muted}`}>
+              Please wait while we load your assigned interns.
+            </p>
+          </div>
+        </section>
+      </div>
     );
-
-    if (!confirmed) return;
-
-    const assignment = state.assignments.find(
-      (item) => item.id === assignmentId
-    );
-
-    if (assignment) {
-      assignment.status = "Completed";
-    }
-
-    alert("Internship marked as completed.");
-
-    // Force refresh so the UI immediately updates.
-    window.location.reload();
-  };
+  }
 
   // =========================================================
   // RETURN
@@ -347,6 +613,34 @@ export default function Interns() {
           assignments.
         </p>
       </div>
+
+      {/* =====================================================
+          ERROR
+      ===================================================== */}
+
+      {error && (
+        <div
+          className={`mb-5 p-4 rounded-xl border ${
+            darkMode
+              ? "bg-red-950/30 border-red-900 text-red-300"
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}
+        >
+          <p className="text-xs font-bold mb-1">
+            Unable to load or update interns
+          </p>
+
+          <p className="text-xs">{error}</p>
+
+          <button
+            type="button"
+            onClick={loadInterns}
+            className="mt-3 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
 
       {/* =====================================================
           SUMMARY CARDS
@@ -384,7 +678,7 @@ export default function Interns() {
                 {activeCount}
               </p>
 
-              <p className={`text-xs mt-1 ${muted}`}>Currently deployed</p>
+              <p className={`text-xs mt-1 ${muted}`}>Currently accepted</p>
             </div>
 
             <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
@@ -438,7 +732,7 @@ export default function Interns() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by name, student ID, program, or email..."
+                placeholder="Search by name, ID, school, position, year level, program, or email..."
                 className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
               />
             </div>
@@ -457,7 +751,9 @@ export default function Interns() {
               className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
             >
               <option value="All">All Status</option>
+
               <option value="Active">Active</option>
+
               <option value="Completed">Completed</option>
             </select>
           </div>
@@ -516,13 +812,12 @@ export default function Interns() {
             <div className="text-4xl mb-3">👥</div>
 
             <p className={`font-semibold ${heading}`}>
-              No deployed interns yet.
+              No accepted interns yet.
             </p>
 
             <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
-              Interns will appear here only after their required documents have
-              been approved by the registrar and the student has been officially
-              deployed.
+              Students will appear here after the registrar officially deploys
+              them and your company accepts their internship placement.
             </p>
           </div>
         </section>
@@ -592,11 +887,16 @@ export default function Interns() {
             }`}
           >
             {filteredAssignments.map((assignment) => {
-              const student = state.students.find(
-                (item) => item.id === assignment.studentId
-              );
+              const student = getStudent(assignment.student_id);
 
-              const isCompleted = assignment.status === "Completed";
+              const opportunity = getOpportunity(assignment.opportunity_id);
+
+              const school = getSchool(student?.schoolId);
+
+              const isCompleted =
+                assignment.status === ASSIGNMENT_STATUS.COMPLETED;
+
+              const isProcessing = processingId === assignment.id;
 
               return (
                 <div
@@ -605,12 +905,12 @@ export default function Interns() {
                     darkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"
                   }`}
                 >
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                  <div className="flex flex-col xl:flex-row xl:items-center gap-6">
                     {/* =========================================
-                        STUDENT INFORMATION
+                        INTERN
                     ========================================= */}
 
-                    <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex items-start gap-4 min-w-0 xl:w-[260px]">
                       {/* AVATAR */}
 
                       <div
@@ -648,43 +948,87 @@ export default function Interns() {
 
                         <p className={`text-xs mt-1 ${muted}`}>
                           {student?.studentId || "No Student ID"}
-                          {" · "}
+                        </p>
+
+                        <p className={`text-xs mt-1 ${muted}`}>
                           {student?.program || "No Program"}
                         </p>
 
                         <p className={`text-xs mt-1 ${muted}`}>
                           {student?.email || "No email available"}
                         </p>
-
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <span
-                            className={`text-[10px] px-2 py-1 rounded-md ${
-                              darkMode
-                                ? "bg-slate-800 text-slate-300"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            Assignment: {assignment.id}
-                          </span>
-
-                          <span
-                            className={`text-[10px] px-2 py-1 rounded-md ${
-                              darkMode
-                                ? "bg-slate-800 text-slate-300"
-                                : "bg-slate-100 text-slate-600"
-                            }`}
-                          >
-                            Deployed: {assignment.deployedAt}
-                          </span>
-                        </div>
                       </div>
+                    </div>
+
+                    {/* =========================================
+                        SCHOOL
+                    ========================================= */}
+
+                    <div className="xl:w-[190px]">
+                      <p
+                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                      >
+                        School
+                      </p>
+
+                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
+                        {school?.name || "School not specified"}
+                      </p>
+
+                      {school?.code && (
+                        <p className={`text-xs mt-1 ${muted}`}>{school.code}</p>
+                      )}
+                    </div>
+
+                    {/* =========================================
+                        POSITION
+                    ========================================= */}
+
+                    <div className="xl:w-[190px]">
+                      <p
+                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                      >
+                        Position
+                      </p>
+
+                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
+                        {opportunity?.title || "Position not specified"}
+                      </p>
+
+                      {opportunity?.position_type && (
+                        <p className={`text-xs mt-1 ${muted}`}>
+                          {opportunity.position_type}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* =========================================
+                        YEAR LEVEL
+                    ========================================= */}
+
+                    <div className="xl:w-[110px]">
+                      <p
+                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                      >
+                        Year Level
+                      </p>
+
+                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
+                        {student?.yearLevel || "Not specified"}
+                      </p>
+
+                      {student?.department && (
+                        <p className={`text-xs mt-1 ${muted}`}>
+                          {student.department}
+                        </p>
+                      )}
                     </div>
 
                     {/* =========================================
                         INTERNSHIP PERIOD
                     ========================================= */}
 
-                    <div className="lg:min-w-[220px]">
+                    <div className="xl:flex-1 xl:min-w-[190px]">
                       <p
                         className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
                       >
@@ -692,11 +1036,16 @@ export default function Interns() {
                       </p>
 
                       <p className={`text-sm font-semibold mt-1 ${heading}`}>
-                        {assignment.startDate}
+                        {assignment.start_date
+                          ? new Date(assignment.start_date).toLocaleDateString()
+                          : "N/A"}
                       </p>
 
                       <p className={`text-xs ${muted}`}>
-                        to {assignment.endDate}
+                        to{" "}
+                        {assignment.end_date
+                          ? new Date(assignment.end_date).toLocaleDateString()
+                          : "N/A"}
                       </p>
                     </div>
 
@@ -706,30 +1055,66 @@ export default function Interns() {
 
                     <div className="flex-shrink-0">
                       {isCompleted ? (
-                        <span
-                          className={`inline-flex px-4 py-2 rounded-lg text-xs font-semibold ${
+                        <button
+                          type="button"
+                          onClick={() => handleEvaluateIntern(assignment.id)}
+                          className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-xs font-semibold transition ${
                             darkMode
-                              ? "bg-slate-800 text-slate-300"
-                              : "bg-slate-100 text-slate-600"
+                              ? "bg-blue-600 text-white hover:bg-blue-700"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
                           }`}
                         >
-                          Internship Completed
-                        </span>
+                          Evaluate Intern
+                        </button>
                       ) : (
                         <button
                           type="button"
+                          disabled={isProcessing}
                           onClick={() =>
                             handleCompleteInternship(
                               assignment.id,
                               student?.fullName || "this intern"
                             )
                           }
-                          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+                          className={`px-4 py-2 rounded-lg text-white text-xs font-semibold transition ${
+                            isProcessing
+                              ? "bg-blue-400 cursor-not-allowed"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          }`}
                         >
-                          Mark as Completed
+                          {isProcessing ? "Updating..." : "Mark as Completed"}
                         </button>
                       )}
                     </div>
+                  </div>
+
+                  {/* =========================================
+                      ASSIGNMENT META
+                  ========================================= */}
+
+                  <div className="flex flex-wrap gap-2 mt-4 ml-0 xl:ml-[64px]">
+                    <span
+                      className={`text-[10px] px-2 py-1 rounded-md ${
+                        darkMode
+                          ? "bg-slate-800 text-slate-300"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      Assignment: {assignment.id}
+                    </span>
+
+                    <span
+                      className={`text-[10px] px-2 py-1 rounded-md ${
+                        darkMode
+                          ? "bg-slate-800 text-slate-300"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      Deployed:{" "}
+                      {assignment.deployed_at
+                        ? new Date(assignment.deployed_at).toLocaleDateString()
+                        : "N/A"}
+                    </span>
                   </div>
                 </div>
               );

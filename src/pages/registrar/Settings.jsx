@@ -1,5 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseRegistrar } from "../../supabaseClient";
+
+const SCHOOL_LOGO_BUCKET = "school-assets";
 
 const Settings = () => {
   const { darkMode } = useOutletContext();
@@ -16,6 +19,21 @@ const Settings = () => {
   });
 
   const [profileMessage, setProfileMessage] = useState("");
+
+  // =========================================================
+  // SCHOOL INFORMATION
+  // =========================================================
+
+  const [school, setSchool] = useState(null);
+  const [schoolId, setSchoolId] = useState(null);
+
+  const [schoolLoading, setSchoolLoading] = useState(true);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const [schoolMessage, setSchoolMessage] = useState({
+    type: "",
+    text: "",
+  });
 
   // =========================================================
   // NOTIFICATIONS
@@ -78,6 +96,89 @@ const Settings = () => {
   const dividerClass = darkMode ? "border-slate-700" : "border-slate-200";
 
   // =========================================================
+  // LOAD REGISTRAR SCHOOL
+  // =========================================================
+
+  useEffect(() => {
+    loadRegistrarSchool();
+  }, []);
+
+  const loadRegistrarSchool = async () => {
+    try {
+      setSchoolLoading(true);
+      setSchoolMessage({
+        type: "",
+        text: "",
+      });
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user) {
+        throw new Error("You are not authenticated.");
+      }
+
+      // -------------------------------------------------------
+      // Get registrar's school
+      // -------------------------------------------------------
+
+      const { data: registrar, error: registrarError } = await supabaseRegistrar
+        .from("registrars")
+        .select("school_id")
+        .eq("id", user.id)
+        .single();
+
+      if (registrarError) {
+        throw registrarError;
+      }
+
+      if (!registrar?.school_id) {
+        throw new Error("Your registrar account is not assigned to a school.");
+      }
+
+      setSchoolId(registrar.school_id);
+
+      // -------------------------------------------------------
+      // Get school information
+      // -------------------------------------------------------
+
+      const { data: schoolData, error: schoolError } = await supabaseRegistrar
+        .from("schools")
+        .select(
+          `
+            id,
+            name,
+            code,
+            logo_url
+          `
+        )
+        .eq("id", registrar.school_id)
+        .single();
+
+      if (schoolError) {
+        throw schoolError;
+      }
+
+      setSchool(schoolData);
+    } catch (error) {
+      console.error("Failed to load registrar school:", error);
+
+      setSchoolMessage({
+        type: "error",
+        text: error.message || "Failed to load your school information.",
+      });
+    } finally {
+      setSchoolLoading(false);
+    }
+  };
+
+  // =========================================================
   // PROFILE HANDLERS
   // =========================================================
 
@@ -98,6 +199,223 @@ const Settings = () => {
     setTimeout(() => {
       setProfileMessage("");
     }, 3000);
+  };
+
+  // =========================================================
+  // SCHOOL LOGO HANDLER
+  // =========================================================
+
+  const handleSchoolLogoUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setSchoolMessage({
+      type: "",
+      text: "",
+    });
+
+    const resetInput = () => {
+      event.target.value = "";
+    };
+
+    // -------------------------------------------------------
+    // Validate file type
+    // -------------------------------------------------------
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      setSchoolMessage({
+        type: "error",
+        text: "Please upload a PNG, JPG, or WebP image.",
+      });
+
+      resetInput();
+      return;
+    }
+
+    // -------------------------------------------------------
+    // Validate file size
+    // -------------------------------------------------------
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setSchoolMessage({
+        type: "error",
+        text: "School logo must be 5MB or smaller.",
+      });
+
+      resetInput();
+      return;
+    }
+
+    if (!schoolId) {
+      setSchoolMessage({
+        type: "error",
+        text: "School information is not available.",
+      });
+
+      resetInput();
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+
+      // -----------------------------------------------------
+      // Get authenticated user
+      // -----------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user) {
+        throw new Error("You are not authenticated.");
+      }
+
+      // -----------------------------------------------------
+      // Verify registrar is actually assigned to this school
+      // -----------------------------------------------------
+
+      const { data: registrar, error: registrarError } = await supabaseRegistrar
+        .from("registrars")
+        .select("school_id")
+        .eq("id", user.id)
+        .single();
+
+      if (registrarError) {
+        throw registrarError;
+      }
+
+      if (!registrar?.school_id) {
+        throw new Error("Your registrar account is not assigned to a school.");
+      }
+
+      if (registrar.school_id !== schoolId) {
+        throw new Error(
+          "You are not authorized to update this school's information."
+        );
+      }
+
+      // -----------------------------------------------------
+      // Get extension
+      // -----------------------------------------------------
+
+      const extension = file.name.split(".").pop()?.toLowerCase() || "png";
+
+      // -----------------------------------------------------
+      // Unique file path
+      // -----------------------------------------------------
+
+      const filePath = `school-logos/${schoolId}/${crypto.randomUUID()}.${extension}`;
+
+      console.log("Uploading school logo:", {
+        bucket: SCHOOL_LOGO_BUCKET,
+        filePath,
+        schoolId,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+
+      // -----------------------------------------------------
+      // Upload to Storage
+      // -----------------------------------------------------
+
+      const { data: uploadedFile, error: uploadError } =
+        await supabaseRegistrar.storage
+          .from(SCHOOL_LOGO_BUCKET)
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: file.type,
+          });
+
+      if (uploadError) {
+        console.error("Storage upload failed:", uploadError);
+        throw new Error(`Failed to upload school logo: ${uploadError.message}`);
+      }
+
+      console.log("School logo uploaded:", uploadedFile);
+
+      // -----------------------------------------------------
+      // Generate public URL
+      // -----------------------------------------------------
+
+      const { data: publicUrlData } = supabaseRegistrar.storage
+        .from(SCHOOL_LOGO_BUCKET)
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData?.publicUrl;
+
+      if (!publicUrl) {
+        throw new Error(
+          "The logo was uploaded, but Supabase could not generate its public URL."
+        );
+      }
+
+      console.log("Generated public logo URL:", publicUrl);
+
+      // -----------------------------------------------------
+      // Save URL to schools.logo_url
+      // -----------------------------------------------------
+
+      const { data: updatedSchool, error: schoolUpdateError } =
+        await supabaseRegistrar
+          .from("schools")
+          .update({
+            logo_url: publicUrl,
+          })
+          .eq("id", schoolId)
+          .select("id, name, code, logo_url")
+          .single();
+
+      if (schoolUpdateError) {
+        console.error("schools.logo_url update failed:", schoolUpdateError);
+
+        throw new Error(
+          `Logo uploaded to Storage, but saving the logo URL failed: ${schoolUpdateError.message}`
+        );
+      }
+
+      if (!updatedSchool) {
+        throw new Error(
+          "The logo was uploaded, but the school record was not updated."
+        );
+      }
+
+      console.log("Updated school record:", updatedSchool);
+
+      // -----------------------------------------------------
+      // Update UI
+      // -----------------------------------------------------
+
+      setSchool(updatedSchool);
+
+      setSchoolMessage({
+        type: "success",
+        text: "School logo uploaded and saved successfully. It will be used for internship completion certificates.",
+      });
+    } catch (error) {
+      console.error("School logo upload error:", error);
+
+      setSchoolMessage({
+        type: "error",
+        text: error?.message || "Failed to upload and save the school logo.",
+      });
+    } finally {
+      setUploadingLogo(false);
+      resetInput();
+    }
   };
 
   // =========================================================
@@ -192,6 +510,7 @@ const Settings = () => {
 
     setTimeout(() => {
       setShowPasswordForm(false);
+
       setPasswordMessage({
         type: "",
         text: "",
@@ -293,7 +612,8 @@ const Settings = () => {
               ${bodyTextClass}
             `}
           >
-            Manage your profile, notifications, and account security.
+            Manage your profile, school information, notifications, and account
+            security.
           </p>
         </div>
 
@@ -517,6 +837,387 @@ const Settings = () => {
                   Save Changes
                 </button>
               </form>
+            </section>
+
+            {/* DIVIDER */}
+
+            <div className={`border-t ${dividerClass}`} />
+
+            {/* =================================================
+                SCHOOL INFORMATION
+            ================================================= */}
+
+            <section>
+              <div className="mb-5">
+                <h2
+                  className={`
+                    text-base
+                    sm:text-lg
+                    font-bold
+                    ${headingClass}
+                  `}
+                >
+                  School Information
+                </h2>
+
+                <p
+                  className={`
+                    text-[11px]
+                    sm:text-xs
+                    mt-1
+                    ${bodyTextClass}
+                  `}
+                >
+                  Manage your school's information and official logo used for
+                  internship completion certificates.
+                </p>
+              </div>
+
+              <div className="max-w-[700px]">
+                {/* SCHOOL DETAILS */}
+
+                <div
+                  className={`
+                    border
+                    rounded-xl
+                    p-4
+                    sm:p-5
+                    ${sectionCardClass}
+                  `}
+                >
+                  {schoolLoading ? (
+                    <div>
+                      <p
+                        className={`
+                          text-sm
+                          font-semibold
+                          ${headingClass}
+                        `}
+                      >
+                        Loading school information...
+                      </p>
+
+                      <p
+                        className={`
+                          text-xs
+                          mt-1
+                          ${bodyTextClass}
+                        `}
+                      >
+                        Please wait while we load your assigned school.
+                      </p>
+                    </div>
+                  ) : school ? (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 mb-6">
+                        <span
+                          className={`
+                            text-xs
+                            font-semibold
+                            ${labelClass}
+                          `}
+                        >
+                          School
+                        </span>
+
+                        <div>
+                          <p
+                            className={`
+                              text-sm
+                              font-bold
+                              ${headingClass}
+                            `}
+                          >
+                            {school.name || "Unnamed School"}
+                          </p>
+
+                          {school.code && (
+                            <p
+                              className={`
+                                text-xs
+                                mt-0.5
+                                ${bodyTextClass}
+                              `}
+                            >
+                              School Code: {school.code}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LOGO AREA */}
+
+                      <div
+                        className={`
+                          border-t
+                          pt-5
+                          ${dividerClass}
+                        `}
+                      >
+                        <div className="mb-4">
+                          <p
+                            className={`
+                              text-sm
+                              font-semibold
+                              ${headingClass}
+                            `}
+                          >
+                            Official School Logo
+                          </p>
+
+                          <p
+                            className={`
+                              text-[10px]
+                              sm:text-xs
+                              mt-1
+                              ${bodyTextClass}
+                            `}
+                          >
+                            This logo will automatically appear on internship
+                            completion certificates issued to students from your
+                            school.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
+                          {/* LOGO PREVIEW */}
+
+                          <div
+                            className={`
+                              w-36
+                              h-36
+                              rounded-xl
+                              border-2
+                              border-dashed
+                              flex
+                              items-center
+                              justify-center
+                              overflow-hidden
+                              flex-shrink-0
+                              ${
+                                darkMode
+                                  ? "border-slate-600 bg-slate-900"
+                                  : "border-slate-300 bg-slate-50"
+                              }
+                            `}
+                          >
+                            {school.logo_url ? (
+                              <img
+                                src={school.logo_url}
+                                alt={`${school.name} logo`}
+                                className="w-full h-full object-contain p-4"
+                              />
+                            ) : (
+                              <div className="text-center px-4">
+                                <p
+                                  className={`
+                                    text-xs
+                                    font-medium
+                                    ${bodyTextClass}
+                                  `}
+                                >
+                                  No logo uploaded
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* UPLOAD */}
+
+                          <div className="flex-1">
+                            <label
+                              className={`
+                                inline-flex
+                                items-center
+                                justify-center
+                                px-5
+                                py-2.5
+                                rounded-lg
+                                text-xs
+                                font-bold
+                                transition
+                                ${
+                                  uploadingLogo
+                                    ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                                    : "bg-slate-800 text-white hover:bg-slate-700 cursor-pointer"
+                                }
+                              `}
+                            >
+                              {uploadingLogo
+                                ? "Uploading..."
+                                : school.logo_url
+                                ? "Replace School Logo"
+                                : "Upload School Logo"}
+
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={handleSchoolLogoUpload}
+                                disabled={uploadingLogo}
+                                className="hidden"
+                              />
+                            </label>
+
+                            <p
+                              className={`
+                                text-[10px]
+                                mt-2
+                                ${bodyTextClass}
+                              `}
+                            >
+                              PNG, JPG, or WebP · Maximum 5MB
+                            </p>
+
+                            <p
+                              className={`
+                                text-[10px]
+                                mt-1
+                                ${bodyTextClass}
+                              `}
+                            >
+                              Upload your official school logo before deploying
+                              students.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* SCHOOL MESSAGE */}
+
+                        {schoolMessage.text && (
+                          <div
+                            className={`
+                              mt-5
+                              px-4
+                              py-3
+                              rounded-lg
+                              border
+                              text-xs
+                              font-medium
+                              ${
+                                schoolMessage.type === "success"
+                                  ? darkMode
+                                    ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : darkMode
+                                  ? "bg-red-950/40 text-red-300 border-red-800"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              }
+                            `}
+                          >
+                            {schoolMessage.text}
+                          </div>
+                        )}
+
+                        {/* READY STATUS */}
+
+                        {!schoolLoading && (
+                          <div
+                            className={`
+                              mt-5
+                              flex
+                              items-start
+                              gap-3
+                              rounded-lg
+                              border
+                              px-4
+                              py-3
+                              ${
+                                school.logo_url
+                                  ? darkMode
+                                    ? "bg-emerald-950/30 border-emerald-900"
+                                    : "bg-emerald-50 border-emerald-200"
+                                  : darkMode
+                                  ? "bg-amber-950/30 border-amber-900"
+                                  : "bg-amber-50 border-amber-200"
+                              }
+                            `}
+                          >
+                            <div
+                              className={`
+                                mt-0.5
+                                w-2
+                                h-2
+                                rounded-full
+                                flex-shrink-0
+                                ${
+                                  school.logo_url
+                                    ? "bg-emerald-500"
+                                    : "bg-amber-500"
+                                }
+                              `}
+                            />
+
+                            <div>
+                              <p
+                                className={`
+                                  text-xs
+                                  font-bold
+                                  ${
+                                    school.logo_url
+                                      ? darkMode
+                                        ? "text-emerald-300"
+                                        : "text-emerald-700"
+                                      : darkMode
+                                      ? "text-amber-300"
+                                      : "text-amber-700"
+                                  }
+                                `}
+                              >
+                                {school.logo_url
+                                  ? "School Logo Ready"
+                                  : "School Logo Required"}
+                              </p>
+
+                              <p
+                                className={`
+                                  text-[10px]
+                                  sm:text-xs
+                                  mt-0.5
+                                  ${
+                                    school.logo_url
+                                      ? darkMode
+                                        ? "text-emerald-400"
+                                        : "text-emerald-600"
+                                      : darkMode
+                                      ? "text-amber-400"
+                                      : "text-amber-600"
+                                  }
+                                `}
+                              >
+                                {school.logo_url
+                                  ? "Your school logo is configured and ready to be used on internship certificates."
+                                  : "Please upload your school's official logo before deploying students."}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <p
+                        className={`
+                          text-sm
+                          font-semibold
+                          ${headingClass}
+                        `}
+                      >
+                        School information unavailable
+                      </p>
+
+                      <p
+                        className={`
+                          text-xs
+                          mt-1
+                          ${bodyTextClass}
+                        `}
+                      >
+                        Your registrar account could not be linked to a school.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* DIVIDER */}
@@ -837,6 +1538,7 @@ const Settings = () => {
                     type="button"
                     onClick={() => {
                       setShowPasswordForm(!showPasswordForm);
+
                       setPasswordMessage({
                         type: "",
                         text: "",
@@ -871,6 +1573,8 @@ const Settings = () => {
                     `}
                   >
                     <form onSubmit={handleChangePassword} className="space-y-4">
+                      {/* CURRENT PASSWORD */}
+
                       <div>
                         <label
                           className={`
@@ -904,6 +1608,8 @@ const Settings = () => {
                           `}
                         />
                       </div>
+
+                      {/* NEW PASSWORD */}
 
                       <div>
                         <label
@@ -948,6 +1654,8 @@ const Settings = () => {
                           Use at least 8 characters.
                         </p>
                       </div>
+
+                      {/* CONFIRM PASSWORD */}
 
                       <div>
                         <label
@@ -1034,6 +1742,7 @@ const Settings = () => {
                           type="button"
                           onClick={() => {
                             setShowPasswordForm(false);
+
                             setPasswordMessage({
                               type: "",
                               text: "",

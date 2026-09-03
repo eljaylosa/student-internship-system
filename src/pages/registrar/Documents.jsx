@@ -21,55 +21,58 @@ const STATUS = {
 
 const STORAGE_BUCKET = "internship-documents";
 
-export default function Documents() {
+const Documents = () => {
   const { darkMode } = useOutletContext();
 
-  // =========================================================
-  // STATE
-  // =========================================================
-
   const [registrar, setRegistrar] = useState(null);
-
   const [students, setStudents] = useState([]);
   const [studentUsers, setStudentUsers] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
   const [documentTypes, setDocumentTypes] = useState([]);
   const [documents, setDocuments] = useState([]);
 
+  // School information used for certificate/deployment validation
+  const [schools, setSchools] = useState([]);
+
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [deployingAssignmentId, setDeployingAssignmentId] = useState(null);
 
-  // =========================================================
-  // THEME
-  // =========================================================
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // ---------------------------------------------------------
+  // Theme
+  // ---------------------------------------------------------
+
+  const pageBg = darkMode ? "bg-slate-950" : "bg-slate-50";
 
   const card = darkMode
     ? "bg-slate-900 border-slate-700"
     : "bg-white border-slate-200";
 
-  const mutedText = darkMode ? "text-slate-400" : "text-slate-500";
-
   const border = darkMode ? "border-slate-700" : "border-slate-200";
 
-  // =========================================================
-  // LOAD PAGE
-  // =========================================================
+  const text = darkMode ? "text-white" : "text-slate-900";
 
-  useEffect(() => {
-    loadDocumentsPage();
-  }, []);
+  const mutedText = darkMode ? "text-slate-400" : "text-slate-500";
 
-  const loadDocumentsPage = async () => {
-    setLoading(true);
+  const inputClass = darkMode
+    ? "bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+    : "bg-white border-slate-200 text-slate-900 placeholder:text-slate-400";
 
+  // ---------------------------------------------------------
+  // Load Data
+  // ---------------------------------------------------------
+
+  const loadData = async () => {
     try {
-      // -------------------------------------------------------
-      // CURRENT AUTH USER
-      // -------------------------------------------------------
+      setLoading(true);
 
       const {
         data: { user },
@@ -81,215 +84,238 @@ export default function Documents() {
       }
 
       if (!user) {
-        throw new Error("You are not logged in.");
+        throw new Error("No authenticated user found.");
       }
 
-      // -------------------------------------------------------
-      // REGISTRAR USER
-      // -------------------------------------------------------
-
-      const { data: userData, error: userError } = await supabaseRegistrar
-        .from("users")
-        .select(
-          `
-            id,
-            email,
-            role,
-            first_name,
-            middle_name,
-            last_name,
-            status
-          `
-        )
-        .eq("id", user.id)
-        .single();
-
-      if (userError) {
-        throw userError;
-      }
-
-      setRegistrar(userData);
-
-      // -------------------------------------------------------
-      // STUDENTS
-      // -------------------------------------------------------
-
-      const { data: studentData, error: studentError } =
-        await supabaseRegistrar.from("students").select(`
-            id,
-            student_id,
-            program,
-            year_level,
-            department,
-            phone,
-            address,
-            gwa
-          `);
-
-      if (studentError) {
-        throw studentError;
-      }
-
-      setStudents(studentData || []);
-
-      // -------------------------------------------------------
-      // STUDENT USERS
-      //
-      // Gets names + email from users table.
-      // students.id should match users.id.
-      // -------------------------------------------------------
-
-      const { data: studentUserData, error: studentUserError } =
+      // Current registrar
+      const { data: registrarData, error: registrarError } =
         await supabaseRegistrar
           .from("users")
           .select(
             `
-            id,
-            email,
-            first_name,
-            middle_name,
-            last_name,
-            role,
-            status
-          `
+              id,
+              email,
+              role,
+              first_name,
+              middle_name,
+              last_name,
+              status
+            `
+          )
+          .eq("id", user.id)
+          .single();
+
+      if (registrarError) {
+        throw registrarError;
+      }
+
+      setRegistrar(registrarData);
+
+      // Students
+      // Added school_id because deployment now needs to verify
+      // that the student's school has an official logo.
+      const { data: studentsData, error: studentsError } =
+        await supabaseRegistrar
+          .from("students")
+          .select(
+            `
+              id,
+              student_id,
+              school_id,
+              program,
+              year_level,
+              department,
+              phone,
+              address,
+              gwa
+            `
+          )
+          .order("student_id", { ascending: true });
+
+      if (studentsError) {
+        throw studentsError;
+      }
+
+      setStudents(studentsData || []);
+
+      // Student users
+      const { data: studentUsersData, error: studentUsersError } =
+        await supabaseRegistrar
+          .from("users")
+          .select(
+            `
+              id,
+              email,
+              first_name,
+              middle_name,
+              last_name,
+              role,
+              status
+            `
           )
           .eq("role", "student");
 
-      if (studentUserError) {
-        throw studentUserError;
+      if (studentUsersError) {
+        throw studentUsersError;
       }
 
-      setStudentUsers(studentUserData || []);
+      setStudentUsers(studentUsersData || []);
 
-      // -------------------------------------------------------
-      // ASSIGNMENTS
-      // -------------------------------------------------------
+      // Schools
+      // Used to determine whether the student's school has
+      // an official logo configured.
+      const { data: schoolsData, error: schoolsError } = await supabaseRegistrar
+        .from("schools")
+        .select(
+          `
+              id,
+              name,
+              code,
+              logo_url
+            `
+        )
+        .order("name", { ascending: true });
 
-      const { data: assignmentData, error: assignmentError } =
+      if (schoolsError) {
+        throw schoolsError;
+      }
+
+      setSchools(schoolsData || []);
+
+      // Assignments
+      const { data: assignmentsData, error: assignmentsError } =
         await supabaseRegistrar
           .from("assignments")
           .select(
             `
-            id,
-            application_id,
-            student_id,
-            opportunity_id,
-            company_id,
-            status,
-            start_date,
-            end_date,
-            deployed_at,
-            created_at,
-            updated_at
-          `
+              id,
+              application_id,
+              student_id,
+              opportunity_id,
+              company_id,
+              status,
+              start_date,
+              end_date,
+              deployed_at,
+              created_at,
+              updated_at
+            `
           )
-          .order("created_at", {
-            ascending: false,
-          });
+          .order("created_at", { ascending: false });
 
-      if (assignmentError) {
-        throw assignmentError;
+      if (assignmentsError) {
+        throw assignmentsError;
       }
 
-      setAssignments(assignmentData || []);
+      setAssignments(assignmentsData || []);
 
-      // -------------------------------------------------------
-      // COMPANIES
-      //
-      // IMPORTANT:
-      // Actual company name column = company_name
-      // -------------------------------------------------------
+      // Companies
+      const { data: companiesData, error: companiesError } =
+        await supabaseRegistrar
+          .from("companies")
+          .select(
+            `
+              id,
+              company_name,
+              company_email,
+              company_phone,
+              company_address,
+              industry,
+              designation,
+              status
+            `
+          )
+          .order("company_name", { ascending: true });
 
-      const { data: companyData, error: companyError } =
-        await supabaseRegistrar.from("companies").select(`
-            id,
-            company_name,
-            company_email,
-            company_phone,
-            company_address,
-            industry,
-            designation,
-            status
-          `);
-
-      if (companyError) {
-        throw companyError;
+      if (companiesError) {
+        throw companiesError;
       }
 
-      setCompanies(companyData || []);
+      setCompanies(companiesData || []);
 
-      // -------------------------------------------------------
-      // DOCUMENT TYPES
-      // -------------------------------------------------------
+      // Opportunities
+      const { data: opportunitiesData, error: opportunitiesError } =
+        await supabaseRegistrar
+          .from("opportunities")
+          .select(
+            `
+              id,
+              title
+            `
+          )
+          .order("title", { ascending: true });
 
-      const { data: documentTypeData, error: documentTypeError } =
+      if (opportunitiesError) {
+        throw opportunitiesError;
+      }
+
+      setOpportunities(opportunitiesData || []);
+
+      // Document types
+      const { data: documentTypesData, error: documentTypesError } =
         await supabaseRegistrar
           .from("document_types")
           .select(
             `
-            id,
-            name,
-            description,
-            required,
-            created_at,
-            updated_at
-          `
+              id,
+              name,
+              description,
+              required,
+              created_at,
+              updated_at
+            `
           )
-          .order("created_at", {
-            ascending: true,
-          });
+          .order("name", { ascending: true });
 
-      if (documentTypeError) {
-        throw documentTypeError;
+      if (documentTypesError) {
+        throw documentTypesError;
       }
 
-      setDocumentTypes(documentTypeData || []);
+      setDocumentTypes(documentTypesData || []);
 
-      // -------------------------------------------------------
-      // DOCUMENTS
-      // -------------------------------------------------------
-
-      const { data: documentData, error: documentError } =
+      // Documents
+      const { data: documentsData, error: documentsError } =
         await supabaseRegistrar
           .from("documents")
           .select(
             `
-            id,
-            assignment_id,
-            student_id,
-            document_type_id,
-            file_name,
-            storage_path,
-            version,
-            status,
-            notes,
-            reviewed_by,
-            reviewed_at,
-            created_at,
-            updated_at
-          `
+              id,
+              assignment_id,
+              student_id,
+              document_type_id,
+              file_name,
+              storage_path,
+              version,
+              status,
+              notes,
+              reviewed_by,
+              reviewed_at,
+              created_at,
+              updated_at
+            `
           )
-          .order("created_at", {
-            ascending: true,
-          });
+          .order("created_at", { ascending: false });
 
-      if (documentError) {
-        throw documentError;
+      if (documentsError) {
+        throw documentsError;
       }
 
-      setDocuments(documentData || []);
+      setDocuments(documentsData || []);
     } catch (error) {
-      console.error("Error loading Registrar Documents page:", error);
-
-      alert(error.message || "Unable to load internship documents.");
+      console.error("Error loading documents:", error);
+      alert(error.message || "Failed to load document verification data.");
     } finally {
       setLoading(false);
     }
   };
 
-  // =========================================================
-  // HELPERS
-  // =========================================================
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // ---------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------
 
   const getStudent = (studentId) => {
     return students.find((student) => student.id === studentId);
@@ -322,354 +348,360 @@ export default function Documents() {
     return companies.find((company) => company.id === companyId);
   };
 
+  const getOpportunity = (opportunityId) => {
+    return opportunities.find(
+      (opportunity) => opportunity.id === opportunityId
+    );
+  };
+
   const getDocumentType = (typeId) => {
     return documentTypes.find((type) => type.id === typeId);
   };
 
-  const getStatusLabel = (status) => {
-    const labels = {
-      [STATUS.document.SUBMITTED]: "Submitted",
-      [STATUS.document.PENDING_REVIEW]: "Pending Review",
-      [STATUS.document.APPROVED]: "Approved",
-      [STATUS.document.NEEDS_REVISION]: "Needs Revision",
-    };
+  // ---------------------------------------------------------
+  // School Helpers
+  // ---------------------------------------------------------
 
-    return labels[status] || status;
+  const getSchool = (schoolId) => {
+    if (!schoolId) {
+      return null;
+    }
+
+    return schools.find((school) => school.id === schoolId) || null;
+  };
+
+  const getStudentSchool = (studentId) => {
+    const student = getStudent(studentId);
+
+    if (!student?.school_id) {
+      return null;
+    }
+
+    return getSchool(student.school_id);
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case STATUS.document.SUBMITTED:
+        return "Submitted";
+
+      case STATUS.document.PENDING_REVIEW:
+        return "Under Review";
+
+      case STATUS.document.APPROVED:
+        return "Approved";
+
+      case STATUS.document.NEEDS_REVISION:
+        return "Revision Required";
+
+      default:
+        return status
+          ? status
+              .replaceAll("_", " ")
+              .replace(/\b\w/g, (char) => char.toUpperCase())
+          : "Unknown";
+    }
   };
 
   const getStatusClass = (status) => {
     switch (status) {
       case STATUS.document.APPROVED:
         return darkMode
-          ? "bg-emerald-950 text-emerald-400 border-emerald-900"
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
           : "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-      case STATUS.document.NEEDS_REVISION:
-        return darkMode
-          ? "bg-red-950 text-red-400 border-red-900"
-          : "bg-red-50 text-red-700 border-red-200";
 
       case STATUS.document.PENDING_REVIEW:
       case STATUS.document.SUBMITTED:
         return darkMode
-          ? "bg-amber-950 text-amber-400 border-amber-900"
+          ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
           : "bg-amber-50 text-amber-700 border-amber-200";
+
+      case STATUS.document.NEEDS_REVISION:
+        return darkMode
+          ? "bg-red-500/10 text-red-400 border-red-500/20"
+          : "bg-red-50 text-red-700 border-red-200";
 
       default:
         return darkMode
           ? "bg-slate-800 text-slate-300 border-slate-700"
-          : "bg-slate-50 text-slate-600 border-slate-200";
+          : "bg-slate-100 text-slate-600 border-slate-200";
     }
   };
 
-  // =========================================================
-  // GROUP DOCUMENTS BY STUDENT
-  // =========================================================
+  const getAssignmentStatusLabel = (status, deployedAt = null) => {
+    switch (status) {
+      case STATUS.assignment.PENDING:
+        return deployedAt ? "Sent to Company" : "Pending Deployment";
 
-  const studentGroups = useMemo(() => {
-    const groups = {};
+      case STATUS.assignment.ACTIVE:
+        return "Accepted by Company";
+
+      case STATUS.assignment.COMPLETED:
+        return "Completed";
+
+      case STATUS.assignment.SUSPENDED:
+        return "Suspended";
+
+      case STATUS.assignment.TERMINATED:
+        return "Rejected by Company";
+
+      default:
+        return "No Assignment";
+    }
+  };
+
+  const getAssignmentStatusClass = (status, deployedAt = null) => {
+    if (status === STATUS.assignment.PENDING && deployedAt) {
+      return darkMode
+        ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+        : "bg-blue-50 text-blue-700 border-blue-200";
+    }
+
+    switch (status) {
+      case STATUS.assignment.ACTIVE:
+      case STATUS.assignment.COMPLETED:
+        return darkMode
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+      case STATUS.assignment.SUSPENDED:
+      case STATUS.assignment.TERMINATED:
+        return darkMode
+          ? "bg-red-500/10 text-red-400 border-red-500/20"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      default:
+        return darkMode
+          ? "bg-slate-800 text-slate-300 border-slate-700"
+          : "bg-slate-100 text-slate-600 border-slate-200";
+    }
+  };
+
+  // ---------------------------------------------------------
+  // Documents By Assignment
+  // ---------------------------------------------------------
+
+  const documentsByAssignment = useMemo(() => {
+    const map = {};
 
     documents.forEach((document) => {
-      if (!groups[document.student_id]) {
-        groups[document.student_id] = [];
+      if (!document.assignment_id) {
+        return;
       }
 
-      groups[document.student_id].push(document);
+      if (!map[document.assignment_id]) {
+        map[document.assignment_id] = [];
+      }
+
+      map[document.assignment_id].push(document);
     });
 
-    return Object.entries(groups).map(([studentId, studentDocuments]) => {
-      const student = getStudent(studentId);
-      const studentUser = getStudentUser(studentId);
+    return map;
+  }, [documents]);
 
-      const assignment = getAssignment(studentDocuments[0]?.assignment_id);
+  // ---------------------------------------------------------
+  // Internship Groups
+  // ---------------------------------------------------------
 
-      const company = getCompany(assignment?.company_id);
+  const studentGroups = useMemo(() => {
+    const requiredTypes = documentTypes.filter((type) => type.required);
 
-      const requiredTypes = documentTypes.filter((type) => type.required);
+    return assignments
+      .map((assignment) => {
+        const assignmentDocuments = documentsByAssignment[assignment.id] || [];
 
-      const approvedRequiredDocuments = studentDocuments.filter((document) => {
-        const type = getDocumentType(document.document_type_id);
+        const studentId = assignment.student_id;
 
-        return type?.required && document.status === STATUS.document.APPROVED;
+        const student = getStudent(studentId);
+        const studentUser = getStudentUser(studentId);
+        const company = getCompany(assignment.company_id);
+        const opportunity = getOpportunity(assignment.opportunity_id);
+
+        const approvedRequiredDocuments = assignmentDocuments.filter(
+          (document) => {
+            const type = getDocumentType(document.document_type_id);
+
+            return (
+              type?.required && document.status === STATUS.document.APPROVED
+            );
+          }
+        );
+
+        const pendingDocuments = assignmentDocuments.filter(
+          (document) =>
+            document.status === STATUS.document.PENDING_REVIEW ||
+            document.status === STATUS.document.SUBMITTED
+        );
+
+        const needsRevision = assignmentDocuments.filter(
+          (document) => document.status === STATUS.document.NEEDS_REVISION
+        );
+
+        const approvedDocuments = assignmentDocuments.filter(
+          (document) => document.status === STATUS.document.APPROVED
+        );
+
+        const allRequiredDocumentsApproved =
+          requiredTypes.length > 0 &&
+          approvedRequiredDocuments.length >= requiredTypes.length;
+
+        const deployed = assignment.status === STATUS.assignment.ACTIVE;
+
+        const sentToCompany =
+          assignment.status === STATUS.assignment.PENDING &&
+          !!assignment.deployed_at;
+
+        const completed = assignment.status === STATUS.assignment.COMPLETED;
+
+        const suspended = assignment.status === STATUS.assignment.SUSPENDED;
+
+        const terminated = assignment.status === STATUS.assignment.TERMINATED;
+
+        const deploymentFinished =
+          sentToCompany || deployed || completed || suspended || terminated;
+
+        let overallStatus = "Under Review";
+
+        if (deployed) {
+          overallStatus = "Deployed";
+        } else if (sentToCompany) {
+          overallStatus = "Sent to Company";
+        } else if (completed) {
+          overallStatus = "Completed";
+        } else if (suspended) {
+          overallStatus = "Suspended";
+        } else if (terminated) {
+          overallStatus = "Terminated";
+        } else if (needsRevision.length > 0) {
+          overallStatus = "Revision Required";
+        } else if (allRequiredDocumentsApproved) {
+          overallStatus = "Ready for Deployment";
+        } else if (pendingDocuments.length > 0) {
+          overallStatus = "Under Review";
+        } else if (assignmentDocuments.length === 0) {
+          overallStatus = "No Documents";
+        }
+
+        return {
+          // Assignment is the unique internship group.
+          groupId: assignment.id,
+
+          studentId,
+          student,
+          studentUser,
+          studentName: getStudentFullName(studentId),
+
+          assignment,
+          applicationId: assignment.application_id,
+
+          // Internship information
+          opportunity,
+          internshipTitle: opportunity?.title || "Unknown Internship",
+
+          company,
+
+          // School information
+          school: student?.school_id ? getSchool(student.school_id) : null,
+
+          documents: assignmentDocuments,
+
+          requiredCount: requiredTypes.length,
+          approvedRequiredCount: approvedRequiredDocuments.length,
+
+          pendingDocuments,
+          approvedDocuments,
+          needsRevision,
+
+          allRequiredDocumentsApproved,
+
+          deployed,
+          completed,
+          suspended,
+          terminated,
+          deploymentFinished,
+
+          overallStatus,
+        };
+      })
+      .sort((a, b) => {
+        const studentCompare = a.studentName.localeCompare(b.studentName);
+
+        if (studentCompare !== 0) {
+          return studentCompare;
+        }
+
+        return (
+          new Date(b.assignment?.created_at || 0) -
+          new Date(a.assignment?.created_at || 0)
+        );
       });
-
-      const allRequiredDocumentsApproved =
-        requiredTypes.length > 0 &&
-        approvedRequiredDocuments.length === requiredTypes.length;
-
-      const pendingDocuments = studentDocuments.filter(
-        (document) =>
-          document.status === STATUS.document.PENDING_REVIEW ||
-          document.status === STATUS.document.SUBMITTED
-      );
-
-      const needsRevision = studentDocuments.filter(
-        (document) => document.status === STATUS.document.NEEDS_REVISION
-      );
-
-      const deployed = assignment?.status === STATUS.assignment.ACTIVE;
-
-      const completed = assignment?.status === STATUS.assignment.COMPLETED;
-
-      const suspended = assignment?.status === STATUS.assignment.SUSPENDED;
-
-      const terminated = assignment?.status === STATUS.assignment.TERMINATED;
-
-      const deploymentFinished =
-        deployed || completed || suspended || terminated;
-
-      return {
-        studentId,
-        student,
-        studentUser,
-        studentName: getStudentFullName(studentId),
-        assignment,
-        company,
-        documents: studentDocuments,
-        requiredCount: requiredTypes.length,
-        approvedRequiredCount: approvedRequiredDocuments.length,
-        pendingDocuments,
-        needsRevision,
-        allRequiredDocumentsApproved,
-        deployed,
-        completed,
-        suspended,
-        terminated,
-        deploymentFinished,
-      };
-    });
   }, [
-    documents,
+    assignments,
+    documentsByAssignment,
     students,
     studentUsers,
-    assignments,
     documentTypes,
     companies,
+    opportunities,
+    documents,
+    schools,
   ]);
 
-  // =========================================================
-  // APPROVE DOCUMENT
-  // =========================================================
+  // ---------------------------------------------------------
+  // Selected Internship
+  // ---------------------------------------------------------
 
-  const handleApprove = async (document) => {
-    if (!registrar) {
-      alert("Registrar information could not be loaded.");
-      return;
+  const selectedStudentGroup = useMemo(() => {
+    if (!selectedGroupId) {
+      return null;
     }
 
-    const confirmed = window.confirm(`Approve "${document.file_name}"?`);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setActionLoadingId(document.id);
-
-    try {
-      const { data: updatedDocument, error } = await supabaseRegistrar
-        .from("documents")
-        .update({
-          status: STATUS.document.APPROVED,
-          notes: "Verified by Registrar.",
-          reviewed_by: registrar.id,
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", document.id)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      setDocuments((previous) =>
-        previous.map((item) =>
-          item.id === updatedDocument.id ? updatedDocument : item
-        )
-      );
-
-      setSelectedDocument(null);
-
-      alert("Document approved successfully.");
-    } catch (error) {
-      console.error("Error approving document:", error);
-
-      alert(error.message || "Unable to approve document.");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  // =========================================================
-  // REQUEST REVISION
-  // =========================================================
-
-  const handleRevision = async (document) => {
-    if (!registrar) {
-      alert("Registrar information could not be loaded.");
-      return;
-    }
-
-    const note = window.prompt(
-      "Enter the reason for requesting a revision:",
-      "Please upload a clearer or updated document."
+    return (
+      studentGroups.find((group) => group.groupId === selectedGroupId) || null
     );
+  }, [studentGroups, selectedGroupId]);
 
-    if (note === null) {
-      return;
-    }
+  // ---------------------------------------------------------
+  // Filtering
+  // ---------------------------------------------------------
 
-    if (!note.trim()) {
-      alert("Please provide a revision note.");
-      return;
-    }
+  const filteredStudentGroups = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
 
-    setActionLoadingId(document.id);
+    return studentGroups.filter((group) => {
+      const matchesSearch =
+        !search ||
+        group.studentName.toLowerCase().includes(search) ||
+        group.student?.student_id?.toLowerCase().includes(search) ||
+        group.student?.program?.toLowerCase().includes(search) ||
+        group.company?.company_name?.toLowerCase().includes(search) ||
+        group.internshipTitle?.toLowerCase().includes(search);
 
-    try {
-      const { data: updatedDocument, error } = await supabaseRegistrar
-        .from("documents")
-        .update({
-          status: STATUS.document.NEEDS_REVISION,
-          notes: note.trim(),
-          reviewed_by: registrar.id,
-          reviewed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", document.id)
-        .select()
-        .single();
+      let matchesStatus = true;
 
-      if (error) {
-        throw error;
+      if (statusFilter === "under_review") {
+        matchesStatus = group.overallStatus === "Under Review";
       }
 
-      setDocuments((previous) =>
-        previous.map((item) =>
-          item.id === updatedDocument.id ? updatedDocument : item
-        )
-      );
-
-      setSelectedDocument(null);
-
-      alert("Revision request sent successfully.");
-    } catch (error) {
-      console.error("Error requesting document revision:", error);
-
-      alert(error.message || "Unable to request document revision.");
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  // =========================================================
-  // VIEW DOCUMENT
-  // =========================================================
-
-  const handleViewDocument = async (document) => {
-    try {
-      if (!document.storage_path) {
-        throw new Error("This document does not have a storage path.");
+      if (statusFilter === "revision") {
+        matchesStatus = group.overallStatus === "Revision Required";
       }
 
-      const { data, error } = await supabaseRegistrar.storage
-        .from(STORAGE_BUCKET)
-        .createSignedUrl(document.storage_path, 60 * 10);
-
-      if (error) {
-        throw error;
+      if (statusFilter === "ready") {
+        matchesStatus = group.overallStatus === "Ready for Deployment";
       }
 
-      if (!data?.signedUrl) {
-        throw new Error("Unable to create document preview URL.");
+      if (statusFilter === "deployed") {
+        matchesStatus = group.overallStatus === "Deployed";
       }
 
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      console.error("Error opening document:", error);
+      return matchesSearch && matchesStatus;
+    });
+  }, [studentGroups, searchTerm, statusFilter]);
 
-      alert(error.message || "Unable to open this document.");
-    }
-  };
-
-  // =========================================================
-  // DEPLOY INTERN
-  // =========================================================
-
-  const handleDeploy = async (group) => {
-    if (!group.assignment) {
-      alert("No internship assignment found for this student.");
-
-      return;
-    }
-
-    if (!group.allRequiredDocumentsApproved) {
-      alert(
-        "All required documents must be approved before this intern can be deployed."
-      );
-
-      return;
-    }
-
-    if (group.deploymentFinished) {
-      alert("This internship is no longer available for deployment.");
-
-      return;
-    }
-
-    const company = getCompany(group.assignment.company_id);
-
-    const confirmed = window.confirm(
-      `Deploy ${group.studentName} to ${
-        company?.company_name || "the assigned company"
-      }?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setDeployingAssignmentId(group.assignment.id);
-
-    try {
-      const { data: updatedAssignment, error } = await supabaseRegistrar
-        .from("assignments")
-        .update({
-          status: STATUS.assignment.ACTIVE,
-          deployed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", group.assignment.id)
-        .eq("status", STATUS.assignment.PENDING)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      setAssignments((previous) =>
-        previous.map((assignment) =>
-          assignment.id === updatedAssignment.id
-            ? updatedAssignment
-            : assignment
-        )
-      );
-
-      alert("Intern deployed successfully.");
-    } catch (error) {
-      console.error("Error deploying intern:", error);
-
-      alert(error.message || "Unable to deploy intern.");
-    } finally {
-      setDeployingAssignmentId(null);
-    }
-  };
-
-  // =========================================================
-  // SUMMARY
-  // =========================================================
+  // ---------------------------------------------------------
+  // Summary
+  // ---------------------------------------------------------
 
   const totalDocuments = documents.length;
 
@@ -687,837 +719,1535 @@ export default function Documents() {
     (group) => group.allRequiredDocumentsApproved && !group.deploymentFinished
   ).length;
 
-  // =========================================================
-  // LOADING
-  // =========================================================
+  // ---------------------------------------------------------
+  // Document Actions
+  // ---------------------------------------------------------
+
+  const handleApprove = async (document) => {
+    if (!registrar?.id) {
+      alert("Registrar information is unavailable.");
+      return;
+    }
+
+    try {
+      setActionLoadingId(document.id);
+
+      const reviewedAt = new Date().toISOString();
+
+      const { error } = await supabaseRegistrar
+        .from("documents")
+        .update({
+          status: STATUS.document.APPROVED,
+          notes: "Verified by Registrar.",
+          reviewed_by: registrar.id,
+          reviewed_at: reviewedAt,
+          updated_at: reviewedAt,
+        })
+        .eq("id", document.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setDocuments((current) =>
+        current.map((item) =>
+          item.id === document.id
+            ? {
+                ...item,
+                status: STATUS.document.APPROVED,
+                notes: "Verified by Registrar.",
+                reviewed_by: registrar.id,
+                reviewed_at: reviewedAt,
+                updated_at: reviewedAt,
+              }
+            : item
+        )
+      );
+
+      setSelectedDocument((current) =>
+        current?.id === document.id
+          ? {
+              ...current,
+              status: STATUS.document.APPROVED,
+              notes: "Verified by Registrar.",
+              reviewed_by: registrar.id,
+              reviewed_at: reviewedAt,
+              updated_at: reviewedAt,
+            }
+          : current
+      );
+    } catch (error) {
+      console.error("Error approving document:", error);
+      alert(error.message || "Failed to approve document.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRevision = async (document) => {
+    if (!registrar?.id) {
+      alert("Registrar information is unavailable.");
+      return;
+    }
+
+    const note = window.prompt(
+      "Enter the reason why this document needs revision:"
+    );
+
+    if (note === null) {
+      return;
+    }
+
+    if (!note.trim()) {
+      alert("Please provide a revision note.");
+      return;
+    }
+
+    try {
+      setActionLoadingId(document.id);
+
+      const reviewedAt = new Date().toISOString();
+
+      const { error } = await supabaseRegistrar
+        .from("documents")
+        .update({
+          status: STATUS.document.NEEDS_REVISION,
+          notes: note.trim(),
+          reviewed_by: registrar.id,
+          reviewed_at: reviewedAt,
+          updated_at: reviewedAt,
+        })
+        .eq("id", document.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setDocuments((current) =>
+        current.map((item) =>
+          item.id === document.id
+            ? {
+                ...item,
+                status: STATUS.document.NEEDS_REVISION,
+                notes: note.trim(),
+                reviewed_by: registrar.id,
+                reviewed_at: reviewedAt,
+                updated_at: reviewedAt,
+              }
+            : item
+        )
+      );
+
+      setSelectedDocument((current) =>
+        current?.id === document.id
+          ? {
+              ...current,
+              status: STATUS.document.NEEDS_REVISION,
+              notes: note.trim(),
+              reviewed_by: registrar.id,
+              reviewed_at: reviewedAt,
+            }
+          : current
+      );
+    } catch (error) {
+      console.error("Error requesting revision:", error);
+      alert(error.message || "Failed to request document revision.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // View Document
+  // ---------------------------------------------------------
+
+  const handleViewDocument = async (document) => {
+    if (!document?.storage_path) {
+      alert("No file is attached to this document.");
+      return;
+    }
+
+    try {
+      setActionLoadingId(document.id);
+
+      const { data, error } = await supabaseRegistrar.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(document.storage_path, 60 * 10);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.signedUrl) {
+        throw new Error("Unable to generate document URL.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Error viewing document:", error);
+      alert(error.message || "Failed to open document.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // Deployment
+  // ---------------------------------------------------------
+
+  const handleDeploy = async (group) => {
+    if (!group?.assignment) {
+      alert("No assignment was found for this internship.");
+      return;
+    }
+
+    if (!group.allRequiredDocumentsApproved) {
+      alert(
+        "The student cannot be deployed until all required documents are approved."
+      );
+      return;
+    }
+
+    if (group.deploymentFinished) {
+      alert("This internship has already been processed.");
+      return;
+    }
+
+    // -------------------------------------------------------
+    // SCHOOL LOGO VALIDATION
+    // -------------------------------------------------------
+    // The school logo is required before deployment because
+    // the student's school logo will be used when generating
+    // the internship completion certificate.
+    // -------------------------------------------------------
+
+    const student = getStudent(group.assignment.student_id);
+
+    if (!student) {
+      alert(
+        "Student information could not be found. Deployment cannot continue."
+      );
+      return;
+    }
+
+    if (!student.school_id) {
+      alert(
+        "This student is not assigned to a school. Please assign the student to a school before deployment."
+      );
+      return;
+    }
+
+    const school = getSchool(student.school_id);
+
+    if (!school) {
+      alert(
+        "The student's school information could not be found. Please verify the student's school assignment before deployment."
+      );
+      return;
+    }
+
+    if (!school.logo_url) {
+      alert(
+        `Deployment blocked.\n\n${
+          school.name || "This student's school"
+        } does not have an official school logo uploaded yet.\n\nPlease go to:\nRegistrar Settings → School Information\n\nand upload the school's official logo before deploying this student.`
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // Confirmation
+    // -------------------------------------------------------
+
+    const confirmed = window.confirm(
+      `Deploy ${group.studentName} to ${
+        group.company?.company_name || "the assigned company"
+      }?\n\nSchool: ${
+        school.name || "Unknown School"
+      }\n\nThe student's school logo is configured and ready for certificate generation.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeployingAssignmentId(group.assignment.id);
+
+      const deployedAt = new Date().toISOString();
+
+      const { data: updatedAssignment, error } = await supabaseRegistrar
+        .from("assignments")
+        .update({
+          status: STATUS.assignment.PENDING,
+          deployed_at: deployedAt,
+          updated_at: deployedAt,
+        })
+        .eq("id", group.assignment.id)
+        .select(
+          `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at
+          `
+        )
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!updatedAssignment) {
+        throw new Error(
+          "The assignment was not updated. Please check the Registrar assignment permissions."
+        );
+      }
+
+      setAssignments((current) =>
+        current.map((assignment) =>
+          assignment.id === updatedAssignment.id
+            ? updatedAssignment
+            : assignment
+        )
+      );
+
+      alert(
+        `${group.studentName} has been successfully sent to the company for review.`
+      );
+    } catch (error) {
+      console.error("Error deploying student:", error);
+
+      alert(
+        error.message ||
+          "Failed to deploy student. Please check the assignment permissions."
+      );
+    } finally {
+      setDeployingAssignmentId(null);
+    }
+  };
+
+  // ---------------------------------------------------------
+  // UI Helpers
+  // ---------------------------------------------------------
+
+  const getInitials = (name) => {
+    if (!name || name === "Unknown Student") {
+      return "?";
+    }
+
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase();
+  };
+
+  const getOverallStatusClass = (status) => {
+    switch (status) {
+      case "Ready for Deployment":
+        return darkMode
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+      case "Deployed":
+      case "Completed":
+        return darkMode
+          ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+          : "bg-blue-50 text-blue-700 border-blue-200";
+
+      case "Revision Required":
+        return darkMode
+          ? "bg-red-500/10 text-red-400 border-red-500/20"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      case "Suspended":
+      case "Terminated":
+        return darkMode
+          ? "bg-red-500/10 text-red-400 border-red-500/20"
+          : "bg-red-50 text-red-700 border-red-200";
+
+      case "No Documents":
+        return darkMode
+          ? "bg-slate-800 text-slate-400 border-slate-700"
+          : "bg-slate-100 text-slate-500 border-slate-200";
+
+      default:
+        return darkMode
+          ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+          : "bg-amber-50 text-amber-700 border-amber-200";
+    }
+  };
+
+  // ---------------------------------------------------------
+  // Loading
+  // ---------------------------------------------------------
 
   if (loading) {
     return (
-      <div
-        className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
-          darkMode ? "text-slate-100" : "text-slate-900"
-        }`}
-      >
-        <div className={`border rounded-2xl p-10 text-center ${card}`}>
-          <div className="text-2xl mb-3">⏳</div>
+      <div className={`min-h-full ${pageBg} p-6 md:p-8`}>
+        <div className="flex items-center justify-center min-h-[500px]">
+          <div className="text-center">
+            <div
+              className={`w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4 ${
+                darkMode
+                  ? "border-slate-700 border-t-blue-500"
+                  : "border-slate-200 border-t-blue-600"
+              }`}
+            />
 
-          <h3 className="font-bold">Loading documents...</h3>
-
-          <p className={`text-sm mt-1 ${mutedText}`}>
-            Please wait while we load student internship documents.
-          </p>
+            <p className={mutedText}>Loading document verification...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // =========================================================
-  // PAGE
-  // =========================================================
+  // ---------------------------------------------------------
+  // Main UI
+  // ---------------------------------------------------------
 
   return (
-    <div
-      className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
-        darkMode ? "text-slate-100" : "text-slate-900"
-      }`}
-    >
-      {/* HEADER */}
+    <div className={`min-h-full ${pageBg} p-5 md:p-7 lg:p-8`}>
+      {/* Header */}
+      <div className="mb-7">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <h1 className={`text-2xl md:text-3xl font-bold ${text}`}>
+              Document Verification
+            </h1>
 
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
-          Registrar Portal
-        </p>
+            <p className={`mt-1 ${mutedText}`}>
+              Review internship documents and manage student deployment.
+            </p>
+          </div>
 
-        <h1 className="text-2xl font-black">Document Verification</h1>
-
-        <p className={`text-sm mt-1 ${mutedText}`}>
-          Review student internship requirements before deployment.
-        </p>
-      </div>
-
-      {/* SUMMARY */}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className={`border rounded-2xl p-4 ${card}`}>
-          <p className={`text-xs font-semibold ${mutedText}`}>
-            Submitted Documents
-          </p>
-
-          <p className="text-2xl font-black mt-1">{totalDocuments}</p>
-        </div>
-
-        <div className={`border rounded-2xl p-4 ${card}`}>
-          <p className={`text-xs font-semibold ${mutedText}`}>Pending Review</p>
-
-          <p className="text-2xl font-black mt-1">{pendingDocuments}</p>
-        </div>
-
-        <div className={`border rounded-2xl p-4 ${card}`}>
-          <p className={`text-xs font-semibold ${mutedText}`}>
-            Approved Documents
-          </p>
-
-          <p className="text-2xl font-black mt-1">{approvedDocuments}</p>
-        </div>
-
-        <div className={`border rounded-2xl p-4 ${card}`}>
-          <p className={`text-xs font-semibold ${mutedText}`}>
-            Ready for Deployment
-          </p>
-
-          <p className="text-2xl font-black mt-1">{readyForDeployment}</p>
+          <button
+            onClick={loadData}
+            className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition ${
+              darkMode
+                ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                : "border-slate-200 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            ↻ Refresh
+          </button>
         </div>
       </div>
 
-      {/* DOCUMENT LIST */}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
+        <div className={`rounded-2xl border ${card} p-5`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`text-sm ${mutedText}`}>Total Documents</p>
 
-      <section className={`border rounded-2xl overflow-hidden ${card}`}>
-        <div className={`px-5 py-4 border-b ${border}`}>
-          <h2 className="font-bold text-sm">Student Document Verification</h2>
+              <p className={`text-2xl font-bold ${text} mt-2`}>
+                {totalDocuments}
+              </p>
+            </div>
 
-          <p className={`text-xs mt-1 ${mutedText}`}>
-            Approve all required documents before deploying the intern.
-          </p>
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+              📄
+            </div>
+          </div>
         </div>
 
-        {studentGroups.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="text-3xl mb-3">📄</div>
+        <div className={`rounded-2xl border ${card} p-5`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`text-sm ${mutedText}`}>Under Review</p>
 
-            <p className="font-semibold">No submitted documents</p>
+              <p className={`text-2xl font-bold ${text} mt-2`}>
+                {pendingDocuments}
+              </p>
+            </div>
+
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+              ⏳
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-2xl border ${card} p-5`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`text-sm ${mutedText}`}>Approved</p>
+
+              <p className={`text-2xl font-bold ${text} mt-2`}>
+                {approvedDocuments}
+              </p>
+            </div>
+
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+              ✓
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-2xl border ${card} p-5`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`text-sm ${mutedText}`}>Ready to Deploy</p>
+
+              <p className={`text-2xl font-bold ${text} mt-2`}>
+                {readyForDeployment}
+              </p>
+            </div>
+
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
+              🚀
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main List */}
+      <div className={`rounded-2xl border ${card} overflow-hidden`}>
+        {/* List Header */}
+        <div className={`p-5 border-b ${border}`}>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h2 className={`text-lg font-semibold ${text}`}>
+                Internship Submissions
+              </h2>
+
+              <p className={`text-sm mt-1 ${mutedText}`}>
+                Each internship assignment has its own document set.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Search */}
+              <div className="relative">
+                <span
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 ${mutedText}`}
+                >
+                  🔍
+                </span>
+
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search student or internship..."
+                  className={`w-full sm:w-64 pl-9 pr-3 py-2.5 rounded-xl border outline-none text-sm ${inputClass} focus:ring-2 focus:ring-blue-500/30`}
+                />
+              </div>
+
+              {/* Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={`px-3 py-2.5 rounded-xl border outline-none text-sm ${inputClass} focus:ring-2 focus:ring-blue-500/30`}
+              >
+                <option value="all">All Status</option>
+                <option value="under_review">Under Review</option>
+                <option value="revision">Revision Required</option>
+                <option value="ready">Ready for Deployment</option>
+                <option value="deployed">Deployed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Count */}
+        <div className={`px-5 py-3 border-b ${border} text-sm ${mutedText}`}>
+          Showing{" "}
+          <span className={`font-semibold ${text}`}>
+            {filteredStudentGroups.length}
+          </span>{" "}
+          internship
+          {filteredStudentGroups.length !== 1 ? "s" : ""}
+        </div>
+
+        {/* Empty */}
+        {filteredStudentGroups.length === 0 ? (
+          <div className="py-20 text-center px-6">
+            <div
+              className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center text-2xl mb-4 ${
+                darkMode ? "bg-slate-800" : "bg-slate-100"
+              }`}
+            >
+              📄
+            </div>
+
+            <h3 className={`font-semibold ${text}`}>No internships found</h3>
 
             <p className={`text-sm mt-1 ${mutedText}`}>
-              Students will appear here after submitting their internship
-              requirements.
+              Try changing your search or filter.
             </p>
           </div>
         ) : (
-          <div
-            className={`divide-y ${
-              darkMode ? "divide-slate-700" : "divide-slate-200"
-            }`}
-          >
-            {studentGroups.map((group) => {
-              const company = getCompany(group.assignment?.company_id);
+          <>
+            {/* Desktop Table */}
+            <div className="hidden xl:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr
+                    className={`text-left text-xs uppercase tracking-wider ${mutedText} ${
+                      darkMode ? "bg-slate-950/50" : "bg-slate-50"
+                    }`}
+                  >
+                    <th className="px-5 py-3 font-semibold">Student</th>
 
-              return (
-                <div
-                  key={group.studentId}
-                  className={`p-5 ${
-                    darkMode ? "hover:bg-slate-800/30" : "hover:bg-slate-50"
-                  }`}
-                >
-                  {/* STUDENT HEADER */}
+                    <th className="px-5 py-3 font-semibold">Internship</th>
 
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-black">
-                          {group.studentName}
-                        </h3>
+                    <th className="px-5 py-3 font-semibold">Company</th>
 
-                        {group.completed ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-purple-50 text-purple-700 border-purple-200">
-                            COMPLETED
-                          </span>
-                        ) : group.deployed ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-emerald-50 text-emerald-700 border-emerald-200">
-                            DEPLOYED
-                          </span>
-                        ) : group.suspended ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-amber-50 text-amber-700 border-amber-200">
-                            SUSPENDED
-                          </span>
-                        ) : group.terminated ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-red-50 text-red-700 border-red-200">
-                            TERMINATED
-                          </span>
-                        ) : group.allRequiredDocumentsApproved ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
-                            READY FOR DEPLOYMENT
-                          </span>
-                        ) : group.needsRevision.length > 0 ? (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-red-50 text-red-700 border-red-200">
-                            REVISION REQUIRED
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 rounded-full border text-[10px] font-bold bg-amber-50 text-amber-700 border-amber-200">
-                            UNDER REVIEW
-                          </span>
-                        )}
-                      </div>
+                    <th className="px-5 py-3 font-semibold">Documents</th>
 
-                      {/* STUDENT BASIC INFO */}
+                    <th className="px-5 py-3 font-semibold">Status</th>
 
-                      <div className="mt-2 space-y-1">
-                        <p className={`text-xs ${mutedText}`}>
-                          <span className="font-semibold">Student ID:</span>{" "}
-                          {group.student?.student_id || group.studentId}
-                        </p>
+                    <th className="px-5 py-3 font-semibold text-right">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
 
-                        <p className={`text-xs ${mutedText}`}>
-                          <span className="font-semibold">Program:</span>{" "}
-                          {group.student?.program || "No program"}
-                        </p>
-
-                        <p className={`text-xs ${mutedText}`}>
-                          <span className="font-semibold">Year Level:</span>{" "}
-                          {group.student?.year_level || "No year level"}
-                        </p>
-
-                        <p className={`text-xs ${mutedText}`}>
-                          <span className="font-semibold">Department:</span>{" "}
-                          {group.student?.department || "No department"}
-                        </p>
-
-                        {group.studentUser?.email && (
-                          <p className={`text-xs ${mutedText}`}>
-                            <span className="font-semibold">Email:</span>{" "}
-                            {group.studentUser.email}
-                          </p>
-                        )}
-
-                        {group.student?.phone && (
-                          <p className={`text-xs ${mutedText}`}>
-                            <span className="font-semibold">Phone:</span>{" "}
-                            {group.student.phone}
-                          </p>
-                        )}
-
-                        {group.student?.address && (
-                          <p className={`text-xs ${mutedText}`}>
-                            <span className="font-semibold">Address:</span>{" "}
-                            {group.student.address}
-                          </p>
-                        )}
-
-                        {group.student?.gwa && (
-                          <p className={`text-xs ${mutedText}`}>
-                            <span className="font-semibold">GWA:</span>{" "}
-                            {group.student.gwa}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* ASSIGNMENT + COMPANY */}
-
-                      {group.assignment && (
-                        <div className="mt-3">
-                          <p className={`text-xs ${mutedText}`}>
-                            <span className="font-semibold">Assignment:</span>{" "}
-                            {group.assignment.id}
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            <span className="font-semibold">Company:</span>{" "}
-                            <span className="font-semibold">
-                              {company?.company_name || "Unknown Company"}
-                            </span>
-                          </p>
-
-                          {company?.industry && (
-                            <p className={`text-xs mt-1 ${mutedText}`}>
-                              <span className="font-semibold">Industry:</span>{" "}
-                              {company.industry}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* DOCUMENT PROGRESS */}
-
-                    <div
-                      className={`border rounded-xl px-4 py-3 min-w-[220px] ${
-                        darkMode
-                          ? "bg-slate-800 border-slate-700"
-                          : "bg-slate-50 border-slate-200"
+                <tbody>
+                  {filteredStudentGroups.map((group) => (
+                    <tr
+                      key={group.groupId}
+                      className={`border-t ${border} transition ${
+                        darkMode ? "hover:bg-slate-800/40" : "hover:bg-slate-50"
                       }`}
                     >
-                      <p
-                        className={`text-[10px] uppercase tracking-wide font-bold ${mutedText}`}
+                      {/* Student */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
+                              darkMode
+                                ? "bg-blue-500/10 text-blue-400"
+                                : "bg-blue-50 text-blue-700"
+                            }`}
+                          >
+                            {getInitials(group.studentName)}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className={`font-semibold ${text}`}>
+                              {group.studentName}
+                            </p>
+
+                            <p className={`text-xs mt-0.5 ${mutedText}`}>
+                              {group.student?.student_id || "No Student ID"}
+                              {" • "}
+                              {group.student?.program || "No Program"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Internship */}
+                      <td className="px-5 py-4">
+                        <p
+                          className={`text-sm font-semibold ${text}`}
+                          title={group.internshipTitle}
+                        >
+                          {group.internshipTitle}
+                        </p>
+
+                        {group.applicationId && (
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            Application linked
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Company */}
+                      <td className="px-5 py-4">
+                        <p className={`text-sm font-medium ${text}`}>
+                          {group.company?.company_name || "No Company"}
+                        </p>
+
+                        {group.company?.designation && (
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            {group.company.designation}
+                          </p>
+                        )}
+                      </td>
+
+                      {/* Documents */}
+                      <td className="px-5 py-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-semibold text-sm ${text}`}>
+                              {group.approvedRequiredCount}/
+                              {group.requiredCount}
+                            </span>
+
+                            <span className={`text-xs ${mutedText}`}>
+                              required approved
+                            </span>
+                          </div>
+
+                          <div
+                            className={`w-32 h-1.5 rounded-full mt-2 ${
+                              darkMode ? "bg-slate-700" : "bg-slate-200"
+                            }`}
+                          >
+                            <div
+                              className="h-full rounded-full bg-emerald-500 transition-all"
+                              style={{
+                                width: `${
+                                  group.requiredCount > 0
+                                    ? Math.min(
+                                        100,
+                                        (group.approvedRequiredCount /
+                                          group.requiredCount) *
+                                          100
+                                      )
+                                    : 0
+                                }%`,
+                              }}
+                            />
+                          </div>
+
+                          <div
+                            className={`flex gap-3 text-xs mt-2 ${mutedText}`}
+                          >
+                            <span>{group.pendingDocuments.length} pending</span>
+
+                            <span>{group.needsRevision.length} revision</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${getOverallStatusClass(
+                            group.overallStatus
+                          )}`}
+                        >
+                          {group.overallStatus}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedGroupId(group.groupId)}
+                            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition"
+                          >
+                            See Documents
+                          </button>
+
+                          {group.allRequiredDocumentsApproved &&
+                            !group.deploymentFinished &&
+                            group.assignment && (
+                              <button
+                                onClick={() => handleDeploy(group)}
+                                disabled={
+                                  deployingAssignmentId === group.assignment.id
+                                }
+                                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium transition"
+                              >
+                                {deployingAssignmentId === group.assignment.id
+                                  ? "Deploying..."
+                                  : "Deploy"}
+                              </button>
+                            )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Tablet / Mobile Cards */}
+            <div className="xl:hidden divide-y">
+              {filteredStudentGroups.map((group) => (
+                <div key={group.groupId} className={`p-4 md:p-5 ${border}`}>
+                  <div className="flex gap-3">
+                    <div
+                      className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center font-semibold text-sm ${
+                        darkMode
+                          ? "bg-blue-500/10 text-blue-400"
+                          : "bg-blue-50 text-blue-700"
+                      }`}
+                    >
+                      {getInitials(group.studentName)}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div>
+                          <h3 className={`font-semibold ${text}`}>
+                            {group.studentName}
+                          </h3>
+
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            {group.student?.student_id || "No Student ID"}
+                            {" • "}
+                            {group.student?.program || "No Program"}
+                            {group.student?.year_level
+                              ? ` • ${group.student.year_level}`
+                              : ""}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`self-start inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${getOverallStatusClass(
+                            group.overallStatus
+                          )}`}
+                        >
+                          {group.overallStatus}
+                        </span>
+                      </div>
+
+                      {/* Internship */}
+                      <div
+                        className={`mt-4 rounded-xl p-3 ${
+                          darkMode ? "bg-blue-500/5" : "bg-blue-50/70"
+                        }`}
                       >
-                        Required Documents
-                      </p>
+                        <p className={`text-xs ${mutedText}`}>Internship</p>
 
-                      <p className="text-sm font-black mt-1">
-                        {group.approvedRequiredCount} / {group.requiredCount}{" "}
-                        approved
-                      </p>
+                        <p
+                          className={`text-sm font-semibold ${text} mt-1 truncate`}
+                        >
+                          {group.internshipTitle}
+                        </p>
+                      </div>
 
-                      <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 mt-2 overflow-hidden">
+                      <div className="mt-3 grid grid-cols-2 gap-3">
                         <div
-                          className="h-full bg-emerald-500 transition-all"
-                          style={{
-                            width: `${
-                              group.requiredCount
-                                ? Math.min(
-                                    100,
-                                    (group.approvedRequiredCount /
-                                      group.requiredCount) *
-                                      100
-                                  )
-                                : 0
-                            }%`,
-                          }}
-                        />
+                          className={`rounded-xl p-3 ${
+                            darkMode ? "bg-slate-800/70" : "bg-slate-50"
+                          }`}
+                        >
+                          <p className={`text-xs ${mutedText}`}>Company</p>
+
+                          <p
+                            className={`text-sm font-medium ${text} mt-1 truncate`}
+                          >
+                            {group.company?.company_name || "No Company"}
+                          </p>
+                        </div>
+
+                        <div
+                          className={`rounded-xl p-3 ${
+                            darkMode ? "bg-slate-800/70" : "bg-slate-50"
+                          }`}
+                        >
+                          <p className={`text-xs ${mutedText}`}>Documents</p>
+
+                          <p className={`text-sm font-semibold ${text} mt-1`}>
+                            {group.approvedRequiredCount}/{group.requiredCount}{" "}
+                            approved
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {group.pendingDocuments.length > 0 && (
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-lg ${
+                              darkMode
+                                ? "bg-amber-500/10 text-amber-400"
+                                : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {group.pendingDocuments.length} pending
+                          </span>
+                        )}
+
+                        {group.needsRevision.length > 0 && (
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-lg ${
+                              darkMode
+                                ? "bg-red-500/10 text-red-400"
+                                : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {group.needsRevision.length} revision
+                          </span>
+                        )}
+
+                        {group.approvedDocuments.length > 0 && (
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-lg ${
+                              darkMode
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            {group.approvedDocuments.length} approved
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                        <button
+                          onClick={() => setSelectedGroupId(group.groupId)}
+                          className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition"
+                        >
+                          See Documents
+                        </button>
+
+                        {group.allRequiredDocumentsApproved &&
+                          !group.deploymentFinished &&
+                          group.assignment && (
+                            <button
+                              onClick={() => handleDeploy(group)}
+                              disabled={
+                                deployingAssignmentId === group.assignment.id
+                              }
+                              className="sm:w-32 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium transition"
+                            >
+                              {deployingAssignmentId === group.assignment.id
+                                ? "Deploying..."
+                                : "Deploy"}
+                            </button>
+                          )}
                       </div>
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
-                  {/* DOCUMENTS */}
+      {/* =====================================================
+          INTERNSHIP DOCUMENT DRAWER
+          ===================================================== */}
 
-                  <div className="mt-5 space-y-3">
-                    {group.documents.map((document) => {
-                      const type = getDocumentType(document.document_type_id);
+      {selectedStudentGroup && (
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <button
+            aria-label="Close documents"
+            onClick={() => setSelectedGroupId(null)}
+            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+          />
 
-                      const isApproved =
-                        document.status === STATUS.document.APPROVED;
+          {/* Drawer */}
+          <div
+            className={`absolute top-0 right-0 h-full w-full sm:max-w-xl lg:max-w-2xl shadow-2xl ${
+              darkMode ? "bg-slate-950" : "bg-white"
+            }`}
+          >
+            <div className="h-full flex flex-col">
+              {/* Drawer Header */}
+              <div className={`px-5 py-5 border-b ${border}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold ${
+                        darkMode
+                          ? "bg-blue-500/10 text-blue-400"
+                          : "bg-blue-50 text-blue-700"
+                      }`}
+                    >
+                      {getInitials(selectedStudentGroup.studentName)}
+                    </div>
 
-                      const isProcessing = actionLoadingId === document.id;
+                    <div className="min-w-0">
+                      <h2 className={`text-lg font-bold ${text} truncate`}>
+                        {selectedStudentGroup.studentName}
+                      </h2>
+
+                      <p className={`text-sm mt-0.5 ${mutedText}`}>
+                        {selectedStudentGroup.student?.student_id ||
+                          "No Student ID"}
+                        {" • "}
+                        {selectedStudentGroup.student?.program || "No Program"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedGroupId(null)}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      darkMode
+                        ? "hover:bg-slate-800 text-slate-400"
+                        : "hover:bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Internship */}
+                <div
+                  className={`mt-4 rounded-xl p-3 ${
+                    darkMode
+                      ? "bg-blue-500/5 border border-blue-500/10"
+                      : "bg-blue-50 border border-blue-100"
+                  }`}
+                >
+                  <p className={`text-xs ${mutedText}`}>Internship</p>
+
+                  <p className={`text-sm font-semibold ${text} mt-1`}>
+                    {selectedStudentGroup.internshipTitle}
+                  </p>
+                </div>
+
+                {/* Company */}
+                <div
+                  className={`mt-3 rounded-xl p-3 ${
+                    darkMode
+                      ? "bg-slate-900 border border-slate-800"
+                      : "bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`text-xs ${mutedText}`}>
+                        Internship Company
+                      </p>
+
+                      <p
+                        className={`text-sm font-semibold ${text} mt-1 truncate`}
+                      >
+                        {selectedStudentGroup.company?.company_name ||
+                          "No Company"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-medium ${getOverallStatusClass(
+                        selectedStudentGroup.overallStatus
+                      )}`}
+                    >
+                      {selectedStudentGroup.overallStatus}
+                    </span>
+                  </div>
+                </div>
+
+                {/* School */}
+                {selectedStudentGroup.student?.school_id && (
+                  <div
+                    className={`mt-3 rounded-xl p-3 ${
+                      darkMode
+                        ? "bg-slate-900 border border-slate-800"
+                        : "bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`text-xs ${mutedText}`}>Student School</p>
+
+                        <p
+                          className={`text-sm font-semibold ${text} mt-1 truncate`}
+                        >
+                          {selectedStudentGroup.school?.name ||
+                            "School Not Found"}
+                        </p>
+
+                        {selectedStudentGroup.school?.code && (
+                          <p className={`text-xs mt-1 ${mutedText}`}>
+                            {selectedStudentGroup.school.code}
+                          </p>
+                        )}
+                      </div>
+
+                      <div
+                        className={`shrink-0 px-2.5 py-1 rounded-full border text-[11px] font-medium ${
+                          selectedStudentGroup.school?.logo_url
+                            ? darkMode
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : darkMode
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        {selectedStudentGroup.school?.logo_url
+                          ? "Logo Ready"
+                          : "Logo Required"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Internship Status */}
+                {selectedStudentGroup.assignment && (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div
+                      className={`rounded-xl p-3 ${
+                        darkMode
+                          ? "bg-slate-900 border border-slate-800"
+                          : "bg-slate-50"
+                      }`}
+                    >
+                      <p className={`text-xs ${mutedText}`}>
+                        Assignment Status
+                      </p>
+
+                      <p className={`text-sm font-semibold ${text} mt-1`}>
+                        {getAssignmentStatusLabel(
+                          selectedStudentGroup.assignment.status,
+                          selectedStudentGroup.assignment.deployed_at
+                        )}
+                      </p>
+                    </div>
+
+                    <div
+                      className={`rounded-xl p-3 ${
+                        darkMode
+                          ? "bg-slate-900 border border-slate-800"
+                          : "bg-slate-50"
+                      }`}
+                    >
+                      <p className={`text-xs ${mutedText}`}>Documents</p>
+
+                      <p className={`text-sm font-semibold ${text} mt-1`}>
+                        {selectedStudentGroup.documents.length} submitted
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Progress */}
+                <div className="mt-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className={`text-sm font-medium ${text}`}>
+                      Required Documents
+                    </span>
+
+                    <span className={`text-sm font-semibold ${text}`}>
+                      {selectedStudentGroup.approvedRequiredCount}/
+                      {selectedStudentGroup.requiredCount}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`w-full h-2 rounded-full ${
+                      darkMode ? "bg-slate-800" : "bg-slate-200"
+                    }`}
+                  >
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{
+                        width: `${
+                          selectedStudentGroup.requiredCount > 0
+                            ? Math.min(
+                                100,
+                                (selectedStudentGroup.approvedRequiredCount /
+                                  selectedStudentGroup.requiredCount) *
+                                  100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="flex-1 overflow-y-auto p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className={`font-semibold ${text}`}>
+                      Submitted Documents
+                    </h3>
+
+                    <p className={`text-xs mt-1 ${mutedText}`}>
+                      Review each document before approving or requesting
+                      revisions.
+                    </p>
+                  </div>
+
+                  <span
+                    className={`text-xs px-2.5 py-1 rounded-lg ${
+                      darkMode
+                        ? "bg-slate-800 text-slate-300"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {selectedStudentGroup.documents.length} file
+                    {selectedStudentGroup.documents.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {selectedStudentGroup.documents.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div
+                      className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center text-2xl ${
+                        darkMode ? "bg-slate-900" : "bg-slate-100"
+                      }`}
+                    >
+                      📂
+                    </div>
+
+                    <p className={`font-medium ${text} mt-4`}>
+                      No documents submitted
+                    </p>
+
+                    <p className={`text-sm mt-1 ${mutedText}`}>
+                      No documents have been submitted for this internship yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedStudentGroup.documents.map((document) => {
+                      const documentType = getDocumentType(
+                        document.document_type_id
+                      );
+
+                      const isLoading = actionLoadingId === document.id;
 
                       return (
                         <div
                           key={document.id}
-                          className={`border rounded-xl p-4 ${
-                            darkMode
-                              ? "border-slate-700 bg-slate-800/50"
-                              : "border-slate-200 bg-slate-50"
-                          }`}
+                          className={`rounded-2xl border ${border} p-4`}
                         >
-                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div
-                                className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                                  darkMode ? "bg-slate-700" : "bg-white"
-                                }`}
-                              >
-                                📄
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-bold text-sm">
-                                    {type?.name || "Unknown Document"}
-                                  </p>
-
-                                  {type?.required && (
-                                    <span className="text-[10px] font-bold text-red-500">
-                                      REQUIRED
-                                    </span>
-                                  )}
-
-                                  <span
-                                    className={`px-2 py-1 rounded-full border text-[10px] font-bold ${getStatusClass(
-                                      document.status
-                                    )}`}
-                                  >
-                                    {getStatusLabel(document.status)}
-                                  </span>
-                                </div>
-
-                                <p
-                                  className={`text-xs mt-1 truncate ${mutedText}`}
-                                >
-                                  {document.file_name}
-                                </p>
-
-                                <p className={`text-[10px] mt-1 ${mutedText}`}>
-                                  Version {document.version}
-                                </p>
-
-                                {document.notes && (
-                                  <p className="text-xs mt-2 text-red-500">
-                                    <span className="font-bold">
-                                      Registrar note:
-                                    </span>{" "}
-                                    {document.notes}
-                                  </p>
-                                )}
-                              </div>
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ${
+                                darkMode ? "bg-slate-800" : "bg-slate-100"
+                              }`}
+                            >
+                              📄
                             </div>
 
-                            {/* ACTIONS */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4
+                                      className={`font-semibold text-sm ${text}`}
+                                    >
+                                      {documentType?.name || "Unknown Document"}
+                                    </h4>
 
-                            <div className="flex flex-wrap items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedDocument(document)}
-                                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
-                                  darkMode
-                                    ? "border-slate-600 hover:bg-slate-700"
-                                    : "border-slate-300 hover:bg-white"
-                                }`}
-                              >
-                                👁 Details
-                              </button>
+                                    {documentType?.required && (
+                                      <span
+                                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                          darkMode
+                                            ? "bg-blue-500/10 text-blue-400"
+                                            : "bg-blue-50 text-blue-700"
+                                        }`}
+                                      >
+                                        REQUIRED
+                                      </span>
+                                    )}
+                                  </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleViewDocument(document)}
-                                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
-                                  darkMode
-                                    ? "border-blue-800 text-blue-400 hover:bg-blue-950"
-                                    : "border-blue-200 text-blue-600 hover:bg-blue-50"
-                                }`}
-                              >
-                                ↗ View File
-                              </button>
-
-                              {!isApproved && (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={isProcessing}
-                                    onClick={() => handleApprove(document)}
-                                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition"
+                                  <p
+                                    className={`text-xs mt-1 truncate ${mutedText}`}
                                   >
-                                    {isProcessing ? "Saving..." : "✓ Approve"}
-                                  </button>
+                                    {document.file_name || "Unnamed file"}
+                                  </p>
+                                </div>
 
-                                  <button
-                                    type="button"
-                                    disabled={isProcessing}
-                                    onClick={() => handleRevision(document)}
-                                    className={`px-3 py-2 rounded-lg border text-xs font-semibold transition ${
-                                      darkMode
-                                        ? "border-red-900 text-red-400 hover:bg-red-950"
-                                        : "border-red-200 text-red-600 hover:bg-red-50"
-                                    }`}
-                                  >
-                                    ↻ Revision
-                                  </button>
-                                </>
-                              )}
-
-                              {isApproved && (
-                                <span className="text-xs font-semibold text-emerald-600">
-                                  ✓ Verified
+                                <span
+                                  className={`self-start inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-medium ${getStatusClass(
+                                    document.status
+                                  )}`}
+                                >
+                                  {getStatusLabel(document.status)}
                                 </span>
+                              </div>
+
+                              {/* File Info */}
+                              <div
+                                className={`flex flex-wrap gap-x-4 gap-y-1 text-xs mt-3 ${mutedText}`}
+                              >
+                                <span>Version {document.version || 1}</span>
+
+                                {document.reviewed_at && (
+                                  <span>
+                                    Reviewed{" "}
+                                    {new Date(
+                                      document.reviewed_at
+                                    ).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Notes */}
+                              {document.notes && (
+                                <div
+                                  className={`mt-3 rounded-xl p-3 text-xs ${
+                                    darkMode
+                                      ? "bg-slate-800/70 text-slate-300"
+                                      : "bg-slate-50 text-slate-600"
+                                  }`}
+                                >
+                                  <span className="font-semibold">Note:</span>{" "}
+                                  {document.notes}
+                                </div>
                               )}
+
+                              {/* Actions */}
+                              <div className="flex flex-wrap gap-2 mt-4">
+                                <button
+                                  onClick={() => handleViewDocument(document)}
+                                  disabled={isLoading}
+                                  className={`px-3 py-2 rounded-xl border text-xs font-medium transition ${
+                                    darkMode
+                                      ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  } disabled:opacity-50`}
+                                >
+                                  {isLoading ? "Opening..." : "View File"}
+                                </button>
+
+                                <button
+                                  onClick={() => setSelectedDocument(document)}
+                                  className={`px-3 py-2 rounded-xl border text-xs font-medium transition ${
+                                    darkMode
+                                      ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  Details
+                                </button>
+
+                                {document.status !==
+                                  STATUS.document.APPROVED && (
+                                  <>
+                                    <button
+                                      onClick={() => handleApprove(document)}
+                                      disabled={isLoading}
+                                      className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition disabled:opacity-50"
+                                    >
+                                      Approve
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleRevision(document)}
+                                      disabled={isLoading}
+                                      className="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition disabled:opacity-50"
+                                    >
+                                      Request Revision
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-
-                  {/* DEPLOYMENT */}
-
-                  <div
-                    className={`mt-5 pt-5 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
-                    }`}
-                  >
-                    <div>
-                      {group.completed ? (
-                        <>
-                          <p className="text-sm font-bold text-purple-600">
-                            ✓ Internship Completed
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            This internship has already been completed.
-                          </p>
-                        </>
-                      ) : group.deployed ? (
-                        <>
-                          <p className="text-sm font-bold text-emerald-600">
-                            ✓ Intern Deployed
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            The student is now active in their internship.
-                          </p>
-                        </>
-                      ) : group.suspended ? (
-                        <p className="text-sm font-bold text-amber-600">
-                          Internship Suspended
-                        </p>
-                      ) : group.terminated ? (
-                        <p className="text-sm font-bold text-red-600">
-                          Internship Terminated
-                        </p>
-                      ) : group.allRequiredDocumentsApproved ? (
-                        <>
-                          <p className="text-sm font-bold text-blue-600">
-                            All Required Documents Approved
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            This student is ready for deployment.
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-semibold">
-                            Deployment Unavailable
-                          </p>
-
-                          <p className={`text-xs mt-1 ${mutedText}`}>
-                            Approve all required documents before deployment.
-                          </p>
-                        </>
-                      )}
-                    </div>
-
-                    {!group.deploymentFinished && (
-                      <button
-                        type="button"
-                        disabled={
-                          !group.allRequiredDocumentsApproved ||
-                          deployingAssignmentId === group.assignment?.id
-                        }
-                        onClick={() => handleDeploy(group)}
-                        className={`px-5 py-2.5 rounded-lg text-xs font-bold transition ${
-                          group.allRequiredDocumentsApproved
-                            ? "bg-blue-600 hover:bg-blue-700 text-white"
-                            : darkMode
-                            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                            : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                        }`}
-                      >
-                        {deployingAssignmentId === group.assignment?.id
-                          ? "Deploying..."
-                          : "🚀 Deploy Intern"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* =====================================================
-          DOCUMENT DETAILS MODAL
-      ===================================================== */}
-
-      {selectedDocument && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-          onClick={() => setSelectedDocument(null)}
-        >
-          <div
-            className={`w-full max-w-2xl max-h-[90vh] rounded-2xl border shadow-2xl overflow-hidden ${
-              darkMode
-                ? "bg-slate-900 border-slate-700"
-                : "bg-white border-slate-200"
-            }`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {/* HEADER */}
-
-            <div
-              className={`px-5 py-4 border-b flex items-center justify-between ${
-                darkMode ? "border-slate-700" : "border-slate-200"
-              }`}
-            >
-              <div className="min-w-0">
-                <h2 className="font-bold truncate">
-                  {selectedDocument.file_name}
-                </h2>
-
-                <p className={`text-xs mt-1 ${mutedText}`}>
-                  Internship Document
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedDocument(null)}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg transition ${
-                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
-                }`}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* BODY */}
-
-            <div className="p-6 overflow-y-auto max-h-[65vh]">
-              {/* STUDENT INFORMATION */}
-
-              {(() => {
-                const student = getStudent(selectedDocument.student_id);
-
-                const studentUser = getStudentUser(selectedDocument.student_id);
-
-                return (
-                  <div
-                    className={`p-5 rounded-xl border ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-slate-50 border-slate-200"
-                    }`}
-                  >
-                    <p className={`text-xs uppercase font-bold ${mutedText}`}>
-                      Student Information
-                    </p>
-
-                    <h3 className="text-lg font-black mt-1">
-                      {getStudentFullName(selectedDocument.student_id)}
-                    </h3>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-3 mt-4">
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Student ID
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.student_id || selectedDocument.student_id}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Email
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1 break-all">
-                          {studentUser?.email || "No email"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Program
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.program || "No program"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Year Level
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.year_level || "No year level"}
-                        </p>
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Department
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.department || "No department"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Phone
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.phone || "No phone"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          GWA
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.gwa || "Not available"}
-                        </p>
-                      </div>
-
-                      <div className="sm:col-span-2">
-                        <p
-                          className={`text-[10px] uppercase font-bold ${mutedText}`}
-                        >
-                          Address
-                        </p>
-
-                        <p className="text-sm font-semibold mt-1">
-                          {student?.address || "No address"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* DOCUMENT INFORMATION */}
-
-              <div
-                className={`p-5 rounded-xl border mt-4 ${
-                  darkMode
-                    ? "bg-slate-800 border-slate-700"
-                    : "bg-slate-50 border-slate-200"
-                }`}
-              >
-                <p className={`text-xs uppercase font-bold ${mutedText}`}>
-                  Document Information
-                </p>
-
-                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
-                  Document Type
-                </p>
-
-                <p className="font-bold mt-1">
-                  {getDocumentType(selectedDocument.document_type_id)?.name ||
-                    "Unknown Document"}
-                </p>
-
-                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
-                  File
-                </p>
-
-                <p className="text-sm font-semibold mt-1 break-all">
-                  {selectedDocument.file_name}
-                </p>
-
-                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
-                  Version
-                </p>
-
-                <p className="text-sm font-semibold mt-1">
-                  {selectedDocument.version}
-                </p>
-
-                <p className={`text-xs mt-4 uppercase font-bold ${mutedText}`}>
-                  Status
-                </p>
-
-                <span
-                  className={`inline-flex mt-2 px-3 py-1.5 rounded-full border text-xs font-bold ${getStatusClass(
-                    selectedDocument.status
-                  )}`}
-                >
-                  {getStatusLabel(selectedDocument.status)}
-                </span>
-
-                {selectedDocument.notes && (
-                  <>
-                    <p
-                      className={`text-xs mt-4 uppercase font-bold ${mutedText}`}
-                    >
-                      Registrar Note
-                    </p>
-
-                    <p className="text-sm mt-1 text-red-500">
-                      {selectedDocument.notes}
-                    </p>
-                  </>
                 )}
               </div>
 
-              {/* ASSIGNMENT / COMPANY */}
-
-              {(() => {
-                const assignment = getAssignment(
-                  selectedDocument.assignment_id
-                );
-
-                const company = getCompany(assignment?.company_id);
-
-                return (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                    <div
-                      className={`p-3 rounded-lg ${
-                        darkMode ? "bg-slate-800" : "bg-slate-50"
-                      }`}
-                    >
-                      <p
-                        className={`text-[10px] uppercase font-bold ${mutedText}`}
-                      >
-                        Assignment
-                      </p>
-
-                      <p className="text-sm font-semibold mt-1 break-all">
-                        {selectedDocument.assignment_id}
-                      </p>
-                    </div>
-
-                    <div
-                      className={`p-3 rounded-lg ${
-                        darkMode ? "bg-slate-800" : "bg-slate-50"
-                      }`}
-                    >
-                      <p
-                        className={`text-[10px] uppercase font-bold ${mutedText}`}
-                      >
-                        Company
-                      </p>
-
-                      <p className="text-sm font-semibold mt-1">
-                        {company?.company_name || "Unknown Company"}
-                      </p>
-                    </div>
+              {/* Drawer Footer */}
+              <div className={`border-t ${border} p-5`}>
+                {selectedStudentGroup.allRequiredDocumentsApproved &&
+                !selectedStudentGroup.deploymentFinished &&
+                selectedStudentGroup.assignment ? (
+                  <button
+                    onClick={() => handleDeploy(selectedStudentGroup)}
+                    disabled={
+                      deployingAssignmentId ===
+                      selectedStudentGroup.assignment.id
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-sm transition"
+                  >
+                    {deployingAssignmentId ===
+                    selectedStudentGroup.assignment.id
+                      ? "Deploying Intern..."
+                      : "✓ All Required Documents Approved — Deploy Intern"}
+                  </button>
+                ) : selectedStudentGroup.deploymentFinished ? (
+                  <div
+                    className={`w-full px-4 py-3 rounded-xl text-center text-sm font-medium ${
+                      darkMode
+                        ? "bg-blue-500/10 text-blue-400"
+                        : "bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    Internship Status:{" "}
+                    {getAssignmentStatusLabel(
+                      selectedStudentGroup.assignment?.status,
+                      selectedStudentGroup.assignment?.deployed_at
+                    )}
                   </div>
-                );
-              })()}
+                ) : (
+                  <div
+                    className={`w-full px-4 py-3 rounded-xl text-center text-sm ${
+                      darkMode
+                        ? "bg-slate-900 text-slate-400"
+                        : "bg-slate-50 text-slate-500"
+                    }`}
+                  >
+                    Approve all required documents to enable deployment.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* VIEW FILE */}
+      {/* =====================================================
+          DOCUMENT DETAILS MODAL
+          ===================================================== */}
+
+      {selectedDocument && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <button
+            aria-label="Close document details"
+            onClick={() => setSelectedDocument(null)}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          />
+
+          <div
+            className={`relative w-full max-w-lg rounded-2xl border ${card} shadow-2xl overflow-hidden`}
+          >
+            {/* Modal Header */}
+            <div
+              className={`px-5 py-4 border-b ${border} flex items-center justify-between`}
+            >
+              <div>
+                <h3 className={`font-semibold ${text}`}>Document Details</h3>
+
+                <p className={`text-xs mt-1 ${mutedText}`}>
+                  Review information about this submission.
+                </p>
+              </div>
 
               <button
-                type="button"
-                onClick={() => handleViewDocument(selectedDocument)}
-                className="w-full mt-5 px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+                onClick={() => setSelectedDocument(null)}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  darkMode
+                    ? "hover:bg-slate-800 text-slate-400"
+                    : "hover:bg-slate-100 text-slate-500"
+                }`}
               >
-                ↗ Open Uploaded Document
+                ✕
               </button>
             </div>
 
-            {/* ACTIONS */}
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              <div>
+                <p className={`text-xs ${mutedText}`}>Document Type</p>
 
-            {selectedDocument.status !== STATUS.document.APPROVED && (
-              <div
-                className={`px-5 py-4 border-t flex flex-col sm:flex-row justify-end gap-2 ${
-                  darkMode ? "border-slate-700" : "border-slate-200"
-                }`}
-              >
-                <button
-                  type="button"
-                  disabled={actionLoadingId === selectedDocument.id}
-                  onClick={() => handleRevision(selectedDocument)}
-                  className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
-                    darkMode
-                      ? "border-red-900 text-red-400 hover:bg-red-950"
-                      : "border-red-200 text-red-600 hover:bg-red-50"
+                <p className={`font-semibold ${text} mt-1`}>
+                  {getDocumentType(selectedDocument.document_type_id)?.name ||
+                    "Unknown Document"}
+                </p>
+              </div>
+
+              <div>
+                <p className={`text-xs ${mutedText}`}>File Name</p>
+
+                <p className={`text-sm ${text} mt-1 break-all`}>
+                  {selectedDocument.file_name || "Unnamed file"}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className={`text-xs ${mutedText}`}>Version</p>
+
+                  <p className={`text-sm font-medium ${text} mt-1`}>
+                    {selectedDocument.version || 1}
+                  </p>
+                </div>
+
+                <div>
+                  <p className={`text-xs ${mutedText}`}>Status</p>
+
+                  <span
+                    className={`inline-flex mt-1 px-2.5 py-1 rounded-full border text-xs font-medium ${getStatusClass(
+                      selectedDocument.status
+                    )}`}
+                  >
+                    {getStatusLabel(selectedDocument.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className={`text-xs ${mutedText}`}>Submitted</p>
+
+                <p className={`text-sm ${text} mt-1`}>
+                  {selectedDocument.created_at
+                    ? new Date(selectedDocument.created_at).toLocaleString()
+                    : "Unknown"}
+                </p>
+              </div>
+
+              {selectedDocument.reviewed_at && (
+                <div>
+                  <p className={`text-xs ${mutedText}`}>Last Reviewed</p>
+
+                  <p className={`text-sm ${text} mt-1`}>
+                    {new Date(selectedDocument.reviewed_at).toLocaleString()}
+                  </p>
+                </div>
+              )}
+
+              {selectedDocument.notes && (
+                <div
+                  className={`rounded-xl p-4 ${
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
                   }`}
                 >
-                  Request Revision
-                </button>
+                  <p className={`text-xs font-semibold ${mutedText} mb-1`}>
+                    Registrar Note
+                  </p>
 
-                <button
-                  type="button"
-                  disabled={actionLoadingId === selectedDocument.id}
-                  onClick={() => handleApprove(selectedDocument)}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
-                >
-                  Approve Document
-                </button>
-              </div>
-            )}
+                  <p className={`text-sm ${text}`}>{selectedDocument.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className={`px-5 py-4 border-t ${border} flex flex-wrap justify-end gap-2`}
+            >
+              <button
+                onClick={() => handleViewDocument(selectedDocument)}
+                disabled={actionLoadingId === selectedDocument.id}
+                className={`px-4 py-2.5 rounded-xl border text-sm font-medium ${
+                  darkMode
+                    ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                View File
+              </button>
+
+              {selectedDocument.status !== STATUS.document.APPROVED && (
+                <>
+                  <button
+                    onClick={() => handleRevision(selectedDocument)}
+                    disabled={actionLoadingId === selectedDocument.id}
+                    className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    Request Revision
+                  </button>
+
+                  <button
+                    onClick={() => handleApprove(selectedDocument)}
+                    disabled={actionLoadingId === selectedDocument.id}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default Documents;

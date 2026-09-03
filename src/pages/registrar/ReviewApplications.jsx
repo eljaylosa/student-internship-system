@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabaseRegistrar } from "../../supabaseClient";
 
@@ -9,10 +9,6 @@ const STATUS = {
     INFO_REQUESTED: "info_requested",
     APPROVED: "approved",
     REJECTED: "rejected",
-  },
-
-  assignment: {
-    PENDING: "pending",
   },
 };
 
@@ -28,6 +24,9 @@ export default function ReviewApplications() {
   const [processingId, setProcessingId] = useState(null);
 
   const [selectedApplication, setSelectedApplication] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // =========================================================
   // THEME
@@ -73,7 +72,12 @@ export default function ReviewApplications() {
       }
 
       // -------------------------------------------------------
-      // GET SUBMITTED APPLICATIONS
+      // GET APPLICATIONS
+      //
+      // IMPORTANT:
+      // Approved applications are intentionally NOT included
+      // here because approval means the application is now
+      // waiting for the student's confirmation.
       // -------------------------------------------------------
 
       const { data, error } = await supabaseRegistrar
@@ -168,15 +172,33 @@ export default function ReviewApplications() {
 
     const user = student.users;
 
-    return [user.first_name, user.middle_name, user.last_name]
+    const name = [user.first_name, user.middle_name, user.last_name]
       .filter(Boolean)
-      .join(" ");
+      .join(" ")
+      .trim();
+
+    return name || "Unknown Student";
+  };
+
+  const getStudentInitials = (student) => {
+    const name = getStudentName(student);
+
+    if (name === "Unknown Student") {
+      return "US";
+    }
+
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
   };
 
   const getCompanyName = (application) => {
     return (
-      application?.opportunities?.companies?.company_name ||
-      "Unknown Company"
+      application?.opportunities?.companies?.company_name || "Unknown Company"
     );
   };
 
@@ -190,9 +212,7 @@ export default function ReviewApplications() {
 
   const getOpportunityEndDate = (opportunity) => {
     return (
-      opportunity?.internship_end_date ||
-      opportunity?.internship_end ||
-      null
+      opportunity?.internship_end_date || opportunity?.internship_end || null
     );
   };
 
@@ -208,6 +228,22 @@ export default function ReviewApplications() {
     return parsedDate.toLocaleDateString(undefined, {
       year: "numeric",
       month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatShortDate = (date) => {
+    if (!date) return "Not specified";
+
+    const parsedDate = new Date(`${date}T00:00:00`);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return date;
+    }
+
+    return parsedDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
       day: "numeric",
     });
   };
@@ -243,22 +279,133 @@ export default function ReviewApplications() {
         : "bg-blue-50 text-blue-700 border-blue-200";
     }
 
+    if (status === STATUS.application.UNDER_REVIEW) {
+      return darkMode
+        ? "bg-violet-950/50 text-violet-300 border-violet-800"
+        : "bg-violet-50 text-violet-700 border-violet-200";
+    }
+
     return darkMode
       ? "bg-amber-950/50 text-amber-300 border-amber-800"
       : "bg-amber-50 text-amber-700 border-amber-200";
   };
 
   // =========================================================
+  // GROUP APPLICATIONS BY STUDENT
+  // =========================================================
+
+  const studentGroups = useMemo(() => {
+    const groups = {};
+
+    applications.forEach((application) => {
+      const student = application.students;
+
+      const studentKey =
+        student?.id || application.student_id || `unknown-${application.id}`;
+
+      if (!groups[studentKey]) {
+        groups[studentKey] = {
+          studentId: studentKey,
+          student,
+          applications: [],
+        };
+      }
+
+      groups[studentKey].applications.push(application);
+    });
+
+    return Object.values(groups);
+  }, [applications]);
+
+  // =========================================================
+  // FILTER GROUPS
+  // =========================================================
+
+  const filteredStudentGroups = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return studentGroups
+      .map((group) => {
+        const student = group.student;
+
+        const studentName = getStudentName(student).toLowerCase();
+        const studentId = String(student?.student_id || "").toLowerCase();
+        const email = String(student?.users?.email || "").toLowerCase();
+        const program = String(student?.program || "").toLowerCase();
+
+        const matchingApplications = group.applications.filter(
+          (application) => {
+            const opportunity = application.opportunities;
+            const company = opportunity?.companies;
+
+            const matchesStatus =
+              statusFilter === "all" || application.status === statusFilter;
+
+            const applicationText = [
+              opportunity?.title,
+              company?.company_name,
+              opportunity?.location,
+              opportunity?.position_type,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+            const matchesSearch =
+              !query ||
+              studentName.includes(query) ||
+              studentId.includes(query) ||
+              email.includes(query) ||
+              program.includes(query) ||
+              applicationText.includes(query);
+
+            return matchesStatus && matchesSearch;
+          }
+        );
+
+        return {
+          ...group,
+          applications: matchingApplications,
+        };
+      })
+      .filter((group) => group.applications.length > 0);
+  }, [studentGroups, searchTerm, statusFilter]);
+
+  // =========================================================
+  // SUMMARY COUNTS
+  // =========================================================
+
+  const submittedCount = applications.filter(
+    (item) => item.status === STATUS.application.SUBMITTED
+  ).length;
+
+  const underReviewCount = applications.filter(
+    (item) => item.status === STATUS.application.UNDER_REVIEW
+  ).length;
+
+  const informationRequestedCount = applications.filter(
+    (item) => item.status === STATUS.application.INFO_REQUESTED
+  ).length;
+
+  // =========================================================
   // APPROVE APPLICATION
+  //
+  // IMPORTANT:
+  // Registrar approval DOES NOT create an assignment anymore.
+  //
+  // The student must later confirm the approved application
+  // from Student Portal → View Status.
   // =========================================================
 
   const handleApprove = async (application) => {
     if (!application) return;
 
+    const studentName = getStudentName(application.students);
+
     const confirmed = window.confirm(
-      `Approve the internship application of ${getStudentName(
-        application.students
-      )}?`
+      `Approve the internship application of ${studentName}?\n\n` +
+        `The application will be approved and sent to the student for confirmation.\n\n` +
+        `No internship assignment will be created yet.`
     );
 
     if (!confirmed) return;
@@ -283,117 +430,86 @@ export default function ReviewApplications() {
         throw new Error("You are not logged in.");
       }
 
-      const opportunity = application.opportunities;
-
-      if (!opportunity) {
-        throw new Error(
-          "The opportunity connected to this application was not found."
-        );
-      }
-
-      if (!opportunity.company_id) {
-        throw new Error(
-          "This opportunity does not have a company assigned."
-        );
-      }
-
       // -------------------------------------------------------
-      // GET INTERNSHIP DATES
+      // UPDATE APPLICATION ONLY
+      //
+      // DO NOT CREATE AN ASSIGNMENT HERE.
       // -------------------------------------------------------
 
-      const internshipStartDate = getOpportunityStartDate(opportunity);
-      const internshipEndDate = getOpportunityEndDate(opportunity);
-
-      if (!internshipStartDate || !internshipEndDate) {
-        throw new Error(
-          "This opportunity does not have a complete internship start and end date. Please update the opportunity before approving this application."
-        );
-      }
-
-      if (new Date(`${internshipEndDate}T00:00:00`) < new Date(`${internshipStartDate}T00:00:00`)) {
-        throw new Error(
-          "The internship end date cannot be earlier than the internship start date."
-        );
-      }
-
-      // -------------------------------------------------------
-      // CHECK FOR EXISTING ASSIGNMENT
-      // -------------------------------------------------------
-
-      const { data: existingAssignment, error: assignmentCheckError } =
-        await supabaseRegistrar
-          .from("assignments")
-          .select("id, status")
-          .eq("application_id", application.id)
-          .maybeSingle();
-
-      if (assignmentCheckError) {
-        throw assignmentCheckError;
-      }
-
-      if (existingAssignment) {
-        throw new Error(
-          "An assignment already exists for this application."
-        );
-      }
-
-      // -------------------------------------------------------
-      // UPDATE APPLICATION
-      // -------------------------------------------------------
-
-      const { error: applicationUpdateError } = await supabaseRegistrar
+      const { data, error: applicationUpdateError } = await supabaseRegistrar
         .from("applications")
         .update({
           status: STATUS.application.APPROVED,
           reviewer_id: user.id,
-          notes: "Approved by registrar.",
+          notes: "Approved by registrar. Awaiting student confirmation.",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", application.id);
+        .eq("id", application.id)
+        .select(
+          `
+              id,
+              student_id,
+              opportunity_id,
+              cover_letter,
+              status,
+              reviewer_id,
+              notes,
+              submitted_at,
+              created_at,
+              students (
+                id,
+                student_id,
+                phone,
+                address,
+                program,
+                year_level,
+                department,
+                gwa,
+                users (
+                  id,
+                  email,
+                  first_name,
+                  middle_name,
+                  last_name
+                )
+              ),
+              opportunities (
+                id,
+                company_id,
+                title,
+                description,
+                location,
+                position_type,
+                availability,
+                requirements,
+                openings,
+                status,
+                internship_start_date,
+                internship_end_date,
+                internship_start,
+                internship_end,
+                companies (
+                  id,
+                  company_name,
+                  company_email,
+                  company_phone,
+                  company_address,
+                  website,
+                  industry,
+                  designation,
+                  status
+                )
+              )
+            `
+        )
+        .single();
 
       if (applicationUpdateError) {
         throw applicationUpdateError;
       }
 
       // -------------------------------------------------------
-      // CREATE PENDING ASSIGNMENT
-      // -------------------------------------------------------
-
-      const { data: assignment, error: assignmentError } =
-        await supabaseRegistrar
-          .from("assignments")
-          .insert({
-            application_id: application.id,
-            student_id: application.student_id,
-            opportunity_id: application.opportunity_id,
-            company_id: opportunity.company_id,
-            start_date: internshipStartDate,
-            end_date: internshipEndDate,
-            status: STATUS.assignment.PENDING,
-          })
-          .select()
-          .single();
-
-      if (assignmentError) {
-        // -----------------------------------------------------
-        // ROLLBACK APPLICATION IF ASSIGNMENT CREATION FAILS
-        // -----------------------------------------------------
-
-        await supabaseRegistrar
-          .from("applications")
-          .update({
-            status: application.status,
-            reviewer_id: application.reviewer_id,
-            notes: application.notes,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", application.id);
-
-        throw assignmentError;
-      }
-
-      // -------------------------------------------------------
-      // REMOVE FROM CURRENT LIST
+      // REMOVE APPROVED APPLICATION FROM CURRENT REVIEW QUEUE
       // -------------------------------------------------------
 
       setApplications((previous) =>
@@ -402,12 +518,16 @@ export default function ReviewApplications() {
 
       setSelectedApplication(null);
 
+      // -------------------------------------------------------
+      // SUCCESS
+      // -------------------------------------------------------
+
       alert(
-        `Application approved successfully.\n\nAssignment ${assignment.id} was created with status "pending".\n\nInternship Period:\n${formatDate(
-          internshipStartDate
-        )} to ${formatDate(
-          internshipEndDate
-        )}\n\nThe student can now submit internship requirements.`
+        `Application approved successfully.\n\n` +
+          `Student: ${studentName}\n` +
+          `Application Status: Approved\n\n` +
+          `The student must now go to View Status and confirm this internship placement.\n\n` +
+          `No assignment was created yet.`
       );
     } catch (error) {
       console.error("Error approving application:", error);
@@ -639,306 +759,496 @@ export default function ReviewApplications() {
           Registrar Portal
         </p>
 
-        <h1 className="text-2xl font-black">Internship Applications</h1>
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black">
+              Internship Applications
+            </h1>
 
-        <p className={`text-sm mt-1 ${body}`}>
-          Review internship applications submitted by students.
-        </p>
+            <p className={`text-sm mt-1 ${body}`}>
+              Review applications grouped by student.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={loadApplications}
+            className={`self-start lg:self-auto px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
+              darkMode
+                ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       {/* =====================================================
           SUMMARY
       ===================================================== */}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className={`border rounded-xl p-4 ${card}`}>
-          <p
-            className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
-          >
-            Applications to Review
-          </p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div className={`border rounded-2xl p-4 ${card}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
+              >
+                Applications
+              </p>
 
-          <p className="text-2xl font-black mt-1">{applications.length}</p>
+              <p className="text-2xl font-black mt-1">{applications.length}</p>
+            </div>
+
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                darkMode ? "bg-slate-800" : "bg-slate-100"
+              }`}
+            >
+              📋
+            </div>
+          </div>
         </div>
 
-        <div className={`border rounded-xl p-4 ${card}`}>
-          <p
-            className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
-          >
-            Submitted
-          </p>
+        <div className={`border rounded-2xl p-4 ${card}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
+              >
+                Submitted
+              </p>
 
-          <p className="text-2xl font-black mt-1 text-amber-600">
-            {
-              applications.filter(
-                (item) => item.status === STATUS.application.SUBMITTED
-              ).length
-            }
-          </p>
+              <p className="text-2xl font-black mt-1 text-amber-600">
+                {submittedCount}
+              </p>
+            </div>
+
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                darkMode ? "bg-amber-950/40" : "bg-amber-50"
+              }`}
+            >
+              📨
+            </div>
+          </div>
         </div>
 
-        <div className={`border rounded-xl p-4 ${card}`}>
-          <p
-            className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
-          >
-            Information Requested
-          </p>
+        <div className={`border rounded-2xl p-4 ${card}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
+              >
+                Under Review
+              </p>
 
-          <p className="text-2xl font-black mt-1 text-blue-600">
-            {
-              applications.filter(
-                (item) =>
-                  item.status === STATUS.application.INFO_REQUESTED
-              ).length
-            }
-          </p>
+              <p className="text-2xl font-black mt-1 text-violet-600">
+                {underReviewCount}
+              </p>
+            </div>
+
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                darkMode ? "bg-violet-950/40" : "bg-violet-50"
+              }`}
+            >
+              🔎
+            </div>
+          </div>
+        </div>
+
+        <div className={`border rounded-2xl p-4 ${card}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
+              >
+                Info Requested
+              </p>
+
+              <p className="text-2xl font-black mt-1 text-blue-600">
+                {informationRequestedCount}
+              </p>
+            </div>
+
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                darkMode ? "bg-blue-950/40" : "bg-blue-50"
+              }`}
+            >
+              💬
+            </div>
+          </div>
         </div>
       </div>
 
       {/* =====================================================
-          APPLICATIONS
+          FILTERS
+      ===================================================== */}
+
+      <div className={`border rounded-2xl p-4 mb-5 ${card}`}>
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <span
+              className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${body}`}
+            >
+              🔍
+            </span>
+
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search student, ID, program, company, or position..."
+              className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none transition ${
+                darkMode
+                  ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-500"
+                  : "bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400"
+              }`}
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className={`md:w-52 px-3 py-2.5 rounded-xl border text-sm outline-none ${
+              darkMode
+                ? "bg-slate-800 border-slate-700 text-white"
+                : "bg-white border-slate-200 text-slate-700"
+            }`}
+          >
+            <option value="all">All Statuses</option>
+            <option value={STATUS.application.SUBMITTED}>Submitted</option>
+            <option value={STATUS.application.UNDER_REVIEW}>
+              Under Review
+            </option>
+            <option value={STATUS.application.INFO_REQUESTED}>
+              Information Requested
+            </option>
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between mt-3">
+          <p className={`text-xs ${body}`}>
+            Showing{" "}
+            <span className={`font-bold ${heading}`}>
+              {filteredStudentGroups.length}
+            </span>{" "}
+            student{filteredStudentGroups.length !== 1 ? "s" : ""}
+          </p>
+
+          {(searchTerm || statusFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                setStatusFilter("all");
+              }}
+              className="text-xs font-bold text-blue-600 hover:text-blue-700"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* =====================================================
+          STUDENT LIST
       ===================================================== */}
 
       <section className={`border rounded-2xl overflow-hidden ${card}`}>
-        <div className={`p-5 border-b ${border}`}>
-          <h2 className="font-bold text-lg">Submitted Applications</h2>
+        <div
+          className={`px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${border}`}
+        >
+          <div>
+            <h2 className="font-bold text-lg">Students</h2>
 
-          <p className={`text-xs mt-1 ${body}`}>
-            Applications remain under Registrar review until approved,
-            rejected, or returned for additional information.
-          </p>
+            <p className={`text-xs mt-1 ${body}`}>
+              Each student contains all of their applications currently awaiting
+              Registrar action.
+            </p>
+          </div>
+
+          <span
+            className={`text-xs font-bold px-3 py-1.5 rounded-full ${
+              darkMode
+                ? "bg-slate-800 text-slate-300"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {filteredStudentGroups.length} Student
+            {filteredStudentGroups.length !== 1 ? "s" : ""}
+          </span>
         </div>
 
-        {applications.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="text-3xl mb-3">📋</div>
+        {filteredStudentGroups.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-4xl mb-3">📋</div>
 
-            <h3 className="font-bold">No applications to review</h3>
+            <h3 className="font-bold">
+              {applications.length === 0
+                ? "No applications to review"
+                : "No matching applications"}
+            </h3>
 
             <p className={`text-sm mt-1 ${body}`}>
-              New student submissions will appear here.
+              {applications.length === 0
+                ? "New student submissions will appear here."
+                : "Try changing your search or status filter."}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-200 dark:divide-slate-700">
-            {applications.map((application) => {
-              const student = application.students;
-              const opportunity = application.opportunities;
-              const company = opportunity?.companies;
-
+            {filteredStudentGroups.map((group) => {
+              const student = group.student;
               const studentName = getStudentName(student);
 
+              const submittedApplications = group.applications.filter(
+                (item) => item.status === STATUS.application.SUBMITTED
+              ).length;
+
+              const underReviewApplications = group.applications.filter(
+                (item) => item.status === STATUS.application.UNDER_REVIEW
+              ).length;
+
+              const infoRequestedApplications = group.applications.filter(
+                (item) => item.status === STATUS.application.INFO_REQUESTED
+              ).length;
+
               return (
-                <div key={application.id} className="p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
-                    {/* =================================================
-                        APPLICATION INFO
-                    ================================================= */}
+                <div key={group.studentId} className="p-4 md:p-5">
+                  {/* STUDENT HEADER */}
 
-                    <div className="min-w-0">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 font-bold ${
-                            darkMode
-                              ? "bg-slate-800 text-slate-200"
-                              : "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {studentName
-                            .split(" ")
-                            .map((name) => name[0])
-                            .slice(0, 2)
-                            .join("")
-                            .toUpperCase()}
-                        </div>
-
-                        <div>
-                          <p className="font-bold">{studentName}</p>
-
-                          <p className={`text-xs mt-1 ${body}`}>
-                            Student ID: {student?.student_id || "N/A"}
-                          </p>
-
-                          <p className={`text-xs ${body}`}>
-                            {student?.users?.email || "No email"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* =================================================
-                          OPPORTUNITY
-                      ================================================= */}
-
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className={`mt-4 p-4 rounded-xl border ${border} ${
-                          darkMode ? "bg-slate-800/50" : "bg-slate-50"
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-black ${
+                          darkMode
+                            ? "bg-slate-800 text-slate-200"
+                            : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        <p
-                          className={`text-[10px] uppercase tracking-wider font-bold ${body}`}
-                        >
-                          Internship Opportunity
-                        </p>
+                        {getStudentInitials(student)}
+                      </div>
 
-                        <p className="font-bold mt-1">
-                          {opportunity?.title || "Unknown Opportunity"}
-                        </p>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-base truncate">
+                          {studentName}
+                        </h3>
+
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                          <span className={`text-xs ${body}`}>
+                            ID: {student?.student_id || "N/A"}
+                          </span>
+
+                          <span className={`text-xs ${body}`}>
+                            {student?.program || "Program not specified"}
+                          </span>
+
+                          <span className={`text-xs ${body}`}>
+                            Year {student?.year_level || "N/A"}
+                          </span>
+                        </div>
 
                         <p className={`text-xs mt-1 ${body}`}>
-                          {company?.company_name || "Unknown Company"}
+                          {student?.users?.email || "No email"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <div className={`px-3 py-2 rounded-lg border ${border}`}>
+                        <p className={`text-[9px] uppercase font-bold ${body}`}>
+                          Applications
                         </p>
 
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <span
-                            className={`text-[10px] px-2 py-1 rounded-md ${
-                              darkMode
-                                ? "bg-slate-700 text-slate-300"
-                                : "bg-white text-slate-500"
-                            }`}
-                          >
-                            📍 {opportunity?.location || "N/A"}
-                          </span>
-
-                          <span
-                            className={`text-[10px] px-2 py-1 rounded-md ${
-                              darkMode
-                                ? "bg-slate-700 text-slate-300"
-                                : "bg-white text-slate-500"
-                            }`}
-                          >
-                            💼 {opportunity?.position_type || "N/A"}
-                          </span>
-
-                          <span
-                            className={`text-[10px] px-2 py-1 rounded-md ${
-                              darkMode
-                                ? "bg-slate-700 text-slate-300"
-                                : "bg-white text-slate-500"
-                            }`}
-                          >
-                            👥 {opportunity?.openings || 0} openings
-                          </span>
-                        </div>
-
-                        {/* INTERNSHIP PERIOD */}
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                          <div
-                            className={`rounded-lg border p-3 ${
-                              darkMode
-                                ? "border-slate-700 bg-slate-900/50"
-                                : "border-slate-200 bg-white"
-                            }`}
-                          >
-                            <p
-                              className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
-                            >
-                              Internship Start
-                            </p>
-
-                            <p className="text-xs font-semibold mt-1">
-                              {formatDate(
-                                getOpportunityStartDate(opportunity)
-                              )}
-                            </p>
-                          </div>
-
-                          <div
-                            className={`rounded-lg border p-3 ${
-                              darkMode
-                                ? "border-slate-700 bg-slate-900/50"
-                                : "border-slate-200 bg-white"
-                            }`}
-                          >
-                            <p
-                              className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
-                            >
-                              Internship End
-                            </p>
-
-                            <p className="text-xs font-semibold mt-1">
-                              {formatDate(
-                                getOpportunityEndDate(opportunity)
-                              )}
-                            </p>
-                          </div>
-                        </div>
+                        <p className="text-sm font-black mt-0.5">
+                          {group.applications.length}
+                        </p>
                       </div>
 
-                      {/* =================================================
-                          SUBMITTED
-                      ================================================= */}
-
-                      <p className={`text-[10px] mt-3 ${body}`}>
-                        Submitted{" "}
-                        {application.submitted_at
-                          ? new Date(
-                              application.submitted_at
-                            ).toLocaleString()
-                          : "Date unavailable"}
-                      </p>
-                    </div>
-
-                    {/* =================================================
-                        STATUS + ACTIONS
-                    ================================================= */}
-
-                    <div className="flex flex-col items-start lg:items-end gap-3 lg:min-w-[270px]">
-                      <span
-                        className={`inline-flex px-3 py-1.5 rounded-full border text-xs font-bold ${getStatusClass(
-                          application.status
-                        )}`}
-                      >
-                        {getStatusLabel(application.status)}
-                      </span>
-
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedApplication(application)
-                          }
-                          className={`px-3 py-2 rounded-lg border text-xs font-semibold ${
-                            darkMode
-                              ? "border-slate-700 text-slate-300 hover:bg-slate-800"
-                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      {submittedApplications > 0 && (
+                        <div
+                          className={`px-3 py-2 rounded-lg ${
+                            darkMode ? "bg-amber-950/30" : "bg-amber-50"
                           }`}
                         >
-                          View Details
-                        </button>
+                          <p className="text-[9px] uppercase font-bold text-amber-600">
+                            Submitted
+                          </p>
 
-                        <button
-                          type="button"
-                          disabled={processingId === application.id}
-                          onClick={() => handleApprove(application)}
-                          className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          {processingId === application.id
-                            ? "Processing..."
-                            : "Approve"}
-                        </button>
+                          <p className="text-sm font-black mt-0.5 text-amber-600">
+                            {submittedApplications}
+                          </p>
+                        </div>
+                      )}
 
-                        <button
-                          type="button"
-                          disabled={processingId === application.id}
-                          onClick={() =>
-                            handleRequestInformation(application)
-                          }
-                          className="px-3 py-2 rounded-lg border border-blue-200 text-blue-600 text-xs font-semibold hover:bg-blue-50 disabled:opacity-50"
+                      {underReviewApplications > 0 && (
+                        <div
+                          className={`px-3 py-2 rounded-lg ${
+                            darkMode ? "bg-violet-950/30" : "bg-violet-50"
+                          }`}
                         >
-                          Request Info
-                        </button>
+                          <p className="text-[9px] uppercase font-bold text-violet-600">
+                            Reviewing
+                          </p>
 
-                        <button
-                          type="button"
-                          disabled={processingId === application.id}
-                          onClick={() => handleReject(application)}
-                          className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50"
+                          <p className="text-sm font-black mt-0.5 text-violet-600">
+                            {underReviewApplications}
+                          </p>
+                        </div>
+                      )}
+
+                      {infoRequestedApplications > 0 && (
+                        <div
+                          className={`px-3 py-2 rounded-lg ${
+                            darkMode ? "bg-blue-950/30" : "bg-blue-50"
+                          }`}
                         >
-                          Reject
-                        </button>
-                      </div>
+                          <p className="text-[9px] uppercase font-bold text-blue-600">
+                            Info Needed
+                          </p>
+
+                          <p className="text-sm font-black mt-0.5 text-blue-600">
+                            {infoRequestedApplications}
+                          </p>
+                        </div>
+                      )}
                     </div>
+                  </div>
+
+                  {/* APPLICATIONS */}
+
+                  <div className="space-y-2">
+                    {group.applications.map((application, index) => {
+                      const opportunity = application.opportunities;
+                      const company = opportunity?.companies;
+
+                      return (
+                        <div
+                          key={application.id}
+                          className={`border rounded-xl p-3 md:p-4 transition ${
+                            darkMode
+                              ? "border-slate-700 bg-slate-800/40 hover:bg-slate-800/70"
+                              : "border-slate-200 bg-slate-50/70 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex flex-col xl:flex-row xl:items-center gap-4">
+                            <div
+                              className={`hidden sm:flex w-9 h-9 rounded-lg items-center justify-center flex-shrink-0 text-xs font-black ${
+                                darkMode
+                                  ? "bg-slate-700 text-slate-300"
+                                  : "bg-white text-slate-500 border border-slate-200"
+                              }`}
+                            >
+                              {String(index + 1).padStart(2, "0")}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-bold text-sm md:text-base truncate">
+                                  {opportunity?.title || "Unknown Opportunity"}
+                                </h4>
+
+                                <span
+                                  className={`inline-flex px-2 py-1 rounded-full border text-[9px] font-bold ${getStatusClass(
+                                    application.status
+                                  )}`}
+                                >
+                                  {getStatusLabel(application.status)}
+                                </span>
+                              </div>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {company?.company_name || "Unknown Company"}
+                              </p>
+
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                                <span className={`text-[10px] ${body}`}>
+                                  📍 {opportunity?.location || "N/A"}
+                                </span>
+
+                                <span className={`text-[10px] ${body}`}>
+                                  💼 {opportunity?.position_type || "N/A"}
+                                </span>
+
+                                <span className={`text-[10px] ${body}`}>
+                                  📅{" "}
+                                  {formatShortDate(
+                                    getOpportunityStartDate(opportunity)
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="xl:w-40 flex-shrink-0">
+                              <p
+                                className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
+                              >
+                                Submitted
+                              </p>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {application.submitted_at
+                                  ? new Date(
+                                      application.submitted_at
+                                    ).toLocaleDateString()
+                                  : "Date unavailable"}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 xl:justify-end flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedApplication(application)
+                                }
+                                className={`px-3 py-2 rounded-lg border text-xs font-bold ${
+                                  darkMode
+                                    ? "border-slate-700 text-slate-300 hover:bg-slate-700"
+                                    : "border-slate-200 text-slate-600 hover:bg-white"
+                                }`}
+                              >
+                                View Details
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={processingId === application.id}
+                                onClick={() => handleApprove(application)}
+                                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                {processingId === application.id
+                                  ? "..."
+                                  : "Approve"}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={processingId === application.id}
+                                onClick={() =>
+                                  handleRequestInformation(application)
+                                }
+                                className="px-3 py-2 rounded-lg border border-blue-200 text-blue-600 text-xs font-bold hover:bg-blue-50 disabled:opacity-50"
+                              >
+                                Request Info
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={processingId === application.id}
+                                onClick={() => handleReject(application)}
+                                className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -948,7 +1258,7 @@ export default function ReviewApplications() {
       </section>
 
       {/* =======================================================
-          DETAILS MODAL
+          APPLICATION DETAILS MODAL
       ======================================================= */}
 
       {selectedApplication && (
@@ -964,30 +1274,43 @@ export default function ReviewApplications() {
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            {/* HEADER */}
+            {/* MODAL HEADER */}
 
             <div className={`px-5 py-5 border-b ${border}`}>
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p
-                    className={`text-[10px] uppercase tracking-widest font-bold ${body}`}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 font-black ${
+                      darkMode
+                        ? "bg-slate-800 text-slate-200"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
                   >
-                    Application Details
-                  </p>
+                    {getStudentInitials(selectedApplication.students)}
+                  </div>
 
-                  <h2 className="text-xl font-black mt-1">
-                    {getStudentName(selectedApplication.students)}
-                  </h2>
+                  <div className="min-w-0">
+                    <p
+                      className={`text-[10px] uppercase tracking-widest font-bold ${body}`}
+                    >
+                      Application Details
+                    </p>
 
-                  <p className={`text-xs mt-1 ${body}`}>
-                    {selectedApplication.students?.student_id || "N/A"}
-                  </p>
+                    <h2 className="text-xl font-black mt-1 truncate">
+                      {getStudentName(selectedApplication.students)}
+                    </h2>
+
+                    <p className={`text-xs mt-1 ${body}`}>
+                      Student ID:{" "}
+                      {selectedApplication.students?.student_id || "N/A"}
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setSelectedApplication(null)}
-                  className={`w-9 h-9 rounded-lg text-xl ${
+                  className={`w-9 h-9 rounded-lg text-xl flex-shrink-0 ${
                     darkMode
                       ? "hover:bg-slate-800 text-slate-400"
                       : "hover:bg-slate-100 text-slate-500"
@@ -998,30 +1321,48 @@ export default function ReviewApplications() {
               </div>
             </div>
 
-            {/* CONTENT */}
+            {/* MODAL CONTENT */}
 
             <div className="p-5 space-y-6">
               {/* STATUS */}
 
-              <div className="flex items-center justify-between gap-3">
-                <span
-                  className={`inline-flex px-3 py-1.5 rounded-full border text-xs font-bold ${getStatusClass(
-                    selectedApplication.status
-                  )}`}
-                >
-                  {getStatusLabel(selectedApplication.status)}
-                </span>
+              <div
+                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${border}`}
+              >
+                <div>
+                  <p
+                    className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
+                  >
+                    Application Status
+                  </p>
 
-                <span className={`text-xs ${body}`}>
-                  {selectedApplication.submitted_at
-                    ? new Date(
-                        selectedApplication.submitted_at
-                      ).toLocaleString()
-                    : "Date unavailable"}
-                </span>
+                  <span
+                    className={`inline-flex mt-2 px-3 py-1.5 rounded-full border text-xs font-bold ${getStatusClass(
+                      selectedApplication.status
+                    )}`}
+                  >
+                    {getStatusLabel(selectedApplication.status)}
+                  </span>
+                </div>
+
+                <div className="sm:text-right">
+                  <p
+                    className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
+                  >
+                    Submitted
+                  </p>
+
+                  <p className="text-xs font-semibold mt-1">
+                    {selectedApplication.submitted_at
+                      ? new Date(
+                          selectedApplication.submitted_at
+                        ).toLocaleString()
+                      : "Date unavailable"}
+                  </p>
+                </div>
               </div>
 
-              {/* STUDENT */}
+              {/* STUDENT INFORMATION */}
 
               <section>
                 <h3 className="font-bold mb-3">Student Information</h3>
@@ -1052,7 +1393,7 @@ export default function ReviewApplications() {
                       Email
                     </p>
 
-                    <p className="text-sm font-semibold mt-1">
+                    <p className="text-sm font-semibold mt-1 break-all">
                       {selectedApplication.students?.users?.email || "N/A"}
                     </p>
                   </div>
@@ -1106,28 +1447,48 @@ export default function ReviewApplications() {
                       {selectedApplication.students?.gwa || "N/A"}
                     </p>
                   </div>
+
+                  <div
+                    className={`p-3 rounded-xl border sm:col-span-2 ${border}`}
+                  >
+                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      Address
+                    </p>
+
+                    <p className="text-sm font-semibold mt-1">
+                      {selectedApplication.students?.address || "N/A"}
+                    </p>
+                  </div>
                 </div>
               </section>
 
-              {/* OPPORTUNITY */}
+              {/* INTERNSHIP INFORMATION */}
 
               <section>
                 <h3 className="font-bold mb-3">Internship Information</h3>
 
-                <div className={`p-4 rounded-xl border ${border}`}>
-                  <p className={`text-[9px] uppercase font-bold ${body}`}>
-                    Position
-                  </p>
+                <div className={`rounded-xl border overflow-hidden ${border}`}>
+                  <div
+                    className={`p-4 ${
+                      darkMode ? "bg-slate-800/50" : "bg-slate-50"
+                    }`}
+                  >
+                    <p
+                      className={`text-[9px] uppercase tracking-wider font-bold ${body}`}
+                    >
+                      Position
+                    </p>
 
-                  <p className="font-bold mt-1">
-                    {selectedApplication.opportunities?.title || "N/A"}
-                  </p>
+                    <p className="font-black text-lg mt-1">
+                      {selectedApplication.opportunities?.title || "N/A"}
+                    </p>
 
-                  <p className={`text-xs mt-1 ${body}`}>
-                    {getCompanyName(selectedApplication)}
-                  </p>
+                    <p className={`text-xs mt-1 ${body}`}>
+                      {getCompanyName(selectedApplication)}
+                    </p>
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
                     <div>
                       <p className={`text-[9px] uppercase font-bold ${body}`}>
                         Location
@@ -1197,18 +1558,20 @@ export default function ReviewApplications() {
                 <h3 className="font-bold mb-3">Cover Letter</h3>
 
                 <div
-                  className={`p-4 rounded-xl border ${border} ${
-                    darkMode ? "bg-slate-800/50" : "bg-slate-50"
+                  className={`p-4 rounded-xl border ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-800/50"
+                      : "border-slate-200 bg-slate-50"
                   }`}
                 >
-                  <p className={`text-sm leading-6 ${body}`}>
+                  <p className="text-sm leading-6 whitespace-pre-wrap">
                     {selectedApplication.cover_letter ||
                       "No cover letter provided."}
                   </p>
                 </div>
               </section>
 
-              {/* COMPANY */}
+              {/* COMPANY INFORMATION */}
 
               <section>
                 <h3 className="font-bold mb-3">Company Information</h3>
@@ -1230,8 +1593,8 @@ export default function ReviewApplications() {
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.opportunities?.companies
-                        ?.industry || "N/A"}
+                      {selectedApplication.opportunities?.companies?.industry ||
+                        "N/A"}
                     </p>
                   </div>
 
@@ -1251,23 +1614,66 @@ export default function ReviewApplications() {
                       Company Email
                     </p>
 
-                    <p className="text-sm font-semibold mt-1">
+                    <p className="text-sm font-semibold mt-1 break-all">
                       {selectedApplication.opportunities?.companies
                         ?.company_email || "N/A"}
+                    </p>
+                  </div>
+
+                  <div
+                    className={`p-3 rounded-xl border sm:col-span-2 ${border}`}
+                  >
+                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      Website
+                    </p>
+
+                    <p className="text-sm font-semibold mt-1 break-all">
+                      {selectedApplication.opportunities?.companies?.website ||
+                        "N/A"}
                     </p>
                   </div>
                 </div>
               </section>
 
+              {/* REVIEW NOTES */}
+
+              {selectedApplication.notes && (
+                <section>
+                  <h3 className="font-bold mb-3">Registrar Notes</h3>
+
+                  <div
+                    className={`p-4 rounded-xl border ${
+                      darkMode
+                        ? "border-blue-900 bg-blue-950/20"
+                        : "border-blue-200 bg-blue-50"
+                    }`}
+                  >
+                    <p className="text-sm leading-6 whitespace-pre-wrap">
+                      {selectedApplication.notes}
+                    </p>
+                  </div>
+                </section>
+              )}
+
               {/* ACTIONS */}
 
               <div className={`pt-5 border-t ${border}`}>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end gap-2">
                   <button
                     type="button"
-                    disabled={
-                      processingId === selectedApplication.id
-                    }
+                    onClick={() => setSelectedApplication(null)}
+                    className={`px-4 py-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode
+                        ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Close
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={processingId === selectedApplication.id}
                     onClick={() =>
                       handleRequestInformation(selectedApplication)
                     }
@@ -1278,9 +1684,7 @@ export default function ReviewApplications() {
 
                   <button
                     type="button"
-                    disabled={
-                      processingId === selectedApplication.id
-                    }
+                    disabled={processingId === selectedApplication.id}
                     onClick={() => handleReject(selectedApplication)}
                     className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50"
                   >
@@ -1289,9 +1693,7 @@ export default function ReviewApplications() {
 
                   <button
                     type="button"
-                    disabled={
-                      processingId === selectedApplication.id
-                    }
+                    disabled={processingId === selectedApplication.id}
                     onClick={() => handleApprove(selectedApplication)}
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
                   >
@@ -1308,4 +1710,3 @@ export default function ReviewApplications() {
     </div>
   );
 }
-

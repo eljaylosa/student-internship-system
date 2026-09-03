@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { supabaseStudent } from "../../supabaseClient";
+
+// =========================================================
+// STATUS
+// =========================================================
 
 const STATUS = {
   opportunity: {
@@ -14,13 +18,27 @@ const STATUS = {
     UNDER_REVIEW: "under_review",
     INFO_REQUESTED: "info_requested",
     APPROVED: "approved",
+    ACCEPTED: "accepted",
     REJECTED: "rejected",
     WITHDRAWN: "withdrawn",
   },
+
+  assignment: {
+    PENDING: "pending",
+    ACTIVE: "active",
+    COMPLETED: "completed",
+    SUSPENDED: "suspended",
+    TERMINATED: "terminated",
+  },
 };
+
+// =========================================================
+// APPLICATION
+// =========================================================
 
 export default function Application() {
   const { darkMode } = useOutletContext();
+  const navigate = useNavigate();
 
   // =========================================================
   // STATE
@@ -29,18 +47,110 @@ export default function Application() {
   const [student, setStudent] = useState(null);
   const [opportunities, setOpportunities] = useState([]);
   const [applications, setApplications] = useState([]);
-  const [assignment, setAssignment] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+
+  // ---------------------------------------------------------
+  // OPPORTUNITY CAPACITY
+  //
+  // {
+  //   [opportunityId]: {
+  //     total_openings,
+  //     occupied_slots,
+  //     available_slots
+  //   }
+  // }
+  // ---------------------------------------------------------
+
+  const [capacityByOpportunityId, setCapacityByOpportunityId] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmingPlacement, setIsConfirmingPlacement] = useState(false);
 
   const [activeTab, setActiveTab] = useState("apply");
 
   const [opportunityId, setOpportunityId] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
 
-  // Used when a rejected application is being submitted again.
   const [isReapplying, setIsReapplying] = useState(false);
+
+  // =========================================================
+  // LOAD OPPORTUNITY CAPACITIES
+  // =========================================================
+
+  const loadOpportunityCapacities = async (opportunityList) => {
+    const activeOpportunities = (opportunityList || []).filter(
+      (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+    );
+
+    if (activeOpportunities.length === 0) {
+      setCapacityByOpportunityId({});
+      return;
+    }
+
+    const results = await Promise.all(
+      activeOpportunities.map(async (opportunity) => {
+        const { data, error } = await supabaseStudent.rpc(
+          "get_opportunity_capacity",
+          {
+            p_opportunity_id: opportunity.id,
+          }
+        );
+
+        if (error) {
+          console.error(
+            `Error loading capacity for opportunity ${opportunity.id}:`,
+            error
+          );
+
+          return {
+            opportunityId: opportunity.id,
+            capacity: null,
+          };
+        }
+
+        const capacity = Array.isArray(data) ? data[0] : data;
+
+        return {
+          opportunityId: opportunity.id,
+          capacity: capacity || null,
+        };
+      })
+    );
+
+    const capacityMap = results.reduce((map, item) => {
+      map[item.opportunityId] = item.capacity;
+      return map;
+    }, {});
+
+    setCapacityByOpportunityId(capacityMap);
+  };
+
+  // =========================================================
+  // GET CAPACITY FOR OPPORTUNITY
+  // =========================================================
+
+  const getOpportunityCapacity = (targetOpportunityId) => {
+    if (!targetOpportunityId) {
+      return null;
+    }
+
+    return capacityByOpportunityId[targetOpportunityId] || null;
+  };
+
+  // =========================================================
+  // CHECK IF OPPORTUNITY IS FULL
+  // =========================================================
+
+  const isOpportunityFull = (targetOpportunityId) => {
+    const capacity = getOpportunityCapacity(targetOpportunityId);
+
+    if (!capacity) {
+      return false;
+    }
+
+    return Number(capacity.available_slots) <= 0;
+  };
 
   // =========================================================
   // LOAD DATA
@@ -68,7 +178,7 @@ export default function Application() {
       }
 
       // -------------------------------------------------------
-      // GET STUDENT PROFILE
+      // GET STUDENT
       // -------------------------------------------------------
 
       const { data: studentData, error: studentError } = await supabaseStudent
@@ -88,10 +198,80 @@ export default function Application() {
       setStudent(studentData);
 
       // -------------------------------------------------------
-      // LOAD ACTIVE OPPORTUNITIES
+      // LOAD APPLICATIONS
+      //
+      // Applications are loaded independently from opportunity
+      // availability. A closed opportunity must NOT hide an
+      // existing student application.
       // -------------------------------------------------------
 
-      const { data: opportunityData, error: opportunityError } =
+      const { data: applicationData, error: applicationError } =
+        await supabaseStudent
+          .from("applications")
+          .select("*")
+          .eq("student_id", user.id)
+          .order("created_at", {
+            ascending: false,
+          });
+
+      if (applicationError) {
+        throw applicationError;
+      }
+
+      const loadedApplications = applicationData || [];
+
+      setApplications(loadedApplications);
+
+      // -------------------------------------------------------
+      // LOAD ALL ASSIGNMENTS
+      // -------------------------------------------------------
+
+      const { data: assignmentData, error: assignmentError } =
+        await supabaseStudent
+          .from("assignments")
+          .select(
+            `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at
+          `
+          )
+          .eq("student_id", user.id)
+          .in("status", [
+            STATUS.assignment.PENDING,
+            STATUS.assignment.ACTIVE,
+            STATUS.assignment.COMPLETED,
+            STATUS.assignment.SUSPENDED,
+            STATUS.assignment.TERMINATED,
+          ])
+          .order("created_at", {
+            ascending: false,
+          });
+
+      if (assignmentError) {
+        throw assignmentError;
+      }
+
+      const loadedAssignments = assignmentData || [];
+
+      setAssignments(loadedAssignments);
+
+      // -------------------------------------------------------
+      // LOAD ACTIVE OPPORTUNITIES
+      //
+      // These are the opportunities available for NEW
+      // applications.
+      // -------------------------------------------------------
+
+      const { data: activeOpportunityData, error: activeOpportunityError } =
         await supabaseStudent
           .from("opportunities")
           .select("*")
@@ -100,11 +280,63 @@ export default function Application() {
             ascending: false,
           });
 
-      if (opportunityError) {
-        throw opportunityError;
+      if (activeOpportunityError) {
+        throw activeOpportunityError;
       }
 
-      const loadedOpportunities = opportunityData || [];
+      const activeOpportunities = activeOpportunityData || [];
+
+      // -------------------------------------------------------
+      // GET OPPORTUNITIES REFERENCED BY EXISTING APPLICATIONS
+      // AND ASSIGNMENTS
+      //
+      // Existing opportunities are loaded even if CLOSED.
+      // -------------------------------------------------------
+
+      const existingOpportunityIds = [
+        ...new Set(
+          [
+            ...loadedApplications.map(
+              (application) => application.opportunity_id
+            ),
+            ...loadedAssignments.map((assignment) => assignment.opportunity_id),
+          ].filter(Boolean)
+        ),
+      ];
+
+      let existingOpportunities = [];
+
+      if (existingOpportunityIds.length > 0) {
+        const {
+          data: existingOpportunityData,
+          error: existingOpportunityError,
+        } = await supabaseStudent
+          .from("opportunities")
+          .select("*")
+          .in("id", existingOpportunityIds);
+
+        if (existingOpportunityError) {
+          throw existingOpportunityError;
+        }
+
+        existingOpportunities = existingOpportunityData || [];
+      }
+
+      // -------------------------------------------------------
+      // MERGE ACTIVE + EXISTING OPPORTUNITIES
+      // -------------------------------------------------------
+
+      const opportunityMap = new Map();
+
+      activeOpportunities.forEach((opportunity) => {
+        opportunityMap.set(opportunity.id, opportunity);
+      });
+
+      existingOpportunities.forEach((opportunity) => {
+        opportunityMap.set(opportunity.id, opportunity);
+      });
+
+      const loadedOpportunities = Array.from(opportunityMap.values());
 
       // -------------------------------------------------------
       // LOAD COMPANIES
@@ -145,7 +377,7 @@ export default function Application() {
       }
 
       // -------------------------------------------------------
-      // ATTACH COMPANY
+      // ATTACH COMPANIES
       // -------------------------------------------------------
 
       const opportunitiesWithCompanies = loadedOpportunities.map(
@@ -157,57 +389,30 @@ export default function Application() {
 
       setOpportunities(opportunitiesWithCompanies);
 
-      if (opportunitiesWithCompanies.length > 0) {
+      // -------------------------------------------------------
+      // LOAD CAPACITY
+      //
+      // Only ACTIVE opportunities need capacity for the Apply
+      // page. Historical CLOSED opportunities do not need it.
+      // -------------------------------------------------------
+
+      await loadOpportunityCapacities(opportunitiesWithCompanies);
+
+      // -------------------------------------------------------
+      // DEFAULT SELECTED OPPORTUNITY
+      // -------------------------------------------------------
+
+      const defaultActiveOpportunity = opportunitiesWithCompanies.find(
+        (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+      );
+
+      if (defaultActiveOpportunity) {
+        setOpportunityId(defaultActiveOpportunity.id);
+      } else if (opportunitiesWithCompanies.length > 0) {
         setOpportunityId(opportunitiesWithCompanies[0].id);
       } else {
         setOpportunityId("");
       }
-
-      // -------------------------------------------------------
-      // LOAD APPLICATIONS
-      // -------------------------------------------------------
-
-      const { data: applicationData, error: applicationError } =
-        await supabaseStudent
-          .from("applications")
-          .select("*")
-          .eq("student_id", user.id)
-          .order("created_at", {
-            ascending: false,
-          });
-
-      if (applicationError) {
-        throw applicationError;
-      }
-
-      setApplications(applicationData || []);
-
-      // -------------------------------------------------------
-      // LOAD ASSIGNMENT
-      // -------------------------------------------------------
-      // An assignment means the student already has an internship
-      // placement. Therefore, the student must not create another
-      // application.
-      //
-      // We only need to know whether an assignment exists.
-      // -------------------------------------------------------
-
-      const { data: assignmentData, error: assignmentError } =
-        await supabaseStudent
-          .from("assignments")
-          .select("*")
-          .eq("student_id", user.id)
-          .order("created_at", {
-            ascending: false,
-          })
-          .limit(1)
-          .maybeSingle();
-
-      if (assignmentError) {
-        throw assignmentError;
-      }
-
-      setAssignment(assignmentData || null);
     } catch (error) {
       console.error("Error loading student internship data:", error);
 
@@ -215,6 +420,76 @@ export default function Application() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // =========================================================
+  // ASSIGNMENT HELPERS
+  // =========================================================
+
+  const latestAssignment = assignments[0] || null;
+
+  const assignmentByApplicationId = useMemo(() => {
+    return assignments.reduce((map, assignment) => {
+      if (assignment.application_id) {
+        map[assignment.application_id] = assignment;
+      }
+
+      return map;
+    }, {});
+  }, [assignments]);
+
+  // ---------------------------------------------------------
+  // ACTIVE PLACEMENT
+  // ---------------------------------------------------------
+
+  const activePlacementAssignment = useMemo(() => {
+    return (
+      assignments.find((item) =>
+        [STATUS.assignment.PENDING, STATUS.assignment.ACTIVE].includes(
+          item.status
+        )
+      ) || null
+    );
+  }, [assignments]);
+
+  const hasActiveAssignment = Boolean(activePlacementAssignment);
+
+  // ---------------------------------------------------------
+  // COMPLETED PLACEMENT
+  //
+  // HISTORY ONLY.
+  // ---------------------------------------------------------
+
+  const completedPlacement = useMemo(() => {
+    return (
+      assignments.find(
+        (assignment) => assignment.status === STATUS.assignment.COMPLETED
+      ) || null
+    );
+  }, [assignments]);
+
+  const hasCompletedPlacement = Boolean(completedPlacement);
+
+  // ---------------------------------------------------------
+  // ANY ASSIGNMENT
+  // ---------------------------------------------------------
+
+  const hasAnyAssignment = assignments.length > 0;
+
+  // ---------------------------------------------------------
+  // CHECK COMPLETED PLACEMENT FOR SPECIFIC OPPORTUNITY
+  // ---------------------------------------------------------
+
+  const hasCompletedPlacementForOpportunity = (targetOpportunityId) => {
+    if (!targetOpportunityId) {
+      return false;
+    }
+
+    return assignments.some(
+      (assignment) =>
+        assignment.opportunity_id === targetOpportunityId &&
+        assignment.status === STATUS.assignment.COMPLETED
+    );
   };
 
   // =========================================================
@@ -226,6 +501,20 @@ export default function Application() {
   );
 
   // =========================================================
+  // SELECTED OPPORTUNITY AVAILABILITY
+  // =========================================================
+
+  const selectedOpportunityIsActive =
+    selectedOpportunity?.status === STATUS.opportunity.ACTIVE;
+
+  const selectedOpportunityCapacity = getOpportunityCapacity(opportunityId);
+
+  const selectedOpportunityIsFull =
+    selectedOpportunityIsActive &&
+    selectedOpportunityCapacity &&
+    Number(selectedOpportunityCapacity.available_slots) <= 0;
+
+  // =========================================================
   // APPLICATIONS FOR SELECTED OPPORTUNITY
   // =========================================================
 
@@ -233,41 +522,61 @@ export default function Application() {
     .filter((application) => application.opportunity_id === opportunityId)
     .sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
+
       const dateB = new Date(b.created_at || 0).getTime();
 
       return dateB - dateA;
     });
 
-  // Latest application is the one that controls the current state.
-  const existingApplication = applications.find(
-    (application) =>
-      application.opportunity_id === opportunityId &&
-      application.status !== STATUS.application.REJECTED
+  const existingApplication =
+    opportunityApplications.find(
+      (application) =>
+        application.status !== STATUS.application.WITHDRAWN &&
+        application.status !== STATUS.application.REJECTED
+    ) || opportunityApplications[0];
+
+  // =========================================================
+  // GLOBAL APPLICATION STATUS
+  // =========================================================
+
+  const approvedApplication = useMemo(() => {
+    return (
+      applications.find((application) => {
+        if (application.status !== STATUS.application.APPROVED) {
+          return false;
+        }
+
+        const relatedAssignment = assignmentByApplicationId[application.id];
+
+        return !relatedAssignment;
+      }) || null
+    );
+  }, [applications, assignmentByApplicationId]);
+
+  const hasPlacementOffer = Boolean(approvedApplication);
+
+  // =========================================================
+  // RESUME / CV REQUIREMENT
+  // =========================================================
+
+  const hasResume = Boolean(student?.resume_url);
+
+  // ---------------------------------------------------------
+  // LEGACY ACCEPTED APPLICATION
+  // ---------------------------------------------------------
+
+  const acceptedApplication = applications.find(
+    (application) => application.status === STATUS.application.ACCEPTED
   );
 
-  // =========================================================
-  // GLOBAL INTERNSHIP STATUS
-  // =========================================================
-  //
-  // A student is considered to have an active/final placement
-  // when:
-  //
-  // 1. Any application is APPROVED
-  // OR
-  // 2. An assignment already exists
-  //
-  // Submitted / Under Review / Info Requested / Rejected /
-  // Withdrawn / Draft do NOT block applications to other
-  // opportunities.
-  // =========================================================
+  const hasAcceptedApplication = Boolean(acceptedApplication);
 
-  const hasApprovedApplication = applications.some(
-    (application) => application.status === STATUS.application.APPROVED
-  );
+  // ---------------------------------------------------------
+  // FINAL PLACEMENT
+  // ---------------------------------------------------------
 
-  const hasActiveAssignment = Boolean(assignment);
-
-  const hasActiveInternship = hasApprovedApplication || hasActiveAssignment;
+  const hasFinalPlacement =
+    hasActiveAssignment || hasAcceptedApplication || hasCompletedPlacement;
 
   // =========================================================
   // FORMAT DATE
@@ -279,7 +588,6 @@ export default function Application() {
     }
 
     const dateString = String(date).split("T")[0];
-
     const parts = dateString.split("-");
 
     if (parts.length === 3) {
@@ -310,6 +618,30 @@ export default function Application() {
   };
 
   // =========================================================
+  // FORMAT DATE/TIME
+  // =========================================================
+
+  const formatDateTime = (date) => {
+    if (!date) {
+      return "Not specified";
+    }
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "Not specified";
+    }
+
+    return parsedDate.toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  // =========================================================
   // FORMAT INTERNSHIP PERIOD
   // =========================================================
 
@@ -318,8 +650,10 @@ export default function Application() {
       return "Not specified";
     }
 
-    const start = opportunity.internship_start_date;
-    const end = opportunity.internship_end_date;
+    const start =
+      opportunity.internship_start_date || opportunity.internship_start;
+
+    const end = opportunity.internship_end_date || opportunity.internship_end;
 
     if (start && end) {
       return `${formatDate(start)} – ${formatDate(end)}`;
@@ -337,25 +671,56 @@ export default function Application() {
   };
 
   // =========================================================
-  // STYLES
+  // FORMAT STATUS
   // =========================================================
 
-  const input = darkMode
-    ? "bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500"
-    : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400";
+  const formatStatus = (status) => {
+    if (!status) {
+      return "Unknown";
+    }
 
-  const card = darkMode
-    ? "bg-slate-900 border-slate-700"
-    : "bg-white border-slate-200";
+    return status
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+  };
 
   // =========================================================
-  // STATUS COLOR
+  // REJECTION INFO
+  // =========================================================
+
+  const getRejectionInfo = (application) => {
+    const notes = application?.notes?.trim() || "";
+
+    if (notes.includes("Company rejected the internship placement.")) {
+      const reasonIndex = notes.lastIndexOf("Reason:");
+
+      return {
+        source: "Company",
+        reason:
+          reasonIndex !== -1
+            ? notes.substring(reasonIndex + "Reason:".length).trim()
+            : notes,
+      };
+    }
+
+    return {
+      source: "Registrar",
+      reason: notes || "No rejection reason was provided.",
+    };
+  };
+
+  // =========================================================
+  // STATUS TONE
   // =========================================================
 
   const statusTone = (status) => {
     switch (status) {
-      case STATUS.application.APPROVED:
+      case STATUS.application.ACCEPTED:
         return "text-emerald-600";
+
+      case STATUS.application.APPROVED:
+        return "text-blue-600";
 
       case STATUS.application.REJECTED:
         return "text-red-600";
@@ -381,18 +746,126 @@ export default function Application() {
   };
 
   // =========================================================
-  // FORMAT STATUS
+  // ASSIGNMENT STATUS DISPLAY
   // =========================================================
 
-  const formatStatus = (status) => {
-    if (!status) {
-      return "Unknown";
+  const getAssignmentStatusInfo = (assignment) => {
+    if (!assignment) {
+      return null;
     }
 
-    return status
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
+    switch (assignment.status) {
+      case STATUS.assignment.PENDING:
+        if (assignment.deployed_at) {
+          return {
+            title: "Waiting for Company Decision",
+            description:
+              "Your internship has been deployed to the company and is waiting for their decision.",
+            icon: "⏳",
+            tone: "blue",
+          };
+        }
+
+        return {
+          title: "Placement Confirmed",
+          description:
+            "You confirmed this internship placement. It is waiting for deployment.",
+          icon: "✓",
+          tone: "blue",
+        };
+
+      case STATUS.assignment.ACTIVE:
+        return {
+          title: "Internship Active",
+          description:
+            "The company accepted your placement. Your internship is now active.",
+          icon: "🎉",
+          tone: "emerald",
+        };
+
+      case STATUS.assignment.COMPLETED:
+        return {
+          title: "Internship Completed",
+          description:
+            "Your internship placement has been completed successfully.",
+          icon: "🎓",
+          tone: "emerald",
+        };
+
+      case STATUS.assignment.SUSPENDED:
+        return {
+          title: "Internship Suspended",
+          description: "Your internship placement is currently suspended.",
+          icon: "⏸️",
+          tone: "amber",
+        };
+
+      case STATUS.assignment.TERMINATED:
+        return {
+          title: "Placement Terminated",
+          description: "This internship placement has been terminated.",
+          icon: "⚠️",
+          tone: "red",
+        };
+
+      default:
+        return {
+          title: formatStatus(assignment.status),
+          description: "Your internship placement has been updated.",
+          icon: "ℹ️",
+          tone: "blue",
+        };
+    }
+  };
+
+  // =========================================================
+  // APPLY AGAIN ELIGIBILITY
+  // =========================================================
+
+  const canApplyAgain = (targetOpportunityId) => {
+    if (!targetOpportunityId) {
+      return false;
+    }
+
+    const targetOpportunity = opportunities.find(
+      (opportunity) => opportunity.id === targetOpportunityId
+    );
+
+    // New application must target ACTIVE.
+    if (
+      !targetOpportunity ||
+      targetOpportunity.status !== STATUS.opportunity.ACTIVE
+    ) {
+      return false;
+    }
+
+    // Current placement blocks another application.
+    if (hasActiveAssignment) {
+      return false;
+    }
+
+    // Pending placement offer blocks another application.
+    if (hasPlacementOffer) {
+      return false;
+    }
+
+    // Do not reapply to the exact opportunity
+    // already completed.
+    if (hasCompletedPlacementForOpportunity(targetOpportunityId)) {
+      return false;
+    }
+
+    // -------------------------------------------------------
+    // CAPACITY CHECK
+    // -------------------------------------------------------
+
+    const capacity = getOpportunityCapacity(targetOpportunityId);
+
+    if (capacity && Number(capacity.available_slots) <= 0) {
+      return false;
+    }
+
+    return true;
   };
 
   // =========================================================
@@ -400,19 +873,28 @@ export default function Application() {
   // =========================================================
 
   const handleSelectOpportunity = (opportunity) => {
+    if (!opportunity) {
+      return;
+    }
+
     setOpportunityId(opportunity.id);
     setIsReapplying(false);
 
-    const opportunityApplications = applications
+    const selectedApplications = applications
       .filter((item) => item.opportunity_id === opportunity.id)
       .sort((a, b) => {
         const dateA = new Date(a.created_at || 0).getTime();
+
         const dateB = new Date(b.created_at || 0).getTime();
 
         return dateB - dateA;
       });
 
-    const application = opportunityApplications[0];
+    const application = selectedApplications.find(
+      (item) =>
+        item.status !== STATUS.application.WITHDRAWN &&
+        item.status !== STATUS.application.REJECTED
+    );
 
     if (
       application?.status === STATUS.application.DRAFT ||
@@ -425,7 +907,212 @@ export default function Application() {
   };
 
   // =========================================================
-  // UPDATE + RESUBMIT INFORMATION REQUEST
+  // CONFIRM PLACEMENT
+  // =========================================================
+
+  const handleConfirmPlacement = async (application) => {
+    if (!application) {
+      return;
+    }
+
+    if (application.status !== STATUS.application.APPROVED) {
+      alert("This application is no longer waiting for confirmation.");
+      return;
+    }
+
+    const existingAssignment = assignmentByApplicationId[application.id];
+
+    if (existingAssignment) {
+      alert("This internship placement has already been confirmed.");
+      return;
+    }
+
+    if (hasActiveAssignment) {
+      alert("You already have a confirmed internship placement.");
+      return;
+    }
+
+    const opportunity = opportunities.find(
+      (item) => item.id === application.opportunity_id
+    );
+
+    if (!opportunity) {
+      alert(
+        "The internship opportunity associated with this application could not be loaded."
+      );
+      return;
+    }
+
+    const companyName = opportunity?.companies?.company_name || "this company";
+
+    const opportunityTitle =
+      opportunity?.title || "this internship opportunity";
+
+    const confirmed = window.confirm(
+      `Confirm your internship placement with ${companyName}?\n\n` +
+        `${opportunityTitle}\n\n` +
+        `Once confirmed, an internship assignment will be created and your other active applications will be withdrawn.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsConfirmingPlacement(true);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      const { data: newAssignment, error: rpcError } =
+        await supabaseStudent.rpc("confirm_internship_application", {
+          p_application_id: application.id,
+        });
+
+      if (rpcError) {
+        throw rpcError;
+      }
+
+      const createdAssignment = Array.isArray(newAssignment)
+        ? newAssignment[0]
+        : newAssignment;
+
+      if (!createdAssignment) {
+        throw new Error(
+          "The internship placement was confirmed, but no assignment was returned."
+        );
+      }
+
+      await loadData();
+
+      setActiveTab("status");
+
+      alert(
+        "Internship placement confirmed successfully. Your assignment has been created."
+      );
+    } catch (error) {
+      console.error("Error confirming internship placement:", error);
+
+      alert(
+        error.message ||
+          "Unable to confirm the internship placement. Please try again."
+      );
+    } finally {
+      setIsConfirmingPlacement(false);
+    }
+  };
+
+  // =========================================================
+  // DECLINE PLACEMENT
+  // =========================================================
+
+  const handleDeclinePlacement = async (application) => {
+    if (!application) {
+      return;
+    }
+
+    if (application.status !== STATUS.application.APPROVED) {
+      alert("This application is no longer waiting for confirmation.");
+      return;
+    }
+
+    const existingAssignment = assignmentByApplicationId[application.id];
+
+    if (existingAssignment) {
+      alert(
+        "This internship placement has already been confirmed and can no longer be declined."
+      );
+      return;
+    }
+
+    const opportunity = opportunities.find(
+      (item) => item.id === application.opportunity_id
+    );
+
+    if (!opportunity) {
+      alert(
+        "The internship opportunity associated with this application could not be loaded."
+      );
+      return;
+    }
+
+    const companyName = opportunity?.companies?.company_name || "this company";
+
+    const confirmed = window.confirm(
+      `Decline the internship placement offered by ${companyName}?\n\n` +
+        `Your other applications will remain available for review.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsConfirmingPlacement(true);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      const { data: declinedApplication, error: rpcError } =
+        await supabaseStudent.rpc("decline_internship_placement", {
+          p_application_id: application.id,
+        });
+
+      if (rpcError) {
+        throw rpcError;
+      }
+
+      const updatedApplication = Array.isArray(declinedApplication)
+        ? declinedApplication[0]
+        : declinedApplication;
+
+      if (updatedApplication) {
+        setApplications((previous) =>
+          previous.map((item) =>
+            item.id === updatedApplication.id ? updatedApplication : item
+          )
+        );
+      }
+
+      setActiveTab("status");
+
+      alert(
+        "Placement declined. Your other internship applications remain available."
+      );
+    } catch (error) {
+      console.error("Error declining internship placement:", error);
+
+      alert(
+        error.message ||
+          "Unable to decline the internship placement. Please try again."
+      );
+    } finally {
+      setIsConfirmingPlacement(false);
+    }
+  };
+
+  // =========================================================
+  // RESUBMIT INFORMATION REQUEST
   // =========================================================
 
   const handleResubmitInformation = async () => {
@@ -436,6 +1123,13 @@ export default function Application() {
 
     if (!selectedOpportunity) {
       alert("The selected internship opportunity could not be found.");
+      return;
+    }
+
+    if (!hasResume) {
+      alert(
+        "Please upload your Resume/CV in your Student Profile before submitting an internship application."
+      );
       return;
     }
 
@@ -516,7 +1210,7 @@ export default function Application() {
   };
 
   // =========================================================
-  // APPLY AGAIN AFTER REJECTION
+  // APPLY AGAIN
   // =========================================================
 
   const handleApplyAgain = (opportunity) => {
@@ -524,15 +1218,41 @@ export default function Application() {
       return;
     }
 
+    if (opportunity.status !== STATUS.opportunity.ACTIVE) {
+      alert(
+        "This internship opportunity is closed and is no longer accepting new applications."
+      );
+      return;
+    }
+
+    if (hasCompletedPlacementForOpportunity(opportunity.id)) {
+      alert("You have already completed your internship for this opportunity.");
+      return;
+    }
+
+    if (hasActiveAssignment) {
+      alert(
+        "You already have a confirmed internship placement. You cannot apply to another opportunity."
+      );
+      return;
+    }
+
+    if (hasPlacementOffer) {
+      alert(
+        "You currently have an internship placement offer waiting for your confirmation. Please confirm or decline that offer before applying again."
+      );
+      return;
+    }
+
     // -------------------------------------------------------
-    // IMPORTANT:
-    // Applying again must NOT bypass the global internship
-    // restriction.
+    // CAPACITY CHECK
     // -------------------------------------------------------
 
-    if (hasActiveInternship) {
+    const capacity = getOpportunityCapacity(opportunity.id);
+
+    if (capacity && Number(capacity.available_slots) <= 0) {
       alert(
-        "You already have an approved internship placement. You cannot apply to another opportunity."
+        "This internship opportunity is currently full. No available slot remains."
       );
       return;
     }
@@ -558,22 +1278,34 @@ export default function Application() {
       return;
     }
 
+    if (!hasResume) {
+      alert(
+        "Please upload your Resume/CV in your Student Profile before submitting an internship application."
+      );
+      return;
+    }
+
     if (!selectedOpportunity) {
       alert("Please select an internship opportunity.");
       return;
     }
 
     // -------------------------------------------------------
-    // EXISTING APPLICATION MAINTENANCE
+    // NEW APPLICATION ON CLOSED OPPORTUNITY
     // -------------------------------------------------------
-    //
-    // These existing application flows remain allowed even if
-    // the student has multiple applications:
-    //
-    // - Information Requested → Resubmit
-    // - Draft → Submit
-    //
-    // They are NOT new applications.
+
+    if (
+      selectedOpportunity.status !== STATUS.opportunity.ACTIVE &&
+      isReapplying
+    ) {
+      alert(
+        "This internship opportunity is closed and cannot accept a new application."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // EXISTING APPLICATION MAINTENANCE
     // -------------------------------------------------------
 
     if (
@@ -593,22 +1325,43 @@ export default function Application() {
     }
 
     // -------------------------------------------------------
-    // GLOBAL INTERNSHIP RESTRICTION
-    // -------------------------------------------------------
-    //
-    // This MUST happen before the normal duplicate/reapply
-    // checks so "Apply Again" cannot bypass it.
+    // BRAND-NEW APPLICATIONS REQUIRE ACTIVE OPPORTUNITY
     // -------------------------------------------------------
 
-    if (hasActiveInternship) {
+    if (selectedOpportunity.status !== STATUS.opportunity.ACTIVE) {
       alert(
-        "You already have an approved internship placement. You cannot apply to another opportunity."
+        "This internship opportunity is closed and is no longer accepting new applications."
       );
       return;
     }
 
     // -------------------------------------------------------
-    // DUPLICATE APPLICATION FOR SAME OPPORTUNITY
+    // ACTIVE PLACEMENT RESTRICTION
+    // -------------------------------------------------------
+
+    if (hasActiveAssignment) {
+      alert(
+        "You already have a confirmed internship placement. You cannot apply to another opportunity."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // PLACEMENT OFFER RESTRICTION
+    // -------------------------------------------------------
+
+    if (
+      hasPlacementOffer &&
+      approvedApplication?.id !== existingApplication?.id
+    ) {
+      alert(
+        "You have an internship placement offer waiting for confirmation. Please confirm or decline that offer before submitting another application."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // DUPLICATE APPLICATION
     // -------------------------------------------------------
 
     if (
@@ -617,6 +1370,7 @@ export default function Application() {
         STATUS.application.REJECTED,
         STATUS.application.DRAFT,
         STATUS.application.INFO_REQUESTED,
+        STATUS.application.WITHDRAWN,
       ].includes(existingApplication.status) &&
       !isReapplying
     ) {
@@ -648,51 +1402,133 @@ export default function Application() {
       }
 
       // -------------------------------------------------------
-      // FINAL CLIENT-SIDE SAFETY CHECK
-      // -------------------------------------------------------
-      //
-      // Re-check applications and assignments immediately before
-      // creating a new application.
-      //
-      // This protects against stale frontend state.
+      // FINAL APPLICATION CHECK
       // -------------------------------------------------------
 
       const { data: latestApplications, error: latestApplicationsError } =
         await supabaseStudent
           .from("applications")
-          .select("id, status")
+          .select("id, status, opportunity_id")
           .eq("student_id", user.id);
 
       if (latestApplicationsError) {
         throw latestApplicationsError;
       }
 
-      const { data: latestAssignment, error: latestAssignmentError } =
+      // -------------------------------------------------------
+      // FINAL ASSIGNMENT CHECK
+      // -------------------------------------------------------
+
+      const { data: latestAssignments, error: latestAssignmentError } =
         await supabaseStudent
           .from("assignments")
-          .select("id")
-          .eq("student_id", user.id)
-          .limit(1)
-          .maybeSingle();
+          .select("id, application_id, opportunity_id, status")
+          .eq("student_id", user.id);
 
       if (latestAssignmentError) {
         throw latestAssignmentError;
       }
 
-      const latestHasApprovedApplication = (latestApplications || []).some(
-        (application) => application.status === STATUS.application.APPROVED
+      const finalAssignments = latestAssignments || [];
+
+      // -------------------------------------------------------
+      // ONLY PENDING + ACTIVE BLOCK
+      // -------------------------------------------------------
+
+      const finalHasActiveAssignment = finalAssignments.some(
+        (assignment) =>
+          assignment.status === STATUS.assignment.PENDING ||
+          assignment.status === STATUS.assignment.ACTIVE
       );
 
-      const latestHasAssignment = Boolean(latestAssignment);
+      const latestHasPlacementOffer = (latestApplications || []).some(
+        (application) =>
+          application.status === STATUS.application.APPROVED &&
+          !finalAssignments.some(
+            (assignment) => assignment.application_id === application.id
+          )
+      );
 
-      if (latestHasApprovedApplication || latestHasAssignment) {
+      if (finalHasActiveAssignment) {
         throw new Error(
-          "You already have an approved internship placement. You cannot apply to another opportunity."
+          "You already have a confirmed internship placement. You cannot apply to another opportunity."
+        );
+      }
+
+      if (latestHasPlacementOffer) {
+        throw new Error(
+          "You have an internship placement offer waiting for confirmation. Please confirm or decline that offer before submitting another application."
         );
       }
 
       // -------------------------------------------------------
-      // CREATE NEW APPLICATION
+      // FINAL OPPORTUNITY STATUS CHECK
+      // -------------------------------------------------------
+
+      const { data: latestOpportunity, error: latestOpportunityError } =
+        await supabaseStudent
+          .from("opportunities")
+          .select("id, status")
+          .eq("id", selectedOpportunity.id)
+          .maybeSingle();
+
+      if (latestOpportunityError) {
+        throw latestOpportunityError;
+      }
+
+      if (!latestOpportunity) {
+        throw new Error(
+          "The selected internship opportunity could not be found."
+        );
+      }
+
+      if (latestOpportunity.status !== STATUS.opportunity.ACTIVE) {
+        throw new Error(
+          "This internship opportunity has been closed and is no longer accepting new applications."
+        );
+      }
+
+      // -------------------------------------------------------
+      // FINAL CAPACITY CHECK
+      //
+      // IMPORTANT:
+      // Capacity may have changed after the page loaded.
+      // This checks the database again immediately before
+      // creating the new application.
+      // -------------------------------------------------------
+
+      const { data: latestCapacityData, error: latestCapacityError } =
+        await supabaseStudent.rpc("get_opportunity_capacity", {
+          p_opportunity_id: selectedOpportunity.id,
+        });
+
+      if (latestCapacityError) {
+        throw latestCapacityError;
+      }
+
+      const latestCapacity = Array.isArray(latestCapacityData)
+        ? latestCapacityData[0]
+        : latestCapacityData;
+
+      if (!latestCapacity) {
+        throw new Error(
+          "Unable to verify the available slots for this internship opportunity."
+        );
+      }
+
+      if (Number(latestCapacity.available_slots) <= 0) {
+        setCapacityByOpportunityId((previous) => ({
+          ...previous,
+          [selectedOpportunity.id]: latestCapacity,
+        }));
+
+        throw new Error(
+          "This internship opportunity is now full. No available slot remains."
+        );
+      }
+
+      // -------------------------------------------------------
+      // CREATE APPLICATION
       // -------------------------------------------------------
 
       const { data: newApplication, error: insertError } = await supabaseStudent
@@ -709,8 +1545,10 @@ export default function Application() {
 
       if (insertError) {
         if (insertError.code === "23505") {
+          console.error("DUPLICATE APPLICATION ERROR:", insertError);
+
           throw new Error(
-            "Unable to create a new application because a duplicate application was detected."
+            `Duplicate application error: ${insertError.message}`
           );
         }
 
@@ -747,6 +1585,13 @@ export default function Application() {
       return;
     }
 
+    if (!hasResume) {
+      alert(
+        "Please upload your Resume/CV in your Student Profile before submitting an internship application."
+      );
+      return;
+    }
+
     if (!coverLetter.trim()) {
       alert("Please provide a cover letter before submitting.");
       return;
@@ -767,6 +1612,56 @@ export default function Application() {
       if (!user) {
         throw new Error("You are not logged in.");
       }
+
+      // -------------------------------------------------------
+      // ACTIVE ASSIGNMENT CHECK
+      // -------------------------------------------------------
+
+      const { data: latestAssignment, error: latestAssignmentError } =
+        await supabaseStudent
+          .from("assignments")
+          .select("id, status")
+          .eq("student_id", user.id)
+          .in("status", [STATUS.assignment.PENDING, STATUS.assignment.ACTIVE])
+          .limit(1)
+          .maybeSingle();
+
+      if (latestAssignmentError) {
+        throw latestAssignmentError;
+      }
+
+      const { data: latestApplications, error: latestApplicationsError } =
+        await supabaseStudent
+          .from("applications")
+          .select("id, status")
+          .eq("student_id", user.id);
+
+      if (latestApplicationsError) {
+        throw latestApplicationsError;
+      }
+
+      const hasApprovedOffer = (latestApplications || []).some(
+        (application) =>
+          application.status === STATUS.application.APPROVED &&
+          !assignmentByApplicationId[application.id]
+      );
+
+      if (latestAssignment) {
+        throw new Error("You already have a confirmed internship placement.");
+      }
+
+      if (
+        hasApprovedOffer &&
+        existingApplication.status !== STATUS.application.APPROVED
+      ) {
+        throw new Error(
+          "You have an internship placement offer waiting for confirmation. Please confirm or decline that offer first."
+        );
+      }
+
+      // -------------------------------------------------------
+      // EXISTING DRAFT CAN CONTINUE EVEN IF OPPORTUNITY CLOSED
+      // -------------------------------------------------------
 
       const { data: updatedApplication, error: updateError } =
         await supabaseStudent
@@ -831,7 +1726,7 @@ export default function Application() {
     }
 
     // -------------------------------------------------------
-    // EXISTING DRAFT CAN STILL BE UPDATED
+    // EXISTING DRAFT
     // -------------------------------------------------------
 
     if (existingApplication?.status === STATUS.application.DRAFT) {
@@ -888,15 +1783,30 @@ export default function Application() {
     }
 
     // -------------------------------------------------------
-    // REJECTED APPLICATION
+    // REJECTED / WITHDRAWN
     // -------------------------------------------------------
 
-    if (existingApplication?.status === STATUS.application.REJECTED) {
-      // A rejected application is allowed to create a new draft
-      // only if the student has not already been approved/deployed.
-      if (hasActiveInternship) {
+    if (
+      existingApplication?.status === STATUS.application.REJECTED ||
+      existingApplication?.status === STATUS.application.WITHDRAWN
+    ) {
+      if (hasActiveAssignment) {
         alert(
-          "You already have an approved internship placement. You cannot create another application."
+          "You already have a confirmed internship placement. You cannot create another application."
+        );
+        return;
+      }
+
+      if (hasPlacementOffer) {
+        alert(
+          "You have an internship placement offer waiting for confirmation. Please decide on that offer first."
+        );
+        return;
+      }
+
+      if (selectedOpportunity.status !== STATUS.opportunity.ACTIVE) {
+        alert(
+          "This internship opportunity is closed and is no longer accepting new applications."
         );
         return;
       }
@@ -917,12 +1827,34 @@ export default function Application() {
     }
 
     // -------------------------------------------------------
-    // GLOBAL INTERNSHIP RESTRICTION
+    // NEW DRAFT REQUIRES ACTIVE OPPORTUNITY
     // -------------------------------------------------------
 
-    if (hasActiveInternship) {
+    if (selectedOpportunity.status !== STATUS.opportunity.ACTIVE) {
       alert(
-        "You already have an approved internship placement. You cannot apply to another opportunity."
+        "This internship opportunity is closed and is no longer accepting new applications."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // ACTIVE PLACEMENT
+    // -------------------------------------------------------
+
+    if (hasActiveAssignment) {
+      alert(
+        "You already have a confirmed internship placement. You cannot create another application."
+      );
+      return;
+    }
+
+    // -------------------------------------------------------
+    // PENDING OFFER
+    // -------------------------------------------------------
+
+    if (hasPlacementOffer) {
+      alert(
+        "You have an internship placement offer waiting for confirmation. Please confirm or decline that offer first."
       );
       return;
     }
@@ -944,7 +1876,7 @@ export default function Application() {
       }
 
       // -------------------------------------------------------
-      // FINAL CHECK BEFORE CREATING A NEW DRAFT
+      // FINAL CHECK
       // -------------------------------------------------------
 
       const { data: latestApplications, error: latestApplicationsError } =
@@ -957,30 +1889,105 @@ export default function Application() {
         throw latestApplicationsError;
       }
 
-      const { data: latestAssignment, error: latestAssignmentError } =
+      const { data: latestAssignments, error: latestAssignmentError } =
         await supabaseStudent
           .from("assignments")
-          .select("id")
-          .eq("student_id", user.id)
-          .limit(1)
-          .maybeSingle();
+          .select("id, application_id, status")
+          .eq("student_id", user.id);
 
       if (latestAssignmentError) {
         throw latestAssignmentError;
       }
 
-      const latestHasApprovedApplication = (latestApplications || []).some(
-        (application) => application.status === STATUS.application.APPROVED
+      const latestActiveAssignment = (latestAssignments || []).find(
+        (assignment) =>
+          assignment.status === STATUS.assignment.PENDING ||
+          assignment.status === STATUS.assignment.ACTIVE
       );
 
-      if (latestHasApprovedApplication || latestAssignment) {
+      const hasApproved = (latestApplications || []).some(
+        (application) =>
+          application.status === STATUS.application.APPROVED &&
+          !(latestAssignments || []).some(
+            (assignment) => assignment.application_id === application.id
+          )
+      );
+
+      if (latestActiveAssignment) {
         throw new Error(
-          "You already have an approved internship placement. You cannot create another application."
+          "You already have a confirmed internship placement. You cannot create another application."
+        );
+      }
+
+      if (hasApproved) {
+        throw new Error(
+          "You have an internship placement offer waiting for confirmation. Please confirm or decline that offer first."
         );
       }
 
       // -------------------------------------------------------
-      // CREATE NEW DRAFT
+      // FINAL OPPORTUNITY STATUS CHECK
+      // -------------------------------------------------------
+
+      const { data: latestOpportunity, error: latestOpportunityError } =
+        await supabaseStudent
+          .from("opportunities")
+          .select("id, status")
+          .eq("id", selectedOpportunity.id)
+          .maybeSingle();
+
+      if (latestOpportunityError) {
+        throw latestOpportunityError;
+      }
+
+      if (!latestOpportunity) {
+        throw new Error(
+          "The selected internship opportunity could not be found."
+        );
+      }
+
+      if (latestOpportunity.status !== STATUS.opportunity.ACTIVE) {
+        throw new Error(
+          "This internship opportunity has been closed and is no longer accepting new applications."
+        );
+      }
+
+      // -------------------------------------------------------
+      // FINAL CAPACITY CHECK
+      // -------------------------------------------------------
+
+      const { data: latestCapacityData, error: latestCapacityError } =
+        await supabaseStudent.rpc("get_opportunity_capacity", {
+          p_opportunity_id: selectedOpportunity.id,
+        });
+
+      if (latestCapacityError) {
+        throw latestCapacityError;
+      }
+
+      const latestCapacity = Array.isArray(latestCapacityData)
+        ? latestCapacityData[0]
+        : latestCapacityData;
+
+      if (!latestCapacity) {
+        throw new Error(
+          "Unable to verify the available slots for this internship opportunity."
+        );
+      }
+
+      if (Number(latestCapacity.available_slots) <= 0) {
+        setCapacityByOpportunityId((previous) => ({
+          ...previous,
+          [selectedOpportunity.id]: latestCapacity,
+        }));
+
+        throw new Error(
+          "This internship opportunity is now full. No available slot remains."
+        );
+      }
+
+      // -------------------------------------------------------
+      // CREATE DRAFT
       // -------------------------------------------------------
 
       const { data: newDraft, error: insertError } = await supabaseStudent
@@ -996,8 +2003,10 @@ export default function Application() {
 
       if (insertError) {
         if (insertError.code === "23505") {
+          console.error("DUPLICATE APPLICATION ERROR:", insertError);
+
           throw new Error(
-            "An application already exists for this opportunity."
+            `Duplicate application error: ${insertError.message}`
           );
         }
 
@@ -1017,6 +2026,14 @@ export default function Application() {
   };
 
   // =========================================================
+  // OPEN STATUS PAGE
+  // =========================================================
+
+  const handleViewStatusPage = () => {
+    navigate("/student/status");
+  };
+
+  // =========================================================
   // LOADING
   // =========================================================
 
@@ -1027,7 +2044,13 @@ export default function Application() {
           darkMode ? "text-slate-100" : "text-slate-900"
         }`}
       >
-        <div className={`border rounded-2xl p-10 text-center ${card}`}>
+        <div
+          className={`border rounded-2xl p-10 text-center ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
           <div className="text-2xl mb-3">⏳</div>
 
           <h3 className="font-bold">Loading internship opportunities...</h3>
@@ -1041,7 +2064,7 @@ export default function Application() {
   }
 
   // =========================================================
-  // RETURN
+  // MAIN
   // =========================================================
 
   return (
@@ -1066,8 +2089,8 @@ export default function Application() {
             darkMode ? "text-slate-400" : "text-slate-500"
           }`}
         >
-          Browse company internship opportunities and apply for the placement
-          that matches your interests.
+          Browse internship opportunities, manage your applications, and track
+          your placement.
         </p>
       </div>
 
@@ -1089,7 +2112,9 @@ export default function Application() {
             onClick={() => setActiveTab(tab)}
             className={`px-6 py-2.5 rounded-lg text-xs font-semibold ${
               activeTab === tab
-                ? "bg-white text-slate-900 shadow-sm"
+                ? darkMode
+                  ? "bg-slate-700 text-white shadow-sm"
+                  : "bg-white text-slate-900 shadow-sm"
                 : darkMode
                 ? "text-slate-400"
                 : "text-slate-500"
@@ -1105,71 +2130,157 @@ export default function Application() {
       ===================================================== */}
 
       {activeTab === "apply" ? (
-        <section className={`border rounded-2xl p-5 md:p-6 ${card}`}>
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="font-bold text-lg">Available Opportunities</h2>
-
-              <p
-                className={`text-xs mt-1 ${
-                  darkMode ? "text-slate-400" : "text-slate-500"
-                }`}
-              >
-                These opportunities are currently published by companies.
-              </p>
-            </div>
-
-            <span className="text-xs font-semibold text-slate-400">
-              {opportunities.length} available
-            </span>
-          </div>
-
+        <section
+          className={`border rounded-2xl p-5 md:p-6 ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
           {/* =================================================
-              ACTIVE INTERNSHIP NOTICE
+              CURRENT PLACEMENT STATUS
           ================================================= */}
 
-          {hasActiveInternship && (
+          {latestAssignment &&
+            (() => {
+              const statusInfo = getAssignmentStatusInfo(latestAssignment);
+
+              if (!statusInfo) {
+                return null;
+              }
+
+              const toneClasses = {
+                emerald: darkMode
+                  ? "border-emerald-800 bg-emerald-950/30"
+                  : "border-emerald-200 bg-emerald-50",
+
+                blue: darkMode
+                  ? "border-blue-800 bg-blue-950/30"
+                  : "border-blue-200 bg-blue-50",
+
+                amber: darkMode
+                  ? "border-amber-800 bg-amber-950/30"
+                  : "border-amber-200 bg-amber-50",
+
+                red: darkMode
+                  ? "border-red-800 bg-red-950/30"
+                  : "border-red-200 bg-red-50",
+              };
+
+              const textClasses = {
+                emerald: darkMode ? "text-emerald-200" : "text-emerald-800",
+
+                blue: darkMode ? "text-blue-200" : "text-blue-800",
+
+                amber: darkMode ? "text-amber-200" : "text-amber-800",
+
+                red: darkMode ? "text-red-200" : "text-red-800",
+              };
+
+              return (
+                <div
+                  className={`mb-5 border rounded-xl p-4 ${
+                    toneClasses[statusInfo.tone]
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="text-xl">{statusInfo.icon}</div>
+
+                    <div className="flex-1">
+                      <p
+                        className={`text-xs font-bold ${
+                          statusInfo.tone === "emerald"
+                            ? "text-emerald-600"
+                            : statusInfo.tone === "blue"
+                            ? "text-blue-600"
+                            : statusInfo.tone === "amber"
+                            ? "text-amber-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {statusInfo.title}
+                      </p>
+
+                      <p
+                        className={`text-xs mt-1 ${
+                          textClasses[statusInfo.tone]
+                        }`}
+                      >
+                        {statusInfo.description}
+                      </p>
+
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={handleViewStatusPage}
+                          className={`px-4 py-2 rounded-lg text-xs font-bold ${
+                            statusInfo.tone === "emerald"
+                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                              : statusInfo.tone === "red"
+                              ? "bg-red-600 text-white hover:bg-red-700"
+                              : statusInfo.tone === "amber"
+                              ? "bg-amber-600 text-white hover:bg-amber-700"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
+                        >
+                          View Internship Status →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+          {/* =================================================
+              PLACEMENT OFFER NOTICE
+          ================================================= */}
+
+          {hasPlacementOffer && (
             <div
               className={`mb-5 border rounded-xl p-4 ${
                 darkMode
-                  ? "border-emerald-800 bg-emerald-950/30"
-                  : "border-emerald-200 bg-emerald-50"
+                  ? "border-blue-800 bg-blue-950/30"
+                  : "border-blue-200 bg-blue-50"
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className="text-lg">✅</div>
+                <div className="text-lg">🎉</div>
 
                 <div>
-                  <p className="text-xs font-bold text-emerald-600">
-                    Internship Placement Already Approved
+                  <p className="text-xs font-bold text-blue-600">
+                    Internship Placement Offer Available
                   </p>
 
                   <p
                     className={`text-xs mt-1 ${
-                      darkMode ? "text-emerald-200" : "text-emerald-800"
+                      darkMode ? "text-blue-200" : "text-blue-800"
                     }`}
                   >
-                    You already have an approved internship placement. You
-                    cannot submit or create another application for a different
-                    opportunity.
+                    The Registrar approved one of your applications. Please go
+                    to <strong>View Status</strong> to confirm or decline the
+                    placement.
                   </p>
 
-                  {assignment && (
-                    <p
-                      className={`text-[10px] mt-2 ${
-                        darkMode ? "text-emerald-300" : "text-emerald-700"
-                      }`}
-                    >
-                      Assignment status:{" "}
-                      <strong>{formatStatus(assignment.status)}</strong>
-                    </p>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleViewStatusPage}
+                    className="mt-3 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                  >
+                    Review Placement →
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {opportunities.length === 0 ? (
+          {/* =================================================
+              ACTIVE OPPORTUNITIES
+          ================================================= */}
+
+          {opportunities.filter(
+            (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+          ).length === 0 ? (
             <div
               className={`border rounded-xl p-8 text-center ${
                 darkMode ? "border-slate-700" : "border-slate-200"
@@ -1196,148 +2307,267 @@ export default function Application() {
               ================================================= */}
 
               <div className="grid md:grid-cols-2 gap-4 mb-6">
-                {opportunities.map((opportunity) => {
-                  const company = opportunity.companies;
+                {opportunities
+                  .filter(
+                    (opportunity) =>
+                      opportunity.status === STATUS.opportunity.ACTIVE
+                  )
+                  .map((opportunity) => {
+                    const company = opportunity.companies;
 
-                  const opportunityApplications = applications
-                    .filter((item) => item.opportunity_id === opportunity.id)
-                    .sort((a, b) => {
-                      const dateA = new Date(a.created_at || 0).getTime();
+                    const opportunityApplications = applications
+                      .filter((item) => item.opportunity_id === opportunity.id)
+                      .sort((a, b) => {
+                        const dateA = new Date(a.created_at || 0).getTime();
 
-                      const dateB = new Date(b.created_at || 0).getTime();
+                        const dateB = new Date(b.created_at || 0).getTime();
 
-                      return dateB - dateA;
-                    });
+                        return dateB - dateA;
+                      });
 
-                  const application = opportunityApplications[0];
+                    const application =
+                      opportunityApplications.find(
+                        (item) =>
+                          item.status !== STATUS.application.WITHDRAWN &&
+                          item.status !== STATUS.application.REJECTED
+                      ) || opportunityApplications[0];
 
-                  return (
-                    <button
-                      key={opportunity.id}
-                      type="button"
-                      onClick={() => handleSelectOpportunity(opportunity)}
-                      className={`text-left border rounded-xl p-4 transition ${
-                        opportunityId === opportunity.id
-                          ? darkMode
-                            ? "border-blue-500 ring-2 ring-blue-950"
-                            : "border-blue-500 ring-2 ring-blue-100"
-                          : darkMode
-                          ? "border-slate-700 hover:border-slate-500"
-                          : "border-slate-200 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex justify-between gap-2">
-                        <strong>{opportunity.title}</strong>
+                    const applicationAssignment = application
+                      ? assignmentByApplicationId[application.id]
+                      : null;
 
-                        <span className="text-[10px] text-emerald-600 font-bold">
-                          Active
-                        </span>
-                      </div>
+                    const capacity = getOpportunityCapacity(opportunity.id);
 
-                      <p
-                        className={`text-xs mt-1 ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
+                    const availableSlots = capacity
+                      ? Number(capacity.available_slots)
+                      : null;
+
+                    const occupiedSlots = capacity
+                      ? Number(capacity.occupied_slots)
+                      : null;
+
+                    const isFull =
+                      availableSlots !== null && availableSlots <= 0;
+
+                    return (
+                      <button
+                        key={opportunity.id}
+                        type="button"
+                        onClick={() => handleSelectOpportunity(opportunity)}
+                        className={`text-left border rounded-xl p-4 transition ${
+                          opportunityId === opportunity.id
+                            ? darkMode
+                              ? "border-blue-500 ring-2 ring-blue-950"
+                              : "border-blue-500 ring-2 ring-blue-100"
+                            : darkMode
+                            ? "border-slate-700 hover:border-slate-500"
+                            : "border-slate-200 hover:border-slate-300"
                         }`}
                       >
-                        {company?.company_name || "Company"} ·{" "}
-                        {opportunity.location}
-                      </p>
+                        <div className="flex justify-between gap-2">
+                          <strong>{opportunity.title}</strong>
 
-                      <p
-                        className={`text-xs mt-2 line-clamp-3 ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
-                      >
-                        {opportunity.description}
-                      </p>
-
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <span
-                          className={`text-[10px] px-2 py-1 rounded-md ${
-                            darkMode
-                              ? "bg-slate-800 text-slate-400"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          📍 {opportunity.location}
-                        </span>
-
-                        <span
-                          className={`text-[10px] px-2 py-1 rounded-md ${
-                            darkMode
-                              ? "bg-slate-800 text-slate-400"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          👥 {opportunity.openings}{" "}
-                          {opportunity.openings === 1 ? "opening" : "openings"}
-                        </span>
-
-                        <span
-                          className={`text-[10px] px-2 py-1 rounded-md ${
-                            darkMode
-                              ? "bg-slate-800 text-slate-400"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          💼 {opportunity.position_type || "On-site"}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 space-y-1">
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400">
-                            Internship Start
-                          </p>
-
-                          <p
-                            className={`text-xs font-semibold mt-1 ${
-                              darkMode ? "text-slate-300" : "text-slate-600"
+                          <span
+                            className={`text-[10px] font-bold ${
+                              isFull ? "text-red-600" : "text-emerald-600"
                             }`}
                           >
-                            {formatDate(
-                              opportunity.internship_start_date ||
-                                opportunity.internship_start
-                            )}
-                          </p>
+                            {isFull ? "Full" : "Active"}
+                          </span>
                         </div>
 
-                        <div className="pt-1">
-                          <p className="text-[10px] uppercase font-bold text-slate-400">
-                            Internship End
-                          </p>
-
-                          <p
-                            className={`text-xs font-semibold mt-1 ${
-                              darkMode ? "text-slate-300" : "text-slate-600"
-                            }`}
-                          >
-                            {formatDate(
-                              opportunity.internship_end_date ||
-                                opportunity.internship_end
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      {opportunity.availability && (
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Availability: {opportunity.availability}
+                        <p
+                          className={`text-xs mt-1 ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
+                          {company?.company_name || "Company"} ·{" "}
+                          {opportunity.location}
                         </p>
-                      )}
 
-                      {application && (
-                        <div
-                          className={`mt-3 text-[10px] font-bold ${statusTone(
-                            application.status
-                          )}`}
+                        <p
+                          className={`text-xs mt-2 line-clamp-3 ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
                         >
-                          Application: {formatStatus(application.status)}
+                          {opportunity.description}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded-md ${
+                              darkMode
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            📍 {opportunity.location}
+                          </span>
+
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded-md ${
+                              darkMode
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            👥 {opportunity.openings}{" "}
+                            {opportunity.openings === 1
+                              ? "opening"
+                              : "openings"}
+                          </span>
+
+                          {/* =====================================
+                              AVAILABLE SLOTS
+                          ===================================== */}
+
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded-md font-bold ${
+                              capacity
+                                ? isFull
+                                  ? darkMode
+                                    ? "bg-red-950/50 text-red-300"
+                                    : "bg-red-50 text-red-600"
+                                  : darkMode
+                                  ? "bg-emerald-950/50 text-emerald-300"
+                                  : "bg-emerald-50 text-emerald-600"
+                                : darkMode
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {capacity
+                              ? isFull
+                                ? "🚫 No slots available"
+                                : `🟢 ${availableSlots} ${
+                                    availableSlots === 1 ? "slot" : "slots"
+                                  } available`
+                              : "⏳ Checking slots..."}
+                          </span>
+
+                          <span
+                            className={`text-[10px] px-2 py-1 rounded-md ${
+                              darkMode
+                                ? "bg-slate-800 text-slate-400"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            💼 {opportunity.position_type || "On-site"}
+                          </span>
                         </div>
-                      )}
-                    </button>
-                  );
-                })}
+
+                        {/* =====================================
+                            CAPACITY SUMMARY
+                        ===================================== */}
+
+                        {capacity && (
+                          <div
+                            className={`mt-3 rounded-lg border p-3 ${
+                              darkMode
+                                ? "border-slate-700 bg-slate-800/60"
+                                : "border-slate-200 bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400">
+                                  Internship Slots
+                                </p>
+
+                                <p
+                                  className={`text-xs font-semibold mt-1 ${
+                                    isFull ? "text-red-600" : "text-emerald-600"
+                                  }`}
+                                >
+                                  {isFull
+                                    ? "No slots available"
+                                    : `${availableSlots} ${
+                                        availableSlots === 1 ? "slot" : "slots"
+                                      } remaining`}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-[10px] text-slate-400">
+                                  {occupiedSlots} / {capacity.total_openings}{" "}
+                                  occupied
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-3 space-y-1">
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Internship Start
+                            </p>
+
+                            <p
+                              className={`text-xs font-semibold mt-1 ${
+                                darkMode ? "text-slate-300" : "text-slate-600"
+                              }`}
+                            >
+                              {formatDate(
+                                opportunity.internship_start_date ||
+                                  opportunity.internship_start
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="pt-1">
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Internship End
+                            </p>
+
+                            <p
+                              className={`text-xs font-semibold mt-1 ${
+                                darkMode ? "text-slate-300" : "text-slate-600"
+                              }`}
+                            >
+                              {formatDate(
+                                opportunity.internship_end_date ||
+                                  opportunity.internship_end
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {opportunity.availability && (
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Availability: {opportunity.availability}
+                          </p>
+                        )}
+
+                        {application && (
+                          <div
+                            className={`mt-3 text-[10px] font-bold ${
+                              applicationAssignment?.status ===
+                                STATUS.assignment.ACTIVE ||
+                              applicationAssignment?.status ===
+                                STATUS.assignment.COMPLETED
+                                ? "text-emerald-600"
+                                : applicationAssignment?.status ===
+                                  STATUS.assignment.TERMINATED
+                                ? "text-red-600"
+                                : applicationAssignment?.status ===
+                                  STATUS.assignment.PENDING
+                                ? "text-blue-600"
+                                : statusTone(application.status)
+                            }`}
+                          >
+                            {applicationAssignment
+                              ? `Placement: ${formatStatus(
+                                  applicationAssignment.status
+                                )}`
+                              : `Application: ${formatStatus(
+                                  application.status
+                                )}`}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
 
               {/* =================================================
@@ -1352,7 +2582,11 @@ export default function Application() {
                     </label>
 
                     <input
-                      className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
+                      className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                        darkMode
+                          ? "bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500"
+                          : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400"
+                      }`}
                       value={`${selectedOpportunity.title} — ${
                         selectedOpportunity.companies?.company_name || "Company"
                       }`}
@@ -1360,8 +2594,87 @@ export default function Application() {
                     />
                   </div>
 
+                  {/* =================================================
+                      CLOSED OPPORTUNITY NOTICE
+                  ================================================= */}
+
+                  {!selectedOpportunityIsActive && existingApplication && (
+                    <div
+                      className={`border rounded-xl p-4 ${
+                        darkMode
+                          ? "border-slate-700 bg-slate-800/50"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-slate-500">
+                        Opportunity Closed
+                      </p>
+
+                      <p
+                        className={`text-xs mt-1 ${
+                          darkMode ? "text-slate-300" : "text-slate-600"
+                        }`}
+                      >
+                        This opportunity is no longer accepting new
+                        applications. Your existing application is still valid
+                        and can continue through the review and placement
+                        process.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* =================================================
+                      FULL OPPORTUNITY NOTICE
+                  ================================================= */}
+
+                  {selectedOpportunityIsActive &&
+                    selectedOpportunityCapacity &&
+                    Number(selectedOpportunityCapacity.available_slots) <=
+                      0 && (
+                      <div
+                        className={`border rounded-xl p-4 ${
+                          darkMode
+                            ? "border-red-800 bg-red-950/30"
+                            : "border-red-200 bg-red-50"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-lg">🚫</div>
+
+                          <div>
+                            <p className="text-xs font-bold text-red-600">
+                              No Slots Available
+                            </p>
+
+                            <p
+                              className={`text-xs mt-1 ${
+                                darkMode ? "text-red-200" : "text-red-800"
+                              }`}
+                            >
+                              This internship opportunity has reached its
+                              maximum capacity. New applications cannot be
+                              submitted while no slot is available.
+                            </p>
+
+                            <p
+                              className={`text-[10px] mt-2 ${
+                                darkMode ? "text-red-300" : "text-red-700"
+                              }`}
+                            >
+                              Existing applications are not affected by the
+                              opportunity reaching full capacity.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* =================================================
+                      OPPORTUNITY DETAILS
+                  ================================================= */}
+
                   <div
-                    className={`grid sm:grid-cols-2 lg:grid-cols-4 gap-3 border rounded-xl p-4 ${
+                    className={`grid sm:grid-cols-2 lg:grid-cols-5 gap-3 border rounded-xl p-4 ${
                       darkMode
                         ? "border-slate-700 bg-slate-800/50"
                         : "border-slate-200 bg-slate-50"
@@ -1373,7 +2686,7 @@ export default function Application() {
                       </p>
 
                       <p className="text-xs font-semibold mt-1">
-                        {selectedOpportunity.location || "Not specified"}
+                        {selectedOpportunity.location}
                       </p>
                     </div>
 
@@ -1389,7 +2702,7 @@ export default function Application() {
 
                     <div>
                       <p className="text-[10px] uppercase font-bold text-slate-400">
-                        Openings
+                        Total Openings
                       </p>
 
                       <p className="text-xs font-semibold mt-1">
@@ -1400,8 +2713,58 @@ export default function Application() {
                       </p>
                     </div>
 
+                    {/* =========================================
+                        OCCUPIED SLOTS
+                    ========================================= */}
+
                     <div>
-                      <p className="text-[10px] uppercase font-bold">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">
+                        Occupied Slots
+                      </p>
+
+                      <p className="text-xs font-semibold mt-1">
+                        {selectedOpportunityCapacity
+                          ? selectedOpportunityCapacity.occupied_slots
+                          : "Checking..."}
+                      </p>
+                    </div>
+
+                    {/* =========================================
+                        AVAILABLE SLOTS
+                    ========================================= */}
+
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-slate-400">
+                        Available Slots
+                      </p>
+
+                      <p
+                        className={`text-xs font-bold mt-1 ${
+                          selectedOpportunityCapacity &&
+                          Number(selectedOpportunityCapacity.available_slots) <=
+                            0
+                            ? "text-red-600"
+                            : "text-emerald-600"
+                        }`}
+                      >
+                        {selectedOpportunityCapacity
+                          ? Number(
+                              selectedOpportunityCapacity.available_slots
+                            ) <= 0
+                            ? "No slots available"
+                            : `${selectedOpportunityCapacity.available_slots} ${
+                                Number(
+                                  selectedOpportunityCapacity.available_slots
+                                ) === 1
+                                  ? "slot"
+                                  : "slots"
+                              }`
+                          : "Checking..."}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-5">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">
                         Internship Period
                       </p>
 
@@ -1459,37 +2822,63 @@ export default function Application() {
                     )}
 
                   {/* =================================================
-                      REJECTED
+                      REJECTED / WITHDRAWN
                   ================================================= */}
 
-                  {existingApplication?.status ===
-                    STATUS.application.REJECTED &&
+                  {[
+                    STATUS.application.REJECTED,
+                    STATUS.application.WITHDRAWN,
+                  ].includes(existingApplication?.status) &&
                     !isReapplying && (
                       <div
                         className={`border rounded-xl p-4 ${
-                          darkMode
-                            ? "border-red-800 bg-red-950/30"
-                            : "border-red-200 bg-red-50"
+                          existingApplication.status ===
+                          STATUS.application.REJECTED
+                            ? darkMode
+                              ? "border-red-800 bg-red-950/30"
+                              : "border-red-200 bg-red-50"
+                            : darkMode
+                            ? "border-slate-700 bg-slate-800/50"
+                            : "border-slate-200 bg-slate-50"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-xs font-bold text-red-600">
-                              Application Rejected
+                            <p
+                              className={`text-xs font-bold ${
+                                existingApplication.status ===
+                                STATUS.application.REJECTED
+                                  ? "text-red-600"
+                                  : "text-slate-600"
+                              }`}
+                            >
+                              {existingApplication.status ===
+                              STATUS.application.REJECTED
+                                ? "Application Rejected"
+                                : "Placement Declined"}
                             </p>
 
                             <p
                               className={`text-xs mt-2 ${
-                                darkMode ? "text-red-200" : "text-red-800"
+                                darkMode ? "text-slate-300" : "text-slate-600"
                               }`}
                             >
-                              Your application was not approved by the
-                              Registrar.
+                              {existingApplication.status ===
+                              STATUS.application.REJECTED
+                                ? "Your application was not approved by the Registrar."
+                                : "You declined this internship placement."}
                             </p>
                           </div>
 
-                          <span className="text-xs font-bold text-red-600">
-                            Rejected
+                          <span
+                            className={`text-xs font-bold ${
+                              existingApplication.status ===
+                              STATUS.application.REJECTED
+                                ? "text-red-600"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {formatStatus(existingApplication.status)}
                           </span>
                         </div>
 
@@ -1497,12 +2886,22 @@ export default function Application() {
                           <div
                             className={`mt-3 p-3 rounded-lg border ${
                               darkMode
-                                ? "border-red-800 bg-red-950/40"
-                                : "border-red-200 bg-white"
+                                ? "border-slate-700 bg-slate-900"
+                                : "border-slate-200 bg-white"
                             }`}
                           >
-                            <p className="text-[10px] uppercase font-bold text-red-600">
-                              Reason for Rejection
+                            <p
+                              className={`text-[10px] uppercase font-bold ${
+                                existingApplication.status ===
+                                STATUS.application.REJECTED
+                                  ? "text-red-600"
+                                  : "text-slate-500"
+                              }`}
+                            >
+                              {existingApplication.status ===
+                              STATUS.application.REJECTED
+                                ? "Reason for Rejection"
+                                : "Note"}
                             </p>
 
                             <p className="text-xs mt-1">
@@ -1511,15 +2910,149 @@ export default function Application() {
                           </div>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => handleApplyAgain(selectedOpportunity)}
-                          className="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                        >
-                          Apply Again
-                        </button>
+                        {canApplyAgain(selectedOpportunity.id) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleApplyAgain(selectedOpportunity)
+                            }
+                            className="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
+                          >
+                            Apply Again
+                          </button>
+                        )}
                       </div>
                     )}
+
+                  {/* =================================================
+                      COMPLETED / TERMINATED PLACEMENT
+                  ================================================= */}
+
+                  {(() => {
+                    const selectedAssignment = existingApplication
+                      ? assignmentByApplicationId[existingApplication.id]
+                      : null;
+
+                    if (!selectedAssignment) {
+                      return null;
+                    }
+
+                    const statusInfo =
+                      getAssignmentStatusInfo(selectedAssignment);
+
+                    const toneClasses = {
+                      emerald: darkMode
+                        ? "border-emerald-800 bg-emerald-950/30"
+                        : "border-emerald-200 bg-emerald-50",
+
+                      red: darkMode
+                        ? "border-red-800 bg-red-950/30"
+                        : "border-red-200 bg-red-50",
+
+                      amber: darkMode
+                        ? "border-amber-800 bg-amber-950/30"
+                        : "border-amber-200 bg-amber-50",
+
+                      blue: darkMode
+                        ? "border-blue-800 bg-blue-950/30"
+                        : "border-blue-200 bg-blue-50",
+                    };
+
+                    const textClasses = {
+                      emerald: darkMode
+                        ? "text-emerald-200"
+                        : "text-emerald-800",
+
+                      red: darkMode ? "text-red-200" : "text-red-800",
+
+                      amber: darkMode ? "text-amber-200" : "text-amber-800",
+
+                      blue: darkMode ? "text-blue-200" : "text-blue-800",
+                    };
+
+                    return (
+                      <div
+                        className={`border rounded-xl p-5 ${
+                          toneClasses[statusInfo.tone]
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-xl">{statusInfo.icon}</div>
+
+                          <div className="flex-1">
+                            <p
+                              className={`text-sm font-bold ${
+                                statusInfo.tone === "emerald"
+                                  ? "text-emerald-600"
+                                  : statusInfo.tone === "red"
+                                  ? "text-red-600"
+                                  : statusInfo.tone === "amber"
+                                  ? "text-amber-600"
+                                  : "text-blue-600"
+                              }`}
+                            >
+                              {statusInfo.title}
+                            </p>
+
+                            <p
+                              className={`text-xs mt-1 ${
+                                textClasses[statusInfo.tone]
+                              }`}
+                            >
+                              {statusInfo.description}
+                            </p>
+
+                            <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400">
+                                  Assignment Status
+                                </p>
+
+                                <p className="text-xs font-semibold mt-1">
+                                  {formatStatus(selectedAssignment.status)}
+                                </p>
+                              </div>
+
+                              <div>
+                                <p className="text-[10px] uppercase font-bold text-slate-400">
+                                  Internship Period
+                                </p>
+
+                                <p className="text-xs font-semibold mt-1">
+                                  {formatDate(selectedAssignment.start_date)} –{" "}
+                                  {formatDate(selectedAssignment.end_date)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleViewStatusPage}
+                              className="mt-4 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                            >
+                              View Full Status →
+                            </button>
+
+                            {selectedAssignment.status ===
+                              STATUS.assignment.TERMINATED &&
+                              canApplyAgain(
+                                selectedAssignment.opportunity_id
+                              ) && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleApplyAgain(selectedOpportunity)
+                                  }
+                                  className="mt-2 ml-2 px-4 py-2 rounded-lg border text-xs font-bold"
+                                >
+                                  Apply Again
+                                </button>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* =================================================
                       ACTIVE APPLICATION
@@ -1530,6 +3063,9 @@ export default function Application() {
                       STATUS.application.DRAFT,
                       STATUS.application.INFO_REQUESTED,
                       STATUS.application.REJECTED,
+                      STATUS.application.APPROVED,
+                      STATUS.application.ACCEPTED,
+                      STATUS.application.WITHDRAWN,
                     ].includes(existingApplication.status) && (
                       <div
                         className={`border rounded-xl p-4 ${
@@ -1550,65 +3086,6 @@ export default function Application() {
                         >
                           Status: {formatStatus(existingApplication.status)}
                         </p>
-
-                        {existingApplication.submitted_at && (
-                          <p className="text-[10px] text-slate-400 mt-2">
-                            Submitted:{" "}
-                            {new Date(
-                              existingApplication.submitted_at
-                            ).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                  {/* =================================================
-                      GLOBAL BLOCK FOR OTHER OPPORTUNITIES
-                  ================================================= */}
-
-                  {hasActiveInternship &&
-                    !existingApplication &&
-                    !isReapplying && (
-                      <div
-                        className={`border rounded-xl p-5 ${
-                          darkMode
-                            ? "border-emerald-800 bg-emerald-950/20"
-                            : "border-emerald-200 bg-emerald-50"
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="text-xl">🔒</div>
-
-                          <div>
-                            <p className="text-sm font-bold text-emerald-600">
-                              New Applications Are Closed
-                            </p>
-
-                            <p
-                              className={`text-xs mt-1 ${
-                                darkMode
-                                  ? "text-emerald-200"
-                                  : "text-emerald-800"
-                              }`}
-                            >
-                              You already have an approved internship placement.
-                              You may no longer submit a new application to
-                              another opportunity.
-                            </p>
-
-                            {hasApprovedApplication && (
-                              <p className="text-[10px] text-emerald-600 mt-2 font-semibold">
-                                Approved application found.
-                              </p>
-                            )}
-
-                            {assignment && (
-                              <p className="text-[10px] text-emerald-600 mt-1 font-semibold">
-                                Internship assignment found.
-                              </p>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     )}
 
@@ -1616,13 +3093,46 @@ export default function Application() {
                       EDITABLE FORM
                   ================================================= */}
 
-                  {!hasActiveInternship &&
+                  {!hasActiveAssignment &&
+                    !hasPlacementOffer &&
                     (!existingApplication ||
                       existingApplication.status === STATUS.application.DRAFT ||
                       existingApplication.status ===
                         STATUS.application.INFO_REQUESTED ||
                       isReapplying) && (
                       <>
+                        {!hasResume && (
+                          <div
+                            className={`border rounded-lg p-3 ${
+                              darkMode
+                                ? "border-amber-800 bg-amber-950/30"
+                                : "border-amber-200 bg-amber-50"
+                            }`}
+                          >
+                            <p className="text-xs font-bold text-amber-600">
+                              Resume/CV Required
+                            </p>
+
+                            <p
+                              className={`text-[10px] mt-1 ${
+                                darkMode ? "text-amber-200" : "text-amber-800"
+                              }`}
+                            >
+                              Please upload your Resume/CV in your Student
+                              Profile before submitting an internship
+                              application.
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => navigate("/student/profile")}
+                              className="mt-3 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[10px] font-bold hover:bg-amber-700"
+                            >
+                              Go to Profile →
+                            </button>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-xs font-semibold mb-1">
                             {isReapplying
@@ -1635,7 +3145,11 @@ export default function Application() {
 
                           <textarea
                             rows="5"
-                            className={`w-full border rounded-lg px-3 py-2 text-sm ${input}`}
+                            className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                              darkMode
+                                ? "bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500"
+                                : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400"
+                            }`}
                             value={coverLetter}
                             onChange={(event) =>
                               setCoverLetter(event.target.value)
@@ -1645,6 +3159,43 @@ export default function Application() {
                           />
                         </div>
 
+                        {/* =========================================
+                            FULL OPPORTUNITY WARNING
+                        ========================================= */}
+
+                        {selectedOpportunityIsActive &&
+                          selectedOpportunityCapacity &&
+                          Number(selectedOpportunityCapacity.available_slots) <=
+                            0 &&
+                          (!existingApplication ||
+                            isReapplying ||
+                            existingApplication.status ===
+                              STATUS.application.REJECTED ||
+                            existingApplication.status ===
+                              STATUS.application.WITHDRAWN) && (
+                            <div
+                              className={`border rounded-lg p-3 ${
+                                darkMode
+                                  ? "border-red-800 bg-red-950/30"
+                                  : "border-red-200 bg-red-50"
+                              }`}
+                            >
+                              <p className="text-xs font-bold text-red-600">
+                                🚫 No slots available
+                              </p>
+
+                              <p
+                                className={`text-[10px] mt-1 ${
+                                  darkMode ? "text-red-200" : "text-red-800"
+                                }`}
+                              >
+                                This opportunity is currently full. New
+                                applications cannot be submitted until a slot
+                                becomes available.
+                              </p>
+                            </div>
+                          )}
+
                         <div className="flex flex-wrap gap-2">
                           {!isReapplying &&
                             existingApplication?.status !==
@@ -1652,12 +3203,24 @@ export default function Application() {
                               <button
                                 type="button"
                                 className={`px-4 py-2 rounded-lg border text-xs font-semibold ${
-                                  isSubmitting
+                                  isSubmitting ||
+                                  (selectedOpportunityIsActive &&
+                                    selectedOpportunityCapacity &&
+                                    Number(
+                                      selectedOpportunityCapacity.available_slots
+                                    ) <= 0)
                                     ? "opacity-50 cursor-not-allowed"
                                     : ""
                                 }`}
                                 onClick={handleSaveDraft}
-                                disabled={isSubmitting}
+                                disabled={
+                                  isSubmitting ||
+                                  (selectedOpportunityIsActive &&
+                                    selectedOpportunityCapacity &&
+                                    Number(
+                                      selectedOpportunityCapacity.available_slots
+                                    ) <= 0)
+                                }
                               >
                                 {isSubmitting ? "Saving..." : "Save Draft"}
                               </button>
@@ -1684,12 +3247,24 @@ export default function Application() {
                             <button
                               type="button"
                               className={`px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold ${
-                                isSubmitting
+                                isSubmitting ||
+                                (selectedOpportunityIsActive &&
+                                  selectedOpportunityCapacity &&
+                                  Number(
+                                    selectedOpportunityCapacity.available_slots
+                                  ) <= 0)
                                   ? "opacity-50 cursor-not-allowed"
                                   : "hover:bg-slate-800"
                               }`}
                               onClick={handleSubmitApplication}
-                              disabled={isSubmitting}
+                              disabled={
+                                isSubmitting ||
+                                (selectedOpportunityIsActive &&
+                                  selectedOpportunityCapacity &&
+                                  Number(
+                                    selectedOpportunityCapacity.available_slots
+                                  ) <= 0)
+                              }
                             >
                               {isSubmitting
                                 ? "Submitting..."
@@ -1711,13 +3286,19 @@ export default function Application() {
            STATUS TAB
         ===================================================== */
 
-        <section className={`border rounded-2xl p-5 md:p-6 ${card}`}>
+        <section
+          className={`border rounded-2xl p-5 md:p-6 ${
+            darkMode
+              ? "bg-slate-900 border-slate-700"
+              : "bg-white border-slate-200"
+          }`}
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="font-bold text-lg">Application Status</h2>
 
               <p className="text-xs text-slate-500 mt-1">
-                Track the status of your submitted internship applications.
+                Track your internship applications and placement progress.
               </p>
             </div>
 
@@ -1726,6 +3307,352 @@ export default function Application() {
               {applications.length === 1 ? "" : "s"}
             </span>
           </div>
+
+          {/* =================================================
+              PLACEMENT OFFER
+          ================================================= */}
+
+          {hasPlacementOffer && approvedApplication && (
+            <div
+              className={`mb-5 border-2 rounded-2xl p-5 ${
+                darkMode
+                  ? "border-blue-700 bg-blue-950/30"
+                  : "border-blue-200 bg-blue-50"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🎉</div>
+
+                <div className="flex-1">
+                  <p className="text-sm font-black text-blue-600">
+                    Internship Placement Offered
+                  </p>
+
+                  <p
+                    className={`text-xs mt-1 ${
+                      darkMode ? "text-blue-200" : "text-blue-800"
+                    }`}
+                  >
+                    The Registrar has approved one of your internship
+                    applications. Please confirm whether you want to accept this
+                    placement.
+                  </p>
+
+                  {(() => {
+                    const opportunity = opportunities.find(
+                      (item) => item.id === approvedApplication.opportunity_id
+                    );
+
+                    if (!opportunity) {
+                      return (
+                        <div className="mt-4 text-xs text-red-600">
+                          The approved internship opportunity could not be
+                          loaded.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        className={`mt-4 rounded-xl border p-4 ${
+                          darkMode
+                            ? "border-blue-800 bg-slate-900"
+                            : "border-blue-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-sm">
+                              {opportunity.title}
+                            </p>
+
+                            <p className="text-xs text-slate-500 mt-1">
+                              {opportunity.companies?.company_name || "Company"}
+                            </p>
+                          </div>
+
+                          {opportunity.status === STATUS.opportunity.CLOSED && (
+                            <span className="text-[10px] font-bold text-slate-500">
+                              Closed
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Location
+                            </p>
+
+                            <p className="text-xs font-semibold mt-1">
+                              {opportunity.location || "Not specified"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Position Type
+                            </p>
+
+                            <p className="text-xs font-semibold mt-1">
+                              {opportunity.position_type || "On-site"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Internship Period
+                            </p>
+
+                            <p className="text-xs font-semibold mt-1">
+                              {formatInternshipPeriod(opportunity)}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400">
+                              Application Status
+                            </p>
+
+                            <p className="text-xs font-bold text-blue-600 mt-1">
+                              Approved — Awaiting Confirmation
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`mt-4 pt-4 border-t ${
+                            darkMode ? "border-slate-700" : "border-slate-200"
+                          }`}
+                        >
+                          <p
+                            className={`text-xs ${
+                              darkMode ? "text-slate-300" : "text-slate-600"
+                            }`}
+                          >
+                            <strong>Important:</strong> Confirming this
+                            placement will create your internship assignment and
+                            withdraw your other active applications.
+                          </p>
+
+                          <div className="flex flex-wrap gap-2 mt-4">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleConfirmPlacement(approvedApplication)
+                              }
+                              disabled={isConfirmingPlacement}
+                              className={`px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-xs font-bold ${
+                                isConfirmingPlacement
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:bg-emerald-700"
+                              }`}
+                            >
+                              {isConfirmingPlacement
+                                ? "Confirming..."
+                                : "✓ Confirm Placement"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDeclinePlacement(approvedApplication)
+                              }
+                              disabled={isConfirmingPlacement}
+                              className={`px-5 py-2.5 rounded-lg border text-xs font-bold ${
+                                isConfirmingPlacement
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : darkMode
+                                  ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                                  : "border-slate-300 text-slate-600 hover:bg-slate-100"
+                              }`}
+                            >
+                              Decline Placement
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =================================================
+              CURRENT ASSIGNMENT
+          ================================================= */}
+
+          {latestAssignment && (
+            <div
+              className={`mb-5 border rounded-2xl p-5 ${
+                latestAssignment.status === STATUS.assignment.ACTIVE ||
+                latestAssignment.status === STATUS.assignment.COMPLETED
+                  ? darkMode
+                    ? "border-emerald-800 bg-emerald-950/30"
+                    : "border-emerald-200 bg-emerald-50"
+                  : latestAssignment.status === STATUS.assignment.TERMINATED
+                  ? darkMode
+                    ? "border-red-800 bg-red-950/30"
+                    : "border-red-200 bg-red-50"
+                  : latestAssignment.status === STATUS.assignment.SUSPENDED
+                  ? darkMode
+                    ? "border-amber-800 bg-amber-950/30"
+                    : "border-amber-200 bg-amber-50"
+                  : darkMode
+                  ? "border-blue-800 bg-blue-950/30"
+                  : "border-blue-200 bg-blue-50"
+              }`}
+            >
+              {(() => {
+                const statusInfo = getAssignmentStatusInfo(latestAssignment);
+
+                const opportunity = opportunities.find(
+                  (item) => item.id === latestAssignment.opportunity_id
+                );
+
+                const company = opportunity?.companies;
+
+                return (
+                  <div className="flex items-start gap-3">
+                    <div className="text-2xl">{statusInfo?.icon || "ℹ️"}</div>
+
+                    <div className="flex-1">
+                      <p
+                        className={`text-sm font-black ${
+                          latestAssignment.status ===
+                            STATUS.assignment.ACTIVE ||
+                          latestAssignment.status ===
+                            STATUS.assignment.COMPLETED
+                            ? "text-emerald-600"
+                            : latestAssignment.status ===
+                              STATUS.assignment.TERMINATED
+                            ? "text-red-600"
+                            : latestAssignment.status ===
+                              STATUS.assignment.SUSPENDED
+                            ? "text-amber-600"
+                            : "text-blue-600"
+                        }`}
+                      >
+                        {statusInfo?.title}
+                      </p>
+
+                      <p
+                        className={`text-xs mt-1 ${
+                          darkMode ? "text-slate-300" : "text-slate-600"
+                        }`}
+                      >
+                        {statusInfo?.description}
+                      </p>
+
+                      {opportunity && (
+                        <div
+                          className={`mt-4 rounded-xl border p-4 ${
+                            darkMode
+                              ? "border-slate-700 bg-slate-900"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex justify-between gap-3">
+                            <div>
+                              <p className="font-bold text-sm">
+                                {opportunity.title}
+                              </p>
+
+                              <p className="text-xs text-slate-500 mt-1">
+                                {company?.company_name || "Company"}
+                              </p>
+                            </div>
+
+                            {opportunity.status ===
+                              STATUS.opportunity.CLOSED && (
+                              <span className="text-[10px] font-bold text-slate-500">
+                                Closed
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-slate-400">
+                                Location
+                              </p>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {opportunity.location || "Not specified"}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-slate-400">
+                                Position Type
+                              </p>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {opportunity.position_type || "On-site"}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-slate-400">
+                                Start Date
+                              </p>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {formatDate(latestAssignment.start_date)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-slate-400">
+                                End Date
+                              </p>
+
+                              <p className="text-xs font-semibold mt-1">
+                                {formatDate(latestAssignment.end_date)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        <button
+                          type="button"
+                          onClick={handleViewStatusPage}
+                          className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                        >
+                          View Full Internship Status →
+                        </button>
+
+                        {latestAssignment.status ===
+                          STATUS.assignment.TERMINATED &&
+                          canApplyAgain(latestAssignment.opportunity_id) && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                opportunity && handleApplyAgain(opportunity)
+                              }
+                              className={`px-4 py-2 rounded-lg border text-xs font-bold ${
+                                darkMode
+                                  ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                                  : "border-slate-300 text-slate-600 hover:bg-slate-100"
+                              }`}
+                            >
+                              Apply Again
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* =================================================
+              APPLICATION LIST
+          ================================================= */}
 
           {applications.length === 0 ? (
             <div
@@ -1748,18 +3675,68 @@ export default function Application() {
                   (item) => item.id === application.opportunity_id
                 );
 
+                const applicationAssignment =
+                  assignmentByApplicationId[application.id];
+
+                const isPlacementOffer =
+                  application.status === STATUS.application.APPROVED &&
+                  !applicationAssignment;
+
+                const isAccepted =
+                  application.status === STATUS.application.ACCEPTED;
+
+                const isConfirmedApplication = Boolean(applicationAssignment);
+
+                const isCompleted =
+                  applicationAssignment?.status === STATUS.assignment.COMPLETED;
+
+                const isTerminated =
+                  applicationAssignment?.status ===
+                  STATUS.assignment.TERMINATED;
+
+                const isActive =
+                  applicationAssignment?.status === STATUS.assignment.ACTIVE;
+
+                const isOpportunityClosed =
+                  opportunity?.status === STATUS.opportunity.CLOSED;
+
                 return (
                   <div
                     key={application.id}
                     className={`border rounded-xl p-4 ${
-                      darkMode ? "border-slate-700" : "border-slate-200"
+                      isPlacementOffer
+                        ? darkMode
+                          ? "border-blue-700 bg-blue-950/20"
+                          : "border-blue-200 bg-blue-50/40"
+                        : isCompleted ||
+                          isActive ||
+                          isAccepted ||
+                          isConfirmedApplication
+                        ? darkMode
+                          ? "border-emerald-700 bg-emerald-950/20"
+                          : "border-emerald-200 bg-emerald-50/40"
+                        : isTerminated
+                        ? darkMode
+                          ? "border-red-700 bg-red-950/20"
+                          : "border-red-200 bg-red-50/40"
+                        : darkMode
+                        ? "border-slate-700"
+                        : "border-slate-200"
                     }`}
                   >
                     <div className="flex justify-between gap-4">
                       <div>
-                        <p className="font-semibold">
-                          {opportunity?.title || application.opportunity_id}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">
+                            {opportunity?.title || application.opportunity_id}
+                          </p>
+
+                          {isOpportunityClosed && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold">
+                              Closed
+                            </span>
+                          )}
+                        </div>
 
                         <p className="text-xs text-slate-500">
                           {opportunity?.companies?.company_name || "Company"}
@@ -1777,13 +3754,37 @@ export default function Application() {
                       </div>
 
                       <span
-                        className={`text-xs font-bold ${statusTone(
-                          application.status
-                        )}`}
+                        className={`text-xs font-bold ${
+                          applicationAssignment?.status ===
+                            STATUS.assignment.ACTIVE ||
+                          applicationAssignment?.status ===
+                            STATUS.assignment.COMPLETED
+                            ? "text-emerald-600"
+                            : applicationAssignment?.status ===
+                              STATUS.assignment.TERMINATED
+                            ? "text-red-600"
+                            : applicationAssignment?.status ===
+                              STATUS.assignment.SUSPENDED
+                            ? "text-amber-600"
+                            : applicationAssignment?.status ===
+                              STATUS.assignment.PENDING
+                            ? "text-blue-600"
+                            : statusTone(application.status)
+                        }`}
                       >
-                        {formatStatus(application.status)}
+                        {applicationAssignment
+                          ? formatStatus(applicationAssignment.status)
+                          : formatStatus(application.status)}
                       </span>
                     </div>
+
+                    {isOpportunityClosed && (
+                      <p className="text-[10px] text-slate-500 mt-2">
+                        This opportunity is closed to new applicants. Your
+                        existing application remains active in the internship
+                        process.
+                      </p>
+                    )}
 
                     {application.submitted_at && (
                       <p className="text-xs text-slate-500 mt-2">
@@ -1792,7 +3793,170 @@ export default function Application() {
                       </p>
                     )}
 
-                    {/* INFO REQUESTED MESSAGE */}
+                    {/* =========================================
+                            APPROVED — WAITING FOR CONFIRMATION
+                      ========================================= */}
+
+                    {isPlacementOffer && (
+                      <div
+                        className={`mt-3 p-3 rounded-lg border ${
+                          darkMode
+                            ? "border-blue-800 bg-blue-950/40"
+                            : "border-blue-200 bg-blue-50"
+                        }`}
+                      >
+                        <p className="text-[10px] uppercase font-bold text-blue-600">
+                          Placement Confirmation Required
+                        </p>
+
+                        <p
+                          className={`text-xs mt-1 ${
+                            darkMode ? "text-blue-200" : "text-blue-800"
+                          }`}
+                        >
+                          The Registrar approved this application. Confirm it to
+                          create your internship assignment.
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmPlacement(application)}
+                            disabled={isConfirmingPlacement}
+                            className={`px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold ${
+                              isConfirmingPlacement
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:bg-emerald-700"
+                            }`}
+                          >
+                            {isConfirmingPlacement
+                              ? "Confirming..."
+                              : "✓ Confirm Placement"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeclinePlacement(application)}
+                            disabled={isConfirmingPlacement}
+                            className={`px-4 py-2 rounded-lg border text-xs font-bold ${
+                              isConfirmingPlacement
+                                ? "opacity-50 cursor-not-allowed"
+                                : darkMode
+                                ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-100"
+                            }`}
+                          >
+                            Decline Placement
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* =========================================
+                            CONFIRMED / ACTIVE / COMPLETED
+                      ========================================= */}
+
+                    {applicationAssignment && !isTerminated && (
+                      <div
+                        className={`mt-3 p-3 rounded-lg border ${
+                          darkMode
+                            ? "border-emerald-800 bg-emerald-950/30"
+                            : "border-emerald-200 bg-emerald-50"
+                        }`}
+                      >
+                        <p className="text-[10px] uppercase font-bold text-emerald-600">
+                          {isCompleted
+                            ? "Internship Completed"
+                            : isActive
+                            ? "Internship Active"
+                            : applicationAssignment.status ===
+                              STATUS.assignment.PENDING
+                            ? applicationAssignment.deployed_at
+                              ? "Waiting for Company Decision"
+                              : "Internship Placement Confirmed"
+                            : "Internship Placement"}
+                        </p>
+
+                        <p
+                          className={`text-xs mt-1 ${
+                            darkMode ? "text-emerald-200" : "text-emerald-800"
+                          }`}
+                        >
+                          {isCompleted
+                            ? "Your internship placement has been completed successfully."
+                            : isActive
+                            ? "The company accepted your placement. Your internship is now active."
+                            : applicationAssignment.deployed_at
+                            ? "Your internship has been deployed to the company and is awaiting their decision."
+                            : "You confirmed this internship placement. Your assignment has been created."}
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <button
+                            type="button"
+                            onClick={handleViewStatusPage}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                          >
+                            View Status →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* =========================================
+                            TERMINATED
+                      ========================================= */}
+
+                    {isTerminated && (
+                      <div
+                        className={`mt-3 p-3 rounded-lg border ${
+                          darkMode
+                            ? "border-red-800 bg-red-950/30"
+                            : "border-red-200 bg-red-50"
+                        }`}
+                      >
+                        <p className="text-[10px] uppercase font-bold text-red-600">
+                          Placement Terminated
+                        </p>
+
+                        <p
+                          className={`text-xs mt-1 ${
+                            darkMode ? "text-red-200" : "text-red-800"
+                          }`}
+                        >
+                          This internship placement has been terminated.
+                        </p>
+
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <button
+                            type="button"
+                            onClick={handleViewStatusPage}
+                            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                          >
+                            View Status →
+                          </button>
+
+                          {opportunity &&
+                            canApplyAgain(application.opportunity_id) && (
+                              <button
+                                type="button"
+                                onClick={() => handleApplyAgain(opportunity)}
+                                className={`px-4 py-2 rounded-lg border text-xs font-bold ${
+                                  darkMode
+                                    ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                                    : "border-slate-300 text-slate-600 hover:bg-slate-100"
+                                }`}
+                              >
+                                Apply Again
+                              </button>
+                            )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* =========================================
+                            INFORMATION REQUESTED
+                      ========================================= */}
 
                     {application.status ===
                       STATUS.application.INFO_REQUESTED && (
@@ -1824,65 +3988,88 @@ export default function Application() {
                       </div>
                     )}
 
-                    {/* REJECTION REASON */}
+                    {/* =========================================
+                            REJECTION
+                      ========================================= */}
 
-                    {application.status === STATUS.application.REJECTED && (
+                    {application.status === STATUS.application.REJECTED &&
+                      (() => {
+                        const rejectionInfo = getRejectionInfo(application);
+
+                        return (
+                          <div
+                            className={`mt-3 p-3 rounded-lg border ${
+                              darkMode
+                                ? "border-red-800 bg-red-950/30"
+                                : "border-red-200 bg-red-50"
+                            }`}
+                          >
+                            <p className="text-[10px] uppercase font-bold text-red-600">
+                              Rejected by {rejectionInfo.source}
+                            </p>
+
+                            <p
+                              className={`text-xs mt-2 ${
+                                darkMode ? "text-red-200" : "text-red-800"
+                              }`}
+                            >
+                              {rejectionInfo.reason}
+                            </p>
+
+                            {opportunity &&
+                              canApplyAgain(application.opportunity_id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyAgain(opportunity)}
+                                  className="mt-3 text-xs font-bold text-red-600 hover:underline"
+                                >
+                                  Apply Again →
+                                </button>
+                              )}
+                          </div>
+                        );
+                      })()}
+
+                    {/* =========================================
+                            WITHDRAWN
+                      ========================================= */}
+
+                    {application.status === STATUS.application.WITHDRAWN && (
                       <div
                         className={`mt-3 p-3 rounded-lg border ${
                           darkMode
-                            ? "border-red-800 bg-red-950/30"
-                            : "border-red-200 bg-red-50"
+                            ? "border-slate-700 bg-slate-800/50"
+                            : "border-slate-200 bg-slate-50"
                         }`}
                       >
-                        <p className="text-[10px] uppercase font-bold text-red-600">
-                          Reason for Rejection
+                        <p className="text-[10px] uppercase font-bold text-slate-500">
+                          Placement Declined
                         </p>
 
-                        <p className="text-xs mt-1">
+                        <p className="text-xs mt-1 text-slate-500">
                           {application.notes ||
-                            "No rejection reason was provided."}
+                            "You declined this internship placement."}
                         </p>
 
-                        {opportunity && (
-                          <button
-                            type="button"
-                            onClick={() => handleApplyAgain(opportunity)}
-                            className="mt-2 text-xs font-bold text-red-600 hover:underline"
-                          >
-                            Apply Again →
-                          </button>
-                        )}
+                        {opportunity &&
+                          canApplyAgain(application.opportunity_id) && (
+                            <button
+                              type="button"
+                              onClick={() => handleApplyAgain(opportunity)}
+                              className={`mt-3 px-4 py-2 rounded-lg border text-xs font-bold ${
+                                darkMode
+                                  ? "border-slate-600 text-slate-300 hover:bg-slate-800"
+                                  : "border-slate-300 text-slate-600 hover:bg-slate-100"
+                              }`}
+                            >
+                              Apply Again
+                            </button>
+                          )}
                       </div>
                     )}
-
-                    {application.notes &&
-                      application.status !==
-                        STATUS.application.INFO_REQUESTED &&
-                      application.status !== STATUS.application.REJECTED && (
-                        <p className="text-xs text-slate-500 mt-2">
-                          {application.notes}
-                        </p>
-                      )}
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {assignment && (
-            <div className="mt-5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-800">
-              <strong>Internship Assignment {assignment.id}</strong>
-
-              <p className="mt-1">
-                {assignment.start_date
-                  ? formatDate(assignment.start_date)
-                  : "Start date not specified"}{" "}
-                to{" "}
-                {assignment.end_date
-                  ? formatDate(assignment.end_date)
-                  : "End date not specified"}{" "}
-                · {formatStatus(assignment.status)}
-              </p>
             </div>
           )}
         </section>

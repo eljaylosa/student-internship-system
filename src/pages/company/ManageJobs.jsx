@@ -101,7 +101,48 @@ export default function ManageJobs() {
         throw opportunityError;
       }
 
-      setOpportunities(opportunityData || []);
+      // -------------------------------------------------------
+      // LOAD CAPACITY FOR EACH OPPORTUNITY
+      // -------------------------------------------------------
+
+      const opportunitiesWithCapacity = await Promise.all(
+        (opportunityData || []).map(async (opportunity) => {
+          const { data: capacityData, error: capacityError } =
+            await supabaseCompany.rpc("get_opportunity_capacity", {
+              p_opportunity_id: opportunity.id,
+            });
+
+          if (capacityError) {
+            console.error(
+              `Unable to load capacity for opportunity ${opportunity.id}:`,
+              capacityError
+            );
+
+            // Fallback so the opportunity still displays
+            return {
+              ...opportunity,
+              capacity: {
+                total_openings: opportunity.openings || 0,
+                occupied_slots: 0,
+                available_slots: opportunity.openings || 0,
+              },
+            };
+          }
+
+          const capacity = capacityData?.[0] || {
+            total_openings: opportunity.openings || 0,
+            occupied_slots: 0,
+            available_slots: opportunity.openings || 0,
+          };
+
+          return {
+            ...opportunity,
+            capacity,
+          };
+        })
+      );
+
+      setOpportunities(opportunitiesWithCapacity);
     } catch (error) {
       console.error("Error loading company opportunities:", error);
 
@@ -246,11 +287,9 @@ export default function ManageJobs() {
           description: form.description.trim(),
           location: form.location.trim(),
 
-          // NEW DATE FIELDS
           internship_start: form.internshipStart,
           internship_end: form.internshipEnd,
 
-          // KEEP OLD FIELD FOR COMPATIBILITY
           availability,
 
           openings: Number(form.openings),
@@ -265,7 +304,16 @@ export default function ManageJobs() {
         throw error;
       }
 
-      setOpportunities((previous) => [data, ...previous]);
+      const newOpportunity = {
+        ...data,
+        capacity: {
+          total_openings: Number(data.openings),
+          occupied_slots: 0,
+          available_slots: Number(data.openings),
+        },
+      };
+
+      setOpportunities((previous) => [newOpportunity, ...previous]);
 
       setForm({
         title: "",
@@ -347,11 +395,9 @@ export default function ManageJobs() {
           description: editForm.description.trim(),
           location: editForm.location.trim(),
 
-          // NEW DATE FIELDS
           internship_start: editForm.internshipStart,
           internship_end: editForm.internshipEnd,
 
-          // KEEP OLD FIELD UPDATED
           availability,
 
           openings: Number(editForm.openings),
@@ -365,9 +411,33 @@ export default function ManageJobs() {
         throw error;
       }
 
+      // -------------------------------------------------------
+      // REFRESH CAPACITY AFTER OPENINGS CHANGE
+      // -------------------------------------------------------
+
+      const { data: capacityData, error: capacityError } =
+        await supabaseCompany.rpc("get_opportunity_capacity", {
+          p_opportunity_id: id,
+        });
+
+      if (capacityError) {
+        console.error("Unable to refresh opportunity capacity:", capacityError);
+      }
+
+      const capacity = capacityData?.[0] || {
+        total_openings: Number(data.openings),
+        occupied_slots: 0,
+        available_slots: Number(data.openings),
+      };
+
+      const updatedOpportunity = {
+        ...data,
+        capacity,
+      };
+
       setOpportunities((previous) =>
         previous.map((opportunity) =>
-          opportunity.id === id ? data : opportunity
+          opportunity.id === id ? updatedOpportunity : opportunity
         )
       );
 
@@ -394,11 +464,29 @@ export default function ManageJobs() {
     setSubmitting(true);
 
     try {
+      const updateData = {
+        status,
+      };
+
+      // -------------------------------------------------------
+      // MANUAL CLOSE
+      // -------------------------------------------------------
+
+      if (status === STATUS.opportunity.CLOSED) {
+        updateData.closure_reason = "manual";
+      }
+
+      // -------------------------------------------------------
+      // MANUAL REOPEN
+      // -------------------------------------------------------
+
+      if (status === STATUS.opportunity.ACTIVE) {
+        updateData.closure_reason = null;
+      }
+
       const { data, error } = await supabaseCompany
         .from("opportunities")
-        .update({
-          status,
-        })
+        .update(updateData)
         .eq("id", id)
         .eq("company_id", company.id)
         .select()
@@ -408,9 +496,33 @@ export default function ManageJobs() {
         throw error;
       }
 
+      // -------------------------------------------------------
+      // REFRESH CAPACITY
+      // -------------------------------------------------------
+
+      const { data: capacityData, error: capacityError } =
+        await supabaseCompany.rpc("get_opportunity_capacity", {
+          p_opportunity_id: id,
+        });
+
+      if (capacityError) {
+        console.error("Unable to refresh opportunity capacity:", capacityError);
+      }
+
+      const capacity = capacityData?.[0] || {
+        total_openings: Number(data.openings),
+        occupied_slots: 0,
+        available_slots: Number(data.openings),
+      };
+
+      const updatedOpportunity = {
+        ...data,
+        capacity,
+      };
+
       setOpportunities((previous) =>
         previous.map((opportunity) =>
-          opportunity.id === id ? data : opportunity
+          opportunity.id === id ? updatedOpportunity : opportunity
         )
       );
     } catch (error) {
@@ -746,6 +858,19 @@ export default function ManageJobs() {
                 opportunity.availability
               );
 
+              const totalOpenings =
+                opportunity.capacity?.total_openings ??
+                opportunity.openings ??
+                0;
+
+              const occupiedSlots = opportunity.capacity?.occupied_slots ?? 0;
+
+              const availableSlots =
+                opportunity.capacity?.available_slots ??
+                Math.max(totalOpenings - occupiedSlots, 0);
+
+              const isFull = availableSlots <= 0;
+
               return (
                 <article
                   key={opportunity.id}
@@ -770,6 +895,19 @@ export default function ManageJobs() {
                           {opportunity.status.charAt(0).toUpperCase() +
                             opportunity.status.slice(1)}
                         </span>
+
+                        {opportunity.status === STATUS.opportunity.ACTIVE &&
+                          isFull && (
+                            <span
+                              className={`px-2.5 py-1 rounded-full border text-[11px] font-bold ${
+                                darkMode
+                                  ? "bg-red-950 text-red-400 border-red-800"
+                                  : "bg-red-50 text-red-700 border-red-200"
+                              }`}
+                            >
+                              Full
+                            </span>
+                          )}
                       </div>
 
                       <p className={`text-xs mt-1 ${muted}`}>
@@ -1060,7 +1198,7 @@ export default function ManageJobs() {
                   {!isEditing && (
                     <>
                       <div
-                        className={`grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-5 border-t ${border}`}
+                        className={`grid grid-cols-1 sm:grid-cols-4 gap-4 mt-5 pt-5 border-t ${border}`}
                       >
                         {/* LOCATION */}
 
@@ -1090,21 +1228,100 @@ export default function ManageJobs() {
                           </p>
                         </div>
 
-                        {/* OPENINGS */}
+                        {/* TOTAL OPENINGS */}
 
                         <div>
                           <p
                             className={`text-[11px] uppercase font-bold ${muted}`}
                           >
-                            Available Positions
+                            Total Openings
                           </p>
 
                           <p className="text-sm font-medium mt-1">
-                            {opportunity.openings}{" "}
-                            {opportunity.openings === 1
-                              ? "opening"
-                              : "openings"}
+                            {totalOpenings}{" "}
+                            {totalOpenings === 1 ? "opening" : "openings"}
                           </p>
+                        </div>
+
+                        {/* AVAILABLE SLOTS */}
+
+                        <div>
+                          <p
+                            className={`text-[11px] uppercase font-bold ${muted}`}
+                          >
+                            Available Slots
+                          </p>
+
+                          <p
+                            className={`text-sm font-bold mt-1 ${
+                              isFull
+                                ? darkMode
+                                  ? "text-red-400"
+                                  : "text-red-600"
+                                : darkMode
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
+                          >
+                            {availableSlots} / {totalOpenings}
+                          </p>
+
+                          <p className={`text-[11px] mt-0.5 ${muted}`}>
+                            {occupiedSlots}{" "}
+                            {occupiedSlots === 1 ? "intern" : "interns"}{" "}
+                            currently occupying slots
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* SLOT SUMMARY */}
+
+                      <div
+                        className={`mt-4 rounded-xl border px-4 py-3 ${
+                          isFull
+                            ? darkMode
+                              ? "bg-red-950/30 border-red-900"
+                              : "bg-red-50 border-red-200"
+                            : darkMode
+                            ? "bg-emerald-950/20 border-emerald-900"
+                            : "bg-emerald-50 border-emerald-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p
+                              className={`text-xs font-bold ${
+                                isFull
+                                  ? darkMode
+                                    ? "text-red-400"
+                                    : "text-red-700"
+                                  : darkMode
+                                  ? "text-emerald-400"
+                                  : "text-emerald-700"
+                              }`}
+                            >
+                              {isFull
+                                ? "Opportunity is full"
+                                : `${availableSlots} ${
+                                    availableSlots === 1
+                                      ? "slot is"
+                                      : "slots are"
+                                  } still available`}
+                            </p>
+
+                            <p className={`text-[11px] mt-0.5 ${muted}`}>
+                              Capacity is calculated from pending, active, and
+                              suspended internships.
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-black">
+                              {occupiedSlots} / {totalOpenings}
+                            </p>
+
+                            <p className={`text-[10px] ${muted}`}>occupied</p>
+                          </div>
                         </div>
                       </div>
 
