@@ -611,7 +611,7 @@ const Dashboard = () => {
         description:
           "Browse available internship opportunities and apply to a position that matches your program.",
         button: "Browse Opportunities",
-        action: () => navigate("/student/apply"),
+        action: () => navigate("/student/application"),
         icon: "💼",
       };
     }
@@ -1203,7 +1203,7 @@ const Dashboard = () => {
 
               <button
                 type="button"
-                onClick={() => navigate("/student/apply")}
+                onClick={() => navigate("/student/application")}
                 className="mt-6 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
               >
                 Browse Opportunities
@@ -1666,7 +1666,7 @@ const Dashboard = () => {
 
             <button
               type="button"
-              onClick={() => navigate("/student/apply")}
+              onClick={() => navigate("/student/application")}
               className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
             >
               Browse Opportunities
