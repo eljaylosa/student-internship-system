@@ -3,8 +3,6 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 // =========================================================
 // ADMIN NOTIFICATIONS
-// These are notifications that require administrator attention.
-// No backend/mockStore is used yet.
 // =========================================================
 
 const adminNotifications = [
@@ -49,7 +47,8 @@ const adminNotifications = [
     type: "system",
     category: "System",
     title: "System Update",
-    message: "The internship management system was successfully updated.",
+    message:
+      "The internship management system was successfully updated.",
     time: "Yesterday",
     unread: false,
     icon: "⚙️",
@@ -72,40 +71,53 @@ const AdminPortalLayout = () => {
   const [sidebarWidth, setSidebarWidth] = useState(250);
   const [isResizing, setIsResizing] = useState(false);
 
-  // =========================================================
-  // MOBILE SIDEBAR
-  // =========================================================
-
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
+    useState(false);
 
   // =========================================================
-  // PROFILE DROPDOWN
+  // DROPDOWNS
   // =========================================================
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const profileMenuRef = useRef(null);
+  const [isNotificationOpen, setIsNotificationOpen] =
+    useState(false);
 
-  // =========================================================
-  // NOTIFICATION DROPDOWN
-  // =========================================================
-
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const profileRef = useRef(null);
   const notificationRef = useRef(null);
 
   // =========================================================
-  // NOTIFICATION STATE
+  // NOTIFICATIONS
   // =========================================================
 
-  const [notifications, setNotifications] = useState(adminNotifications);
+  const [notifications, setNotifications] =
+    useState(adminNotifications);
+
+  const [selectedNotification, setSelectedNotification] =
+    useState(null);
+
+  const unreadCount = notifications.filter(
+    (notification) => notification.unread
+  ).length;
 
   // =========================================================
   // DARK MODE
-  // LIGHT MODE IS DEFAULT
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("sims_admin_dark_mode") === "true";
+    return (
+      localStorage.getItem("sims_admin_dark_mode") === "true"
+    );
   });
+
+  // =========================================================
+  // LOGOUT CONFIRMATION
+  // =========================================================
+
+  const [showLogoutConfirm, setShowLogoutConfirm] =
+    useState(false);
+
+  const [isLoggingOut, setIsLoggingOut] =
+    useState(false);
 
   // =========================================================
   // SIDEBAR ITEMS
@@ -113,91 +125,119 @@ const AdminPortalLayout = () => {
 
   const sidebarItems = [
     {
-      name: "Dashboard",
-      icon: "▦",
+      label: "Dashboard",
       path: "/admin/dashboard",
-    },
-    {
-      name: "Account Requests",
-      icon: "📩",
-      path: "/admin/requests",
-    },
-    {
-      name: "Company Management",
       icon: "▦",
+    },
+    {
+      label: "Account Requests",
+      path: "/admin/requests",
+      icon: "📩",
+    },
+    {
+      label: "Company Management",
       path: "/admin/companies",
+      icon: "▦",
     },
     {
-      name: "User Management",
-      icon: "👥",
+      label: "User Management",
       path: "/admin/users",
+      icon: "👥",
     },
     {
-      name: "School Management",
-      icon: "🏫",
+      label: "School Management",
       path: "/admin/schools",
+      icon: "🏫",
     },
     {
-      name: "Internship Records",
-      icon: "▣",
+      label: "Internship Records",
       path: "/admin/internships",
+      icon: "▣",
     },
     {
-      name: "Document Management",
-      icon: "▰",
+      label: "Document Management",
       path: "/admin/documents",
+      icon: "▰",
     },
     {
-      name: "Information Management",
-      icon: "ⓘ",
+      label: "Information Management",
       path: "/admin/information",
+      icon: "ⓘ",
     },
     {
-      name: "Evaluation Management",
-      icon: "★",
+      label: "Evaluation Management",
       path: "/admin/evaluations",
+      icon: "★",
     },
     {
-      name: "Reports",
-      icon: "▥",
+      label: "Reports",
       path: "/admin/reports",
+      icon: "▥",
     },
     {
-      name: "System Notifications",
-      icon: "🔔",
+      label: "System Notifications",
       path: "/admin/notifications",
+      icon: "🔔",
       badge: true,
     },
     {
-      name: "System Settings",
-      icon: "⚙",
+      label: "System Settings",
       path: "/admin/settings",
+      icon: "⚙",
     },
     {
-      name: "Audit Logs",
-      icon: "▤",
+      label: "Audit Logs",
       path: "/admin/audit-logs",
+      icon: "▤",
     },
   ];
 
   // =========================================================
-  // NOTIFICATION HELPERS
+  // NOTIFICATION HANDLERS
   // =========================================================
 
-  const unreadNotifications = notifications.filter(
-    (notification) => notification.unread
-  );
-
-  const unreadCount = unreadNotifications.length;
-
   const markNotificationAsRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((notification) =>
+    setNotifications((previous) =>
+      previous.map((notification) =>
         notification.id === id
-          ? { ...notification, unread: false }
+          ? {
+              ...notification,
+              unread: false,
+            }
           : notification
       )
     );
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifications((previous) =>
+      previous.map((notification) => ({
+        ...notification,
+        unread: false,
+      }))
+    );
+  };
+
+  const deleteNotification = (id) => {
+    setNotifications((previous) =>
+      previous.filter(
+        (notification) => notification.id !== id
+      )
+    );
+
+    if (selectedNotification?.id === id) {
+      setSelectedNotification(null);
+    }
+  };
+
+  const openNotification = (notification) => {
+    markNotificationAsRead(notification.id);
+    setSelectedNotification(notification);
+    setIsNotificationOpen(false);
+  };
+
+  const closeNotificationModal = () => {
+    setSelectedNotification(null);
   };
 
   const handleNotificationClick = (notification) => {
@@ -206,11 +246,13 @@ const AdminPortalLayout = () => {
     setIsNotificationOpen(false);
     setIsProfileOpen(false);
 
-    navigate(notification.path || "/admin/notifications");
+    navigate(
+      notification.path || "/admin/notifications"
+    );
   };
 
   // =========================================================
-  // APPLY DARK MODE
+  // DARK MODE
   // =========================================================
 
   useEffect(() => {
@@ -220,13 +262,22 @@ const AdminPortalLayout = () => {
       document.documentElement.classList.remove("dark");
     }
 
+    localStorage.setItem(
+      "sims_admin_dark_mode",
+      darkMode.toString()
+    );
+
     return () => {
       document.documentElement.classList.remove("dark");
     };
   }, [darkMode]);
 
+  const toggleDarkMode = () => {
+    setDarkMode((previous) => !previous);
+  };
+
   // =========================================================
-  // MOBILE SIDEBAR BEHAVIOR
+  // MOBILE SIDEBAR
   // =========================================================
 
   useEffect(() => {
@@ -234,35 +285,16 @@ const AdminPortalLayout = () => {
   }, [location.pathname]);
 
   // =========================================================
-  // ESCAPE KEY
+  // MOBILE BODY SCROLL LOCK
   // =========================================================
 
   useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsMobileSidebarOpen(false);
-        setIsProfileOpen(false);
-        setIsNotificationOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
-  // =========================================================
-  // PREVENT BACKGROUND SCROLLING ON MOBILE
-  // =========================================================
-
-  useEffect(() => {
-    if (isMobileSidebarOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
+    if (!isMobileSidebarOpen) {
       document.body.style.overflow = "";
+      return;
     }
+
+    document.body.style.overflow = "hidden";
 
     return () => {
       document.body.style.overflow = "";
@@ -270,14 +302,43 @@ const AdminPortalLayout = () => {
   }, [isMobileSidebarOpen]);
 
   // =========================================================
-  // CLOSE DROPDOWNS WHEN CLICKING OUTSIDE
+  // ESCAPE KEY
+  // =========================================================
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+
+      setIsMobileSidebarOpen(false);
+      setIsProfileOpen(false);
+      setIsNotificationOpen(false);
+      setSelectedNotification(null);
+      setShowLogoutConfirm(false);
+
+      if (isResizing) {
+        setIsResizing(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+    };
+  }, [isResizing]);
+
+  // =========================================================
+  // CLICK OUTSIDE DROPDOWNS
   // =========================================================
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target)
+        profileRef.current &&
+        !profileRef.current.contains(event.target)
       ) {
         setIsProfileOpen(false);
       }
@@ -290,10 +351,16 @@ const AdminPortalLayout = () => {
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
     };
   }, []);
 
@@ -301,45 +368,94 @@ const AdminPortalLayout = () => {
   // SIDEBAR RESIZE
   // =========================================================
 
-  const handleSidebarResizeStart = (e) => {
-    e.preventDefault();
+  const handleResizeStart = (event) => {
+    // Only allow primary mouse button / normal touch pointer
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
 
     setIsResizing(true);
 
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    // Capture the pointer so dragging remains active
+    // even when the cursor moves away from the handle.
+    try {
+      event.currentTarget.setPointerCapture(
+        event.pointerId
+      );
+    } catch (error) {
+      console.warn(
+        "Pointer capture unavailable:",
+        error
+      );
+    }
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
   };
 
-  const handleSidebarResize = (e) => {
+  const handleResizeMove = (event) => {
     if (!isResizing) return;
 
-    const minWidth = 230;
-    const maxWidth = 340;
+    event.preventDefault();
 
-    const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
+    const MIN_WIDTH = 230;
+    const MAX_WIDTH = 340;
+
+    const newWidth = Math.min(
+      Math.max(event.clientX, MIN_WIDTH),
+      MAX_WIDTH
+    );
 
     setSidebarWidth(newWidth);
   };
 
-  const handleSidebarResizeEnd = (e) => {
-    setIsResizing(false);
+  const handleResizeEnd = (event) => {
+    if (!isResizing) return;
 
     try {
-      e.currentTarget.releasePointerCapture?.(e.pointerId);
-    } catch {
-      // Pointer capture may already be released.
+      if (
+        event.currentTarget.hasPointerCapture(
+          event.pointerId
+        )
+      ) {
+        event.currentTarget.releasePointerCapture(
+          event.pointerId
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Pointer release unavailable:",
+        error
+      );
     }
+
+    setIsResizing(false);
+
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
   };
+
+  // Safety cleanup if component unmounts while resizing
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, []);
 
   // =========================================================
   // NAVIGATION
   // =========================================================
 
   const navigateTo = (path) => {
+    navigate(path);
+
+    setIsMobileSidebarOpen(false);
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
-    setIsMobileSidebarOpen(false);
-
-    navigate(path);
   };
 
   // =========================================================
@@ -351,20 +467,16 @@ const AdminPortalLayout = () => {
   };
 
   // =========================================================
-  // CURRENT SIDEBAR ITEM
-  // =========================================================
-
-  const currentItem = sidebarItems.find(
-    (item) => item.path === location.pathname
-  );
-
-  // =========================================================
   // PAGE TITLE
   // =========================================================
 
   const getPageTitle = () => {
+    const currentItem = sidebarItems.find(
+      (item) => item.path === location.pathname
+    );
+
     if (currentItem) {
-      return currentItem.name;
+      return currentItem.label;
     }
 
     if (location.pathname === "/admin/profile") {
@@ -374,313 +486,337 @@ const AdminPortalLayout = () => {
     return "Administrator Portal";
   };
 
-  const pageTitle = getPageTitle();
-
   // =========================================================
   // LOGOUT
   // =========================================================
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
     setIsMobileSidebarOpen(false);
+    setShowLogoutConfirm(true);
+  };
 
-    navigate("/admin/login", { replace: true });
+  const confirmLogout = async () => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+
+      // Admin currently has no Supabase logout here.
+      // Keep this as navigation until Admin auth is connected.
+
+      setShowLogoutConfirm(false);
+      setIsMobileSidebarOpen(false);
+
+      navigate("/admin/login", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setIsLoggingOut(false);
+    }
+  };
+
+  const cancelLogout = () => {
+    if (isLoggingOut) return;
+
+    setShowLogoutConfirm(false);
   };
 
   // =========================================================
-  // DARK MODE
+  // SIDEBAR CONTENT
   // =========================================================
 
-  const toggleDarkMode = () => {
-    setDarkMode((prev) => {
-      const nextMode = !prev;
-
-      localStorage.setItem("sims_admin_dark_mode", String(nextMode));
-
-      return nextMode;
-    });
-  };
-
-  // =========================================================
-  // DEMO NOTICE
-  // =========================================================
-
-  const renderDemoNotice = () => {
+  const renderSidebarContent = (mobile = false) => {
     return (
       <div
-        className={`mb-3 p-3 rounded-lg text-[10px] leading-relaxed border ${
+        className={`relative flex h-full min-h-0 flex-col overflow-hidden ${
           darkMode
-            ? "bg-red-950/40 border-red-900 text-red-300"
-            : "bg-red-50 border-red-200 text-red-700"
+            ? "bg-slate-900 text-white"
+            : "bg-white text-slate-900"
         }`}
       >
-        <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-        <p>All data on this page are dummy data. No real data are used.</p>
-
-        <p className="mt-1">No database is implemented yet.</p>
-      </div>
-    );
-  };
-
-  // =========================================================
-  // SIDEBAR NAVIGATION
-  // =========================================================
-
-  const renderNavigation = () => {
-    return (
-      <nav className="space-y-1">
-        {sidebarItems.map((item) => {
-          const active = isPathActive(item.path);
-
-          return (
-            <button
-              key={item.name}
-              type="button"
-              onClick={() => navigateTo(item.path)}
-              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] font-semibold transition ${
-                active
-                  ? darkMode
-                    ? "bg-white text-slate-900"
-                    : "bg-slate-800 text-white"
-                  : darkMode
-                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  : "text-slate-700 hover:bg-slate-100"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-5 text-center flex-shrink-0">
-                  {item.icon}
-                </span>
-
-                <span className="truncate">{item.name}</span>
-              </div>
-
-              {item.badge && unreadCount > 0 && (
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    active ? "bg-current" : "bg-red-500"
-                  }`}
-                />
-              )}
-            </button>
-          );
-        })}
-      </nav>
-    );
-  };
-
-  // =========================================================
-  // RETURN
-  // =========================================================
-
-  return (
-    <div
-      className={`min-h-screen transition-colors duration-300 ${
-        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
-      }`}
-    >
-      <div className="flex min-h-screen">
         {/* ===================================================
-            DESKTOP SIDEBAR
+            BRAND
         =================================================== */}
 
-        <aside
-          style={{ width: `${sidebarWidth}px` }}
-          className={`relative hidden lg:flex flex-col flex-shrink-0 border-r transition-colors duration-300 ${
+        <div
+          className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
             darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-200"
-          } ${isResizing ? "select-none" : ""}`}
+              ? "border-slate-700"
+              : "border-slate-200"
+          }`}
         >
-          {/* LOGO */}
-
-          <div
-            className={`min-h-[72px] px-4 flex items-center border-b ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
+          <div className="flex min-w-0 items-center gap-3">
             <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
-                darkMode ? "bg-white text-slate-900" : "bg-slate-800 text-white"
+              className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl font-bold shadow-md ${
+                darkMode
+                  ? "bg-white text-slate-900"
+                  : "bg-slate-900 text-white"
               }`}
             >
               🛡
             </div>
 
-            <div className="ml-3 min-w-0">
-              <h1 className="font-bold text-sm tracking-tight truncate">
+            <div className="min-w-0">
+              <h1
+                className={`truncate text-sm font-bold tracking-tight ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
+                }`}
+              >
                 ADMINISTRATOR PORTAL
               </h1>
 
-              <p className="text-[10px] text-slate-400 mt-0.5">
+              <p
+                className={`truncate text-[10px] ${
+                  darkMode
+                    ? "text-slate-400"
+                    : "text-slate-500"
+                }`}
+              >
                 SIMS Administration
               </p>
             </div>
           </div>
 
-          {/* NAVIGATION */}
+          {/* MOBILE CLOSE */}
 
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            {renderDemoNotice()}
-            {renderNavigation()}
-          </div>
-
-          {/* LOGOUT */}
-
-          <div
-            className={`p-3 border-t ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
+          {mobile && (
             <button
               type="button"
-              onClick={handleLogout}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-[11px] font-semibold transition ${
+              onClick={() =>
+                setIsMobileSidebarOpen(false)
+              }
+              className={`ml-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition ${
                 darkMode
-                  ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
-                  : "text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  : "text-slate-500 hover:bg-slate-800 hover:text-white"
               }`}
+              aria-label="Close sidebar"
             >
-              <span>🚪</span>
-              <span>Logout</span>
+              ✕
             </button>
-          </div>
+          )}
+        </div>
 
-          {/* RESIZE HANDLE */}
+        {/* ===================================================
+            NAVIGATION
+        =================================================== */}
+
+        <div
+          className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
+            darkMode
+              ? "scrollbar-thumb-slate-700"
+              : "scrollbar-thumb-slate-300"
+          }`}
+          style={{
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
+          }}
+        >
+          <div className="space-y-1">
+            {sidebarItems.map((item) => {
+              const active = isPathActive(item.path);
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() =>
+                    navigateTo(item.path)
+                  }
+                  aria-current={
+                    active ? "page" : undefined
+                  }
+                  className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[11px] font-semibold transition-all ${
+                    active
+                      ? darkMode
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "bg-slate-800 text-white shadow-sm"
+                      : darkMode
+                      ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      : "text-slate-600 hover:bg-slate-800 hover:text-white"
+                  }`}
+                >
+                  {/* ACTIVE INDICATOR */}
+
+                  {active && (
+                    <span
+                      className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${
+                        darkMode
+                          ? "bg-white"
+                          : "bg-slate-900"
+                      }`}
+                    />
+                  )}
+
+                  {/* ICON */}
+
+                  <span className="flex w-6 flex-shrink-0 items-center justify-center text-base">
+                    {item.icon}
+                  </span>
+
+                  {/* LABEL */}
+
+                  <span className="min-w-0 flex-1 truncate">
+                    {item.label}
+                  </span>
+
+                  {/* BADGE */}
+
+                  {item.badge &&
+                    unreadCount > 0 && (
+                      <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+                    )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ===================================================
+            FIXED LOGOUT FOOTER
+        =================================================== */}
+
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 border-t p-3 backdrop-blur-md ${
+            darkMode
+              ? "border-slate-700 bg-slate-900/95"
+              : "border-slate-200 bg-white/95"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={handleLogoutClick}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[11px] font-semibold transition ${
+              darkMode
+                ? "text-slate-300 hover:bg-red-950/70 hover:text-red-400"
+                : "text-slate-600 hover:bg-red-50 hover:text-red-600"
+            }`}
+          >
+            <span className="flex w-6 items-center justify-center text-base">
+              ↪
+            </span>
+
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+
+  return (
+    <div
+      className={`min-h-screen w-full transition-colors duration-300 ${
+        darkMode
+          ? "bg-slate-950 text-slate-100"
+          : "bg-slate-50 text-slate-900"
+      }`}
+      style={{
+        touchAction: "pan-y",
+      }}
+    >
+      <div className="flex min-h-screen w-full">
+
+        {/* ===================================================
+            DESKTOP SIDEBAR
+        =================================================== */}
+
+        <aside
+          style={{
+            width: `${sidebarWidth}px`,
+          }}
+          className={`fixed inset-y-0 left-0 z-[70] hidden h-screen flex-shrink-0 overflow-hidden border-r lg:flex ${
+            darkMode
+              ? "border-slate-700 bg-slate-900"
+              : "border-slate-200 bg-white"
+          } ${
+            isResizing
+              ? "select-none"
+              : ""
+          }`}
+        >
+          {renderSidebarContent(false)}
+
+          {/* =================================================
+              RESIZE HANDLE
+          ================================================= */}
 
           <div
             role="separator"
             aria-label="Resize sidebar"
             aria-orientation="vertical"
-            onPointerDown={handleSidebarResizeStart}
-            onPointerMove={handleSidebarResize}
-            onPointerUp={handleSidebarResizeEnd}
-            onPointerCancel={handleSidebarResizeEnd}
-            className={`absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize touch-none ${
+            aria-valuemin={230}
+            aria-valuemax={340}
+            aria-valuenow={sidebarWidth}
+            onPointerDown={handleResizeStart}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            onPointerCancel={handleResizeEnd}
+            className={`absolute right-0 top-0 z-[100] h-full w-2 cursor-col-resize touch-none select-none transition-colors ${
               isResizing
                 ? "bg-blue-500"
                 : darkMode
                 ? "hover:bg-slate-700"
                 : "hover:bg-slate-300"
             }`}
-          />
+          >
+            {/* SMALL VISUAL GRIP */}
+
+            <div
+              className={`absolute left-1/2 top-1/2 h-12 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full transition ${
+                isResizing
+                  ? "bg-white"
+                  : darkMode
+                  ? "bg-slate-600"
+                  : "bg-slate-300"
+              }`}
+            />
+          </div>
         </aside>
 
         {/* ===================================================
-            MOBILE OVERLAY
+            DESKTOP SIDEBAR SPACER
         =================================================== */}
 
-        {isMobileSidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-        )}
-
-        {/* ===================================================
-            MOBILE SIDEBAR
-        =================================================== */}
-
-        <aside
-          className={`fixed top-0 left-0 z-50 h-full w-[280px] max-w-[85vw] flex flex-col border-r transition-transform duration-300 lg:hidden ${
-            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } ${
-            darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-200"
-          }`}
-        >
-          {/* MOBILE HEADER */}
-
-          <div
-            className={`min-h-[72px] px-4 flex items-center justify-between border-b ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
-            <div className="flex items-center">
-              <div
-                className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
-                  darkMode
-                    ? "bg-white text-slate-900"
-                    : "bg-slate-800 text-white"
-                }`}
-              >
-                🛡
-              </div>
-
-              <div className="ml-3">
-                <h1 className="font-bold text-sm">ADMINISTRATOR PORTAL</h1>
-
-                <p className="text-[10px] text-slate-400">
-                  SIMS Administration
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsMobileSidebarOpen(false)}
-              aria-label="Close navigation menu"
-              className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition ${
-                darkMode
-                  ? "text-slate-300 hover:bg-slate-800"
-                  : "text-slate-500 hover:bg-slate-100"
-              }`}
-            >
-              ×
-            </button>
-          </div>
-
-          {/* MOBILE NAVIGATION */}
-
-          <div className="flex-1 overflow-y-auto px-3 py-3">
-            {renderDemoNotice()}
-            {renderNavigation()}
-          </div>
-
-          {/* MOBILE LOGOUT */}
-
-          <div
-            className={`p-3 border-t ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={handleLogout}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-[11px] font-semibold transition ${
-                darkMode
-                  ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
-                  : "text-slate-500 hover:bg-red-50 hover:text-red-600"
-              }`}
-            >
-              <span>🚪</span>
-              <span>Logout</span>
-            </button>
-          </div>
-        </aside>
+        <div
+          className="hidden flex-shrink-0 lg:block"
+          style={{
+            width: `${sidebarWidth}px`,
+          }}
+          aria-hidden="true"
+        />
 
         {/* ===================================================
             MAIN AREA
         =================================================== */}
 
-        <div className="flex-1 min-w-0">
+        <div className="flex min-w-0 flex-1 flex-col">
+
           {/* =================================================
               NAVBAR
           ================================================= */}
 
           <header
-            className={`h-16 sm:h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 relative transition-colors duration-300 ${
+            className={`sticky top-0 z-50 flex h-20 flex-shrink-0 items-center justify-between border-b px-3 shadow-sm backdrop-blur sm:px-6 lg:px-8 ${
               darkMode
-                ? "bg-slate-900 border-slate-700 text-white"
-                : "bg-white border-slate-200 text-slate-900"
+                ? "border-slate-800 bg-slate-900/95"
+                : "border-slate-200 bg-white/95"
             }`}
           >
-            {/* LEFT */}
+            {/* =================================================
+                LEFT
+            ================================================= */}
 
-            <div className="flex items-center min-w-0">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+
               {/* MOBILE MENU */}
 
               <button
@@ -690,9 +826,11 @@ const AdminPortalLayout = () => {
                   setIsProfileOpen(false);
                   setIsNotificationOpen(false);
                 }}
-                aria-label="Open navigation menu"
-                className={`lg:hidden w-10 h-10 mr-3 rounded-xl flex items-center justify-center text-xl flex-shrink-0 transition ${
-                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                aria-label="Open sidebar"
+                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg transition lg:hidden ${
+                  darkMode
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
                 ☰
@@ -701,223 +839,355 @@ const AdminPortalLayout = () => {
               {/* PAGE TITLE */}
 
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm text-slate-400">
-                  Administrator Portal
-                </p>
-
-                <h2 className="font-bold text-sm sm:text-lg truncate">
-                  {pageTitle}
+                <h2
+                  className={`truncate text-lg font-bold sm:text-xl ${
+                    darkMode
+                      ? "text-white"
+                      : "text-slate-900"
+                  }`}
+                >
+                  {getPageTitle()}
                 </h2>
+
+                <p
+                  className={`hidden truncate text-xs sm:block ${
+                    darkMode
+                      ? "text-slate-400"
+                      : "text-slate-500"
+                  }`}
+                >
+                  Student Internship Management System
+                </p>
               </div>
             </div>
 
-            {/* RIGHT */}
+            {/* =================================================
+                RIGHT
+            ================================================= */}
 
-            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+            <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
+
               {/* =================================================
-                  ADMIN NOTIFICATIONS
+                  DARK MODE
               ================================================= */}
 
-              <div className="relative" ref={notificationRef}>
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                aria-label={
+                  darkMode
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+                }
+                title={
+                  darkMode
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+                }
+                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg transition ${
+                  darkMode
+                    ? "text-yellow-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {darkMode ? "☀️" : "🌙"}
+              </button>
+
+              {/* =================================================
+                  NOTIFICATIONS
+              ================================================= */}
+
+              <div
+                ref={notificationRef}
+                className="relative"
+              >
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen((prev) => !prev);
+                    setIsNotificationOpen(
+                      (previous) => !previous
+                    );
                     setIsProfileOpen(false);
                   }}
-                  className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition ${
-                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-xl text-lg transition ${
+                    darkMode
+                      ? "text-slate-300 hover:bg-slate-800"
+                      : "text-slate-600 hover:bg-slate-100"
                   }`}
                   aria-label="Administrator notifications"
                 >
-                  <span className="text-lg">🔔</span>
+                  🔔
 
                   {unreadCount > 0 && (
-                    <>
-                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-
-                      <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                        {unreadCount > 9 ? "9+" : unreadCount}
-                      </span>
-                    </>
+                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                      {unreadCount > 9
+                        ? "9+"
+                        : unreadCount}
+                    </span>
                   )}
                 </button>
 
+                {/* NOTIFICATION DROPDOWN */}
+
                 {isNotificationOpen && (
                   <div
-                    className={`absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-96 border rounded-xl shadow-xl z-50 overflow-hidden ${
+                    className={`fixed left-3 right-3 top-[84px] z-[100] w-auto max-w-none overflow-hidden rounded-2xl border shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] ${
                       darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-white border-slate-200"
+                        ? "border-slate-700 bg-slate-900"
+                        : "border-slate-200 bg-white"
                     }`}
                   >
                     {/* HEADER */}
 
                     <div
-                      className={`px-4 py-3 border-b flex items-center justify-between ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
+                      className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
+                        darkMode
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
-                      <div>
-                        <h3 className="text-sm font-bold">
+                      <div className="min-w-0">
+                        <h3
+                          className={`font-bold ${
+                            darkMode
+                              ? "text-white"
+                              : "text-slate-900"
+                          }`}
+                        >
                           Administrator Notifications
                         </h3>
 
                         <p
-                          className={`text-xs mt-0.5 ${
-                            darkMode ? "text-slate-400" : "text-slate-500"
+                          className={`mt-0.5 text-xs ${
+                            darkMode
+                              ? "text-slate-400"
+                              : "text-slate-500"
                           }`}
                         >
-                          Account requests and system actions
+                          {unreadCount} unread
                         </p>
                       </div>
 
                       {unreadCount > 0 && (
-                        <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full">
-                          {unreadCount} New
-                        </span>
+                        <button
+                          type="button"
+                          onClick={
+                            markAllNotificationsRead
+                          }
+                          className={`flex-shrink-0 text-xs font-semibold hover:underline ${
+                            darkMode
+                              ? "text-blue-400"
+                              : "text-blue-600"
+                          }`}
+                        >
+                          Mark all read
+                        </button>
                       )}
                     </div>
 
                     {/* LIST */}
 
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length > 0 ? (
-                        notifications.map((notification) => (
-                          <button
-                            key={notification.id}
-                            type="button"
-                            onClick={() =>
-                              handleNotificationClick(notification)
-                            }
-                            className={`w-full text-left px-4 py-3 border-b transition ${
-                              notification.unread
-                                ? darkMode
-                                  ? "bg-slate-800 hover:bg-slate-700"
-                                  : "bg-blue-50/50 hover:bg-blue-50"
-                                : darkMode
-                                ? "hover:bg-slate-700"
-                                : "hover:bg-slate-50"
-                            } ${
-                              darkMode ? "border-slate-700" : "border-slate-100"
-                            }`}
-                          >
-                            <div className="flex gap-3">
-                              {/* ICON */}
-
-                              <div
-                                className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                  notification.type === "account-request"
-                                    ? darkMode
-                                      ? "bg-blue-950 text-blue-300"
-                                      : "bg-blue-100 text-blue-700"
-                                    : notification.type ===
-                                      "company-registration"
-                                    ? darkMode
-                                      ? "bg-emerald-950 text-emerald-300"
-                                      : "bg-emerald-100 text-emerald-700"
-                                    : darkMode
-                                    ? "bg-slate-700"
-                                    : "bg-slate-100"
-                                }`}
-                              >
-                                {notification.icon}
-                              </div>
-
-                              {/* CONTENT */}
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-xs font-bold truncate">
-                                    {notification.title}
-                                  </p>
-
-                                  {notification.unread && (
-                                    <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-                                  )}
-                                </div>
-
-                                <p
-                                  className={`text-xs mt-1 line-clamp-2 ${
-                                    darkMode
-                                      ? "text-slate-400"
-                                      : "text-slate-500"
-                                  }`}
-                                >
-                                  {notification.message}
-                                </p>
-
-                                <p
-                                  className={`text-[10px] mt-1.5 ${
-                                    darkMode
-                                      ? "text-slate-500"
-                                      : "text-slate-400"
-                                  }`}
-                                >
-                                  {notification.time}
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-4 py-8 text-center">
-                          <div className="text-2xl mb-2">✓</div>
-
-                          <p className="text-xs font-semibold">
-                            No notifications
-                          </p>
+                    <div
+                      className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
+                      style={{
+                        WebkitOverflowScrolling:
+                          "touch",
+                        touchAction: "pan-y",
+                      }}
+                    >
+                      {notifications.length === 0 ? (
+                        <div className="px-5 py-8 text-center">
+                          <div className="mb-2 text-3xl">
+                            ✓
+                          </div>
 
                           <p
-                            className={`text-[11px] mt-1 ${
-                              darkMode ? "text-slate-400" : "text-slate-500"
+                            className={`text-sm ${
+                              darkMode
+                                ? "text-slate-400"
+                                : "text-slate-500"
                             }`}
                           >
-                            You're all caught up.
+                            No notifications
                           </p>
                         </div>
+                      ) : (
+                        notifications.map(
+                          (notification) => (
+                            <div
+                              key={notification.id}
+                              className={`group relative border-b px-4 py-3 transition ${
+                                darkMode
+                                  ? "border-slate-800 hover:bg-slate-800/70"
+                                  : "border-slate-100 hover:bg-slate-50"
+                              } ${
+                                notification.unread
+                                  ? darkMode
+                                    ? "bg-slate-800/60"
+                                    : "bg-slate-50"
+                                  : ""
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openNotification(
+                                    notification
+                                  )
+                                }
+                                className="w-full pr-8 text-left"
+                              >
+                                <div className="flex gap-3">
+
+                                  {/* ICON */}
+
+                                  <div
+                                    className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                                      notification.type ===
+                                      "account-request"
+                                        ? darkMode
+                                          ? "bg-blue-950 text-blue-300"
+                                          : "bg-blue-100 text-blue-700"
+                                        : notification.type ===
+                                          "company-registration"
+                                        ? darkMode
+                                          ? "bg-emerald-950 text-emerald-300"
+                                          : "bg-emerald-100 text-emerald-700"
+                                        : darkMode
+                                        ? "bg-slate-700"
+                                        : "bg-slate-100"
+                                    }`}
+                                  >
+                                    {notification.icon}
+                                  </div>
+
+                                  {/* CONTENT */}
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start gap-2">
+                                      <h4
+                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                          darkMode
+                                            ? "text-white"
+                                            : "text-slate-800"
+                                        }`}
+                                      >
+                                        {
+                                          notification.title
+                                        }
+                                      </h4>
+
+                                      {notification.unread && (
+                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                                      )}
+                                    </div>
+
+                                    <p
+                                      className={`mt-1 break-words text-xs leading-5 ${
+                                        darkMode
+                                          ? "text-slate-400"
+                                          : "text-slate-500"
+                                      }`}
+                                    >
+                                      {
+                                        notification.message
+                                      }
+                                    </p>
+
+                                    <p
+                                      className={`mt-1.5 text-[10px] ${
+                                        darkMode
+                                          ? "text-slate-500"
+                                          : "text-slate-400"
+                                      }`}
+                                    >
+                                      {
+                                        notification.time
+                                      }
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {/* DELETE */}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteNotification(
+                                    notification.id
+                                  )
+                                }
+                                className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-xs opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 ${
+                                  darkMode
+                                    ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+                                    : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                }`}
+                                aria-label="Delete notification"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )
+                        )
                       )}
                     </div>
 
                     {/* VIEW ALL */}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNotificationOpen(false);
-                        navigateTo("/admin/notifications");
-                      }}
-                      className={`w-full py-3 text-xs font-bold transition ${
+                    <div
+                      className={`border-t p-2 ${
                         darkMode
-                          ? "text-blue-400 hover:bg-slate-700"
-                          : "text-slate-700 hover:bg-slate-50"
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
-                      View All Notifications
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigateTo(
+                            "/admin/notifications"
+                          )
+                        }
+                        className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
+                          darkMode
+                            ? "text-blue-400 hover:bg-slate-800"
+                            : "text-blue-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        View all notifications
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* =================================================
-                  PROFILE DROPDOWN
+                  PROFILE
               ================================================= */}
 
-              <div className="relative" ref={profileMenuRef}>
+              <div
+                ref={profileRef}
+                className="relative"
+              >
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen((prev) => !prev);
+                    setIsProfileOpen(
+                      (previous) => !previous
+                    );
                     setIsNotificationOpen(false);
                   }}
-                  className={`flex items-center gap-2 sm:gap-3 px-2 py-1.5 rounded-xl transition ${
-                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                  className={`flex items-center gap-2 rounded-xl p-1.5 transition ${
+                    darkMode
+                      ? "hover:bg-slate-800"
+                      : "hover:bg-slate-100"
                   }`}
                 >
                   {/* AVATAR */}
 
                   <div
-                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold sm:h-10 sm:w-10 ${
                       darkMode
                         ? "bg-white text-slate-900"
                         : "bg-slate-800 text-white"
@@ -926,130 +1196,159 @@ const AdminPortalLayout = () => {
                     AD
                   </div>
 
-                  {/* ADMIN INFO */}
+                  {/* INFO */}
 
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">
+                  <div className="hidden text-left sm:block">
+                    <p
+                      className={`max-w-[150px] truncate text-sm font-semibold ${
+                        darkMode
+                          ? "text-white"
+                          : "text-slate-800"
+                      }`}
+                    >
                       System Administrator
                     </p>
 
-                    <p className="text-xs text-slate-400">Administrator</p>
+                    <p
+                      className={`max-w-[150px] truncate text-[10px] ${
+                        darkMode
+                          ? "text-slate-400"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      Administrator
+                    </p>
                   </div>
 
                   <span
-                    className={`hidden sm:block text-xs transition-transform ${
-                      isProfileOpen ? "rotate-180" : ""
+                    className={`hidden text-xs transition-transform sm:block ${
+                      darkMode
+                        ? "text-slate-400"
+                        : "text-slate-500"
+                    } ${
+                      isProfileOpen
+                        ? "rotate-180"
+                        : ""
                     }`}
                   >
                     ▼
                   </span>
                 </button>
 
-                {/* PROFILE MENU */}
+                {/* PROFILE DROPDOWN */}
 
                 {isProfileOpen && (
                   <div
-                    className={`absolute right-0 top-14 w-60 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
+                    className={`absolute right-0 top-12 z-[100] w-60 overflow-hidden rounded-2xl border shadow-xl ${
                       darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-white border-slate-200"
+                        ? "border-slate-700 bg-slate-900"
+                        : "border-slate-200 bg-white"
                     }`}
                   >
                     {/* HEADER */}
 
                     <div
-                      className={`px-4 py-4 border-b ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
+                      className={`border-b px-4 py-4 ${
+                        darkMode
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
-                      <p className="text-sm font-bold">System Administrator</p>
-
-                      <p
-                        className={`text-xs mt-1 ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
-                      >
-                        Administrator Account
-                      </p>
-                    </div>
-
-                    {/* PROFILE */}
-
-                    <button
-                      type="button"
-                      onClick={() => navigateTo("/admin/profile")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
-                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>👤</span>
-                      <span>My Profile</span>
-                    </button>
-
-                    {/* SETTINGS */}
-
-                    <button
-                      type="button"
-                      onClick={() => navigateTo("/admin/settings")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
-                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>⚙️</span>
-                      <span>System Settings</span>
-                    </button>
-
-                    {/* DARK MODE */}
-
-                    <div
-                      className={`border-t ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={toggleDarkMode}
-                        className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left transition ${
-                          darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span>{darkMode ? "☀️" : "🌙"}</span>
-
-                          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
-                        </div>
-
+                      <div className="flex items-center gap-3">
                         <div
-                          className={`w-9 h-5 rounded-full p-0.5 transition ${
-                            darkMode ? "bg-blue-600" : "bg-slate-300"
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold ${
+                            darkMode
+                              ? "bg-white text-slate-900"
+                              : "bg-slate-800 text-white"
                           }`}
                         >
-                          <div
-                            className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                              darkMode ? "translate-x-4" : "translate-x-0"
-                            }`}
-                          />
+                          AD
                         </div>
-                      </button>
+
+                        <div className="min-w-0">
+                          <p
+                            className={`truncate text-sm font-semibold ${
+                              darkMode
+                                ? "text-white"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            System Administrator
+                          </p>
+
+                          <p
+                            className={`truncate text-xs ${
+                              darkMode
+                                ? "text-slate-400"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            Administrator Account
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* LOGOUT */}
+                    <div className="p-2">
 
-                    <div
-                      className={`border-t ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
-                      }`}
-                    >
+                      {/* MY PROFILE */}
+
                       <button
                         type="button"
-                        onClick={handleLogout}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition ${
+                        onClick={() =>
+                          navigateTo(
+                            "/admin/profile"
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
                           darkMode
-                            ? "text-red-400 hover:bg-red-950"
-                            : "text-red-500 hover:bg-red-50"
+                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            : "text-slate-600 hover:bg-slate-800 hover:text-white"
                         }`}
                       >
-                        <span>🚪</span>
+                        👤
+                        <span>My Profile</span>
+                      </button>
+
+                      {/* SETTINGS */}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigateTo(
+                            "/admin/settings"
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                          darkMode
+                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            : "text-slate-600 hover:bg-slate-800 hover:text-white"
+                        }`}
+                      >
+                        ⚙️
+                        <span>System Settings</span>
+                      </button>
+
+                      <div
+                        className={`my-1 border-t ${
+                          darkMode
+                            ? "border-slate-800"
+                            : "border-slate-100"
+                        }`}
+                      />
+
+                      {/* LOGOUT */}
+
+                      <button
+                        type="button"
+                        onClick={handleLogoutClick}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                          darkMode
+                            ? "text-red-400 hover:bg-red-500/10"
+                            : "text-red-600 hover:bg-red-50"
+                        }`}
+                      >
+                        ↪
                         <span>Logout</span>
                       </button>
                     </div>
@@ -1064,14 +1363,287 @@ const AdminPortalLayout = () => {
           ================================================= */}
 
           <main
-            className={`min-w-0 min-h-[calc(100vh-5rem)] transition-colors duration-300 ${
-              darkMode ? "bg-slate-950" : "bg-slate-50"
+            className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 transition-colors duration-300 ${
+              darkMode
+                ? "bg-slate-950"
+                : "bg-slate-50"
             }`}
+            style={{
+              touchAction: "pan-y",
+            }}
           >
-            <Outlet context={{ darkMode }} />
+            <Outlet
+              context={{
+                darkMode,
+                notifications,
+                unreadCount,
+                markNotificationAsRead,
+                markAllNotificationsRead,
+                deleteNotification,
+                selectedNotification,
+                openNotification,
+                closeNotificationModal,
+              }}
+            />
           </main>
         </div>
       </div>
+
+      {/* =====================================================
+          MOBILE OVERLAY
+      ===================================================== */}
+
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
+          onClick={() =>
+            setIsMobileSidebarOpen(false)
+          }
+        />
+      )}
+
+      {/* =====================================================
+          MOBILE SIDEBAR
+      ===================================================== */}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
+          darkMode
+            ? "bg-slate-900"
+            : "bg-white"
+        } ${
+          isMobileSidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full"
+        }`}
+      >
+        {renderSidebarContent(true)}
+      </aside>
+
+      {/* =====================================================
+          NOTIFICATION MODAL
+      ===================================================== */}
+
+      {selectedNotification && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
+          onClick={closeNotificationModal}
+        >
+          <div
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
+              darkMode
+                ? "border-slate-700 bg-slate-900"
+                : "border-slate-200 bg-white"
+            }`}
+          >
+            {/* HEADER */}
+
+            <div
+              className={`flex items-center justify-between border-b px-5 py-4 ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
+              }`}
+            >
+              <h3
+                className={`font-bold ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
+                }`}
+              >
+                Notification
+              </h3>
+
+              <button
+                type="button"
+                onClick={closeNotificationModal}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  darkMode
+                    ? "text-slate-400 hover:bg-slate-800"
+                    : "text-slate-500 hover:bg-slate-100"
+                }`}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* CONTENT */}
+
+            <div className="px-5 py-6">
+              <div className="mb-4 flex items-start gap-3">
+                <div
+                  className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl ${
+                    selectedNotification.type ===
+                    "account-request"
+                      ? darkMode
+                        ? "bg-blue-950 text-blue-300"
+                        : "bg-blue-100 text-blue-700"
+                      : selectedNotification.type ===
+                        "company-registration"
+                      ? darkMode
+                        ? "bg-emerald-950 text-emerald-300"
+                        : "bg-emerald-100 text-emerald-700"
+                      : darkMode
+                      ? "bg-slate-800"
+                      : "bg-slate-100"
+                  }`}
+                >
+                  {selectedNotification.icon}
+                </div>
+
+                <div className="min-w-0">
+                  <h4
+                    className={`font-bold ${
+                      darkMode
+                        ? "text-white"
+                        : "text-slate-900"
+                    }`}
+                  >
+                    {selectedNotification.title}
+                  </h4>
+
+                  <p
+                    className={`mt-1 text-xs ${
+                      darkMode
+                        ? "text-slate-500"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {selectedNotification.time}
+                  </p>
+                </div>
+              </div>
+
+              <p
+                className={`text-sm leading-6 ${
+                  darkMode
+                    ? "text-slate-300"
+                    : "text-slate-600"
+                }`}
+              >
+                {selectedNotification.message}
+              </p>
+            </div>
+
+            {/* FOOTER */}
+
+            <div
+              className={`border-t px-5 py-3 text-right ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={closeNotificationModal}
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          LOGOUT CONFIRMATION
+      ===================================================== */}
+
+      {showLogoutConfirm && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+          onClick={cancelLogout}
+        >
+          <div
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${
+              darkMode
+                ? "border-slate-700 bg-slate-900"
+                : "border-slate-200 bg-white"
+            }`}
+          >
+            {/* ICON */}
+
+            <div className="flex justify-center pt-7">
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
+                  darkMode
+                    ? "bg-red-500/10"
+                    : "bg-red-50"
+                }`}
+              >
+                ↪
+              </div>
+            </div>
+
+            {/* CONTENT */}
+
+            <div className="px-6 pb-5 pt-4 text-center">
+              <h3
+                className={`text-lg font-bold ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
+                }`}
+              >
+                Are you sure?
+              </h3>
+
+              <p
+                className={`mt-2 text-sm leading-6 ${
+                  darkMode
+                    ? "text-slate-400"
+                    : "text-slate-500"
+                }`}
+              >
+                Are you sure you want to log out of
+                your administrator account?
+              </p>
+            </div>
+
+            {/* BUTTONS */}
+
+            <div
+              className={`flex gap-3 border-t p-4 ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={cancelLogout}
+                disabled={isLoggingOut}
+                className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  darkMode
+                    ? "bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmLogout}
+                disabled={isLoggingOut}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoggingOut
+                  ? "Logging out..."
+                  : "Logout"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

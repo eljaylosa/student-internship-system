@@ -2,262 +2,214 @@ import React, { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabaseStudent } from "../../supabaseClient";
 
-// =========================================================
-// STORAGE
-// =========================================================
-
-// Profile photos are stored in the private "profile-photos" bucket.
 const STORAGE_BUCKET = "profile-photos";
 
-// =========================================================
-// TEMPORARY FRONTEND NOTIFICATIONS
-// =========================================================
-
+/* =========================================================
+   TEMPORARY NOTIFICATIONS
+   ========================================================= */
 const initialNotifications = [
   {
-    id: "NOT-001",
-    title: "Application Submitted",
-    message:
-      "Your internship application has been successfully submitted and is awaiting review.",
-    relatedEntityType: "InternshipApplication",
-    relatedEntityId: "APP-001",
-    createdAt: "2026-08-18T08:30:00.000Z",
-    readAt: null,
+    id: 1,
+    title: "Application Update",
+    message: "Your internship application is currently under review.",
+    time: "2 hours ago",
+    read: false,
+    type: "application",
   },
   {
-    id: "NOT-002",
-    title: "Document Review Update",
-    message: "Your submitted internship document is currently being reviewed.",
-    relatedEntityType: "DocumentSubmission",
-    relatedEntityId: "DOC-001",
-    createdAt: "2026-08-17T14:15:00.000Z",
-    readAt: null,
+    id: 2,
+    title: "Document Approved",
+    message: "Your submitted internship document has been approved.",
+    time: "1 day ago",
+    read: false,
+    type: "document",
   },
   {
-    id: "NOT-003",
-    title: "Internship Information Updated",
+    id: 3,
+    title: "Internship Reminder",
     message:
-      "New internship guidelines and requirements are now available in the Internship Information section.",
-    relatedEntityType: "InformationItem",
-    relatedEntityId: "INFO-001",
-    createdAt: "2026-08-16T09:00:00.000Z",
-    readAt: "2026-08-16T10:00:00.000Z",
+      "Please make sure all required internship documents are submitted.",
+    time: "2 days ago",
+    read: true,
+    type: "reminder",
   },
 ];
 
-// =========================================================
-// COMPONENT
-// =========================================================
-
-const StudentPortalLayout = () => {
+/* =========================================================
+   COMPONENT
+   ========================================================= */
+export default function StudentPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // =========================================================
-  // STUDENT PROFILE
-  // =========================================================
+  /* =========================================================
+     STUDENT PROFILE
+     ========================================================= */
+  const [fullName, setFullName] = useState("Student");
+  const [program, setProgram] = useState("Student");
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
-  const [studentProfile, setStudentProfile] = useState({
-    fullName: "",
-    program: "",
-    profilePhoto: null,
+  /* =========================================================
+     SIDEBAR
+     ========================================================= */
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  /* =========================================================
+     DROPDOWNS
+     ========================================================= */
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  const profileRef = useRef(null);
+  const notificationRef = useRef(null);
+
+  /* =========================================================
+     NOTIFICATIONS
+     ========================================================= */
+  const [notifications, setNotifications] = useState(
+    initialNotifications
+  );
+
+  const [selectedNotification, setSelectedNotification] =
+    useState(null);
+
+  const unreadCount = notifications.filter(
+    (notification) => !notification.read
+  ).length;
+
+  /* =========================================================
+     DARK MODE
+     ========================================================= */
+  const [darkMode, setDarkMode] = useState(() => {
+    return (
+      localStorage.getItem("studentPortalDarkMode") === "true"
+    );
   });
 
-  const [isStudentLoading, setIsStudentLoading] = useState(true);
+  /* =========================================================
+     SUBMENUS
+     ========================================================= */
+  const [expandedMenus, setExpandedMenus] = useState({});
 
-  // =========================================================
-  // LOAD LOGGED-IN STUDENT
-  // =========================================================
+  /* =========================================================
+     LOGOUT CONFIRMATION
+     ========================================================= */
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  /* =========================================================
+     SIDEBAR ITEMS
+     ========================================================= */
+  const sidebarItems = [
+    {
+      label: "Dashboard",
+      path: "/student/dashboard",
+      icon: "▦",
+    },
+    {
+      label: "My Profile",
+      path: "/student/profile",
+      icon: "👤",
+    },
+    {
+      label: "Apply Now",
+      path: "/student/application",
+      icon: "📝",
+    },
+    {
+      label: "Upload Documents",
+      path: "/student/documents",
+      icon: "📁",
+    },
+    {
+      label: "View Status",
+      path: "/student/status",
+      icon: "📊",
+    },
+    {
+      label: "Evaluations",
+      path: "/student/evaluation",
+      icon: "⭐",
+    },
+    {
+      label: "Document Template",
+      path: "/student/templates",
+      icon: "📄",
+    },
+    {
+      label: "Notifications",
+      path: "/student/notifications",
+      icon: "🔔",
+    },
+    {
+      label: "Information",
+      path: "/student/info",
+      icon: "ℹ️",
+    },
+    {
+      label: "Messages",
+      path: "/student/messages",
+      icon: "💬",
+    },
+    {
+      label: "Settings",
+      path: "/student/settings",
+      icon: "⚙️",
+    },
+  ];
+
+  /* =========================================================
+     LOAD STUDENT PROFILE
+     ========================================================= */
   useEffect(() => {
     loadStudentProfile();
   }, []);
 
-  const loadStudentProfile = async () => {
+  const getProfilePhotoUrl = async (photoPath) => {
+    if (!photoPath) return null;
+
     try {
-      setIsStudentLoading(true);
+      let cleanPath = photoPath;
 
-      // -----------------------------------------
-      // GET AUTHENTICATED USER
-      // -----------------------------------------
+      if (cleanPath.includes("/storage/v1/object/")) {
+        const marker = `/storage/v1/object/`;
+        const markerIndex = cleanPath.indexOf(marker);
 
-      const {
-        data: { user },
-        error: authError,
-      } = await supabaseStudent.auth.getUser();
+        if (markerIndex !== -1) {
+          let storagePart = cleanPath.substring(
+            markerIndex + marker.length
+          );
 
-      if (authError) {
-        throw authError;
-      }
+          storagePart = storagePart
+            .replace(/^public\//, "")
+            .replace(/^sign\//, "")
+            .replace(/^authenticated\//, "");
 
-      if (!user) {
-        throw new Error("No authenticated user found.");
-      }
+          const bucketMarker = `${STORAGE_BUCKET}/`;
 
-      // -----------------------------------------
-      // GET USER INFORMATION
-      // -----------------------------------------
-
-      const { data: userData, error: userError } = await supabaseStudent
-        .from("users")
-        .select("id, first_name, middle_name, last_name")
-        .eq("id", user.id)
-        .single();
-
-      if (userError) {
-        throw userError;
-      }
-
-      // -----------------------------------------
-      // GET STUDENT INFORMATION
-      // -----------------------------------------
-
-      const { data: studentData, error: studentError } = await supabaseStudent
-        .from("students")
-        .select("program, profile_photo_url")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (studentError) {
-        throw studentError;
-      }
-
-      // -----------------------------------------
-      // BUILD FULL NAME
-      // -----------------------------------------
-
-      const fullName = [
-        userData?.first_name,
-        userData?.middle_name,
-        userData?.last_name,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      // -----------------------------------------
-      // PROFILE PHOTO
-      // -----------------------------------------
-
-      let profilePhoto = null;
-
-      if (studentData?.profile_photo_url) {
-        profilePhoto = await getProfilePhotoUrl(studentData.profile_photo_url);
-      }
-
-      // -----------------------------------------
-      // SAVE PROFILE
-      // -----------------------------------------
-
-      setStudentProfile({
-        fullName: fullName || "Student",
-        program: studentData?.program || "Student",
-        profilePhoto,
-      });
-    } catch (error) {
-      console.error("Error loading student profile:", error);
-
-      // Keep layout usable even if profile loading fails.
-      setStudentProfile({
-        fullName: "Student",
-        program: "Student",
-        profilePhoto: null,
-      });
-    } finally {
-      setIsStudentLoading(false);
-    }
-  };
-
-  // =========================================================
-  // GET SIGNED PROFILE PHOTO URL
-  // =========================================================
-
-  const getProfilePhotoUrl = async (storedPath) => {
-    try {
-      if (!storedPath) {
-        return null;
-      }
-
-      let storagePath = storedPath.trim();
-
-      // -----------------------------------------
-      // HANDLE FULL PUBLIC URL
-      // -----------------------------------------
-
-      const publicMarker = `/storage/v1/object/public/${STORAGE_BUCKET}/`;
-
-      if (storagePath.includes(publicMarker)) {
-        storagePath = storagePath.split(publicMarker)[1];
-      }
-
-      // -----------------------------------------
-      // HANDLE FULL SIGNED URL
-      // -----------------------------------------
-
-      const signedMarker = `/storage/v1/object/sign/${STORAGE_BUCKET}/`;
-
-      if (storagePath.includes(signedMarker)) {
-        storagePath = storagePath.split(signedMarker)[1].split("?")[0];
-      }
-
-      // -----------------------------------------
-      // HANDLE STORAGE URL WITHOUT BUCKET
-      // -----------------------------------------
-
-      const objectMarker = `/storage/v1/object/`;
-
-      if (storagePath.includes(objectMarker)) {
-        const objectPart = storagePath.split(objectMarker)[1];
-
-        if (objectPart.includes("/")) {
-          const objectParts = objectPart.split("/");
-
-          // Remove "public" / "sign" / "authenticated" if present.
-          if (
-            objectParts[0] === "public" ||
-            objectParts[0] === "sign" ||
-            objectParts[0] === "authenticated"
-          ) {
-            objectParts.shift();
+          if (storagePart.startsWith(bucketMarker)) {
+            cleanPath = storagePart.substring(
+              bucketMarker.length
+            );
+          } else {
+            cleanPath = storagePart;
           }
-
-          // Remove bucket name if it is present.
-          if (objectParts[0] === STORAGE_BUCKET) {
-            objectParts.shift();
-          }
-
-          storagePath = objectParts.join("/");
         }
       }
 
-      // -----------------------------------------
-      // REMOVE QUERY STRING IF ANY
-      // -----------------------------------------
-
-      storagePath = storagePath.split("?")[0];
-
-      // -----------------------------------------
-      // REMOVE LEADING SLASHES
-      // -----------------------------------------
-
-      storagePath = storagePath.replace(/^\/+/, "");
-
-      if (!storagePath) {
-        return null;
-      }
-
-      console.log("Creating signed profile photo URL for:", storagePath);
-
-      // -----------------------------------------
-      // CREATE SIGNED URL
-      // -----------------------------------------
+      cleanPath = cleanPath.replace(/^\/+/, "");
 
       const { data, error } = await supabaseStudent.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(storagePath, 60 * 60);
+        .createSignedUrl(cleanPath, 3600);
 
       if (error) {
-        console.error("Error creating profile photo signed URL:", error);
-
+        console.error(
+          "Error creating profile photo URL:",
+          error
+        );
         return null;
       }
 
@@ -268,114 +220,99 @@ const StudentPortalLayout = () => {
     }
   };
 
-  // =========================================================
-  // LOGOUT PLACEHOLDER
-  // =========================================================
+  const loadStudentProfile = async () => {
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseStudent.auth.getUser();
 
-  const logout = (...args) => {
-    void args;
+      if (authError) {
+        console.error("Auth error:", authError);
+        return;
+      }
+
+      if (!user) return;
+
+      /* =====================================================
+         USERS
+         ===================================================== */
+      const { data: userData, error: userError } =
+        await supabaseStudent
+          .from("users")
+          .select(
+            `
+              id,
+              first_name,
+              middle_name,
+              last_name
+            `
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (userError) {
+        console.error("User profile error:", userError);
+      }
+
+      if (userData) {
+        const nameParts = [
+          userData.first_name,
+          userData.middle_name,
+          userData.last_name,
+        ].filter(Boolean);
+
+        if (nameParts.length > 0) {
+          setFullName(nameParts.join(" "));
+        }
+      }
+
+      /* =====================================================
+         STUDENTS
+         ===================================================== */
+      const { data: studentData, error: studentError } =
+        await supabaseStudent
+          .from("students")
+          .select(
+            `
+              program,
+              profile_photo_url
+            `
+          )
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (studentError) {
+        console.error(
+          "Student profile error:",
+          studentError
+        );
+      }
+
+      if (studentData) {
+        if (studentData.program) {
+          setProgram(studentData.program);
+        }
+
+        if (studentData.profile_photo_url) {
+          const signedUrl = await getProfilePhotoUrl(
+            studentData.profile_photo_url
+          );
+
+          setProfilePhoto(signedUrl);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load student profile:",
+        error
+      );
+    }
   };
 
-  // =========================================================
-  // SIDEBAR
-  // =========================================================
-
-  const [sidebarWidth, setSidebarWidth] = useState(280);
-  const [isResizing, setIsResizing] = useState(false);
-
-  // =========================================================
-  // MOBILE SIDEBAR
-  // =========================================================
-
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-  // =========================================================
-  // PROFILE DROPDOWN
-  // =========================================================
-
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const profileMenuRef = useRef(null);
-
-  // =========================================================
-  // NOTIFICATION DROPDOWN
-  // =========================================================
-
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const notificationRef = useRef(null);
-
-  // =========================================================
-  // NOTIFICATION STATE
-  // =========================================================
-
-  const [notifications, setNotifications] = useState(initialNotifications);
-
-  const [selectedNotification, setSelectedNotification] = useState(null);
-
-  // =========================================================
-  // NOTIFICATION CONTROLS
-  // =========================================================
-
-  const unreadCount = notifications.filter(
-    (notification) => !notification.readAt
-  ).length;
-
-  const markNotificationRead = (notificationId) => {
-    setNotifications((previous) =>
-      previous.map((notification) =>
-        notification.id === notificationId
-          ? {
-              ...notification,
-              readAt: notification.readAt || new Date().toISOString(),
-            }
-          : notification
-      )
-    );
-  };
-
-  const markAllNotificationsRead = () => {
-    const now = new Date().toISOString();
-
-    setNotifications((previous) =>
-      previous.map((notification) => ({
-        ...notification,
-        readAt: notification.readAt || now,
-      }))
-    );
-  };
-
-  const deleteNotification = (notificationId) => {
-    setNotifications((previous) =>
-      previous.filter((notification) => notification.id !== notificationId)
-    );
-
-    setSelectedNotification((current) =>
-      current?.id === notificationId ? null : current
-    );
-  };
-
-  const openNotification = (notification) => {
-    markNotificationRead(notification.id);
-
-    setSelectedNotification({
-      ...notification,
-      readAt: notification.readAt || new Date().toISOString(),
-    });
-
-    setIsNotificationOpen(false);
-  };
-
-  const closeNotificationModal = () => {
-    setSelectedNotification(null);
-  };
-
-  // =========================================================
-  // DARK MODE
-  // =========================================================
-
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("studentPortalDarkMode") === "true";
-  });
-
+  /* =========================================================
+     DARK MODE
+     ========================================================= */
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -383,55 +320,71 @@ const StudentPortalLayout = () => {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem("studentPortalDarkMode", darkMode);
+    localStorage.setItem(
+      "studentPortalDarkMode",
+      darkMode.toString()
+    );
   }, [darkMode]);
 
-  // =========================================================
-  // MOBILE SIDEBAR BEHAVIOR
-  // =========================================================
+  const toggleDarkMode = () => {
+    setDarkMode((previous) => !previous);
+  };
 
+  /* =========================================================
+     CLOSE MOBILE SIDEBAR ON ROUTE CHANGE
+     ========================================================= */
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [location.pathname]);
 
+  /* =========================================================
+     MOBILE BODY SCROLL LOCK
+     ========================================================= */
   useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsMobileSidebarOpen(false);
-        setIsNotificationOpen(false);
-        setIsProfileOpen(false);
-        setSelectedNotification(null);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isMobileSidebarOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
+    if (!isMobileSidebarOpen) {
       document.body.style.overflow = "";
+      return;
     }
+
+    document.body.style.overflow = "hidden";
 
     return () => {
       document.body.style.overflow = "";
     };
   }, [isMobileSidebarOpen]);
 
-  // =========================================================
-  // CLOSE DROPDOWNS WHEN CLICKING OUTSIDE
-  // =========================================================
+  /* =========================================================
+     ESCAPE KEY
+     ========================================================= */
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
 
+      setIsMobileSidebarOpen(false);
+      setIsNotificationOpen(false);
+      setIsProfileOpen(false);
+      setSelectedNotification(null);
+      setShowLogoutConfirm(false);
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+    };
+  }, []);
+
+  /* =========================================================
+     CLICK OUTSIDE DROPDOWNS
+     ========================================================= */
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target)
+        profileRef.current &&
+        !profileRef.current.contains(event.target)
       ) {
         setIsProfileOpen(false);
       }
@@ -444,808 +397,1033 @@ const StudentPortalLayout = () => {
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
     };
   }, []);
 
-  // =========================================================
-  // SIDEBAR ITEMS
-  // =========================================================
-
-  const sidebarItems = [
-    {
-      name: "Dashboard",
-      icon: "▦",
-      path: "/student/dashboard",
-    },
-    {
-      name: "My Profile",
-      icon: "👤",
-      path: "/student/profile",
-    },
-    {
-      name: "Apply Now",
-      icon: "📋",
-      path: "/student/application",
-    },
-    {
-      name: "Upload Documents",
-      icon: "📁",
-      path: "/student/documents",
-    },
-    {
-      name: "View Status",
-      icon: "📊",
-      path: "/student/status",
-    },
-    {
-      name: "Evaluations",
-      icon: "📋",
-      path: "/student/evaluation",
-    },
-    {
-      name: "Document Template",
-      icon: "📁",
-      path: "/student/templates",
-    },
-    {
-      name: "Notifications",
-      icon: "🔔",
-      path: "/student/notifications",
-      badge: unreadCount > 0,
-    },
-    {
-      name: "Info",
-      icon: "ⓘ",
-      path: "/student/info",
-    },
-    {
-      name: "Messages",
-      icon: "💬",
-      path: "/student/messages",
-    },
-    {
-      name: "Settings",
-      icon: "⚙",
-      path: "/student/settings",
-    },
-  ];
-
-  // =========================================================
-  // EXPANDABLE MENUS
-  // =========================================================
-
-  const [expandedMenus, setExpandedMenus] = useState({
-    "Internship Application": false,
-    "Document Submission": false,
-  });
-
-  // =========================================================
-  // SIDEBAR RESIZE
-  // =========================================================
-
-  const handleSidebarResizeStart = (e) => {
-    e.preventDefault();
-
-    setIsResizing(true);
-
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  };
-
-  const handleSidebarResize = (e) => {
+  /* =========================================================
+     SIDEBAR RESIZE
+     ========================================================= */
+  useEffect(() => {
     if (!isResizing) return;
 
-    const minWidth = 240;
-    const maxWidth = 360;
+    const handleMouseMove = (event) => {
+      const newWidth = Math.min(
+        Math.max(event.clientX, 240),
+        360
+      );
 
-    const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
+      setSidebarWidth(newWidth);
+    };
 
-    setSidebarWidth(newWidth);
-  };
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
 
-  const handleSidebarResizeEnd = (e) => {
-    setIsResizing(false);
+    document.addEventListener(
+      "mousemove",
+      handleMouseMove
+    );
 
-    try {
-      e.currentTarget.releasePointerCapture?.(e.pointerId);
-    } catch {
-      // Pointer capture may already be released.
-    }
-  };
+    document.addEventListener(
+      "mouseup",
+      handleMouseUp
+    );
 
-  // =========================================================
-  // NAVIGATION
-  // =========================================================
+    return () => {
+      document.removeEventListener(
+        "mousemove",
+        handleMouseMove
+      );
 
+      document.removeEventListener(
+        "mouseup",
+        handleMouseUp
+      );
+    };
+  }, [isResizing]);
+
+  /* =========================================================
+     NAVIGATION
+     ========================================================= */
   const navigateTo = (path) => {
     navigate(path);
-
+    setIsMobileSidebarOpen(false);
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
-    setIsMobileSidebarOpen(false);
   };
 
-  const toggleSubmenu = (menuName) => {
-    setExpandedMenus((prev) => ({
-      ...prev,
-      [menuName]: !prev[menuName],
+  /* =========================================================
+     SUBMENU
+     ========================================================= */
+  const toggleSubmenu = (label) => {
+    setExpandedMenus((previous) => ({
+      ...previous,
+      [label]: !previous[label],
     }));
   };
 
+  /* =========================================================
+     ACTIVE PATH
+     ========================================================= */
   const isPathActive = (path) => {
     return location.pathname === path;
   };
 
-  const isChildActive = (children) => {
-    return children?.some((child) => location.pathname === child.path);
+  const isChildActive = (children = []) => {
+    return children.some(
+      (child) => location.pathname === child.path
+    );
   };
 
-  // =========================================================
-  // PAGE TITLE
-  // =========================================================
-
+  /* =========================================================
+     PAGE TITLE
+     ========================================================= */
   const getPageTitle = () => {
-    const currentItem = sidebarItems.find((item) => {
-      if (item.path === location.pathname) {
-        return true;
-      }
-
-      return item.children?.some((child) => child.path === location.pathname);
-    });
-
-    if (!currentItem) {
-      return "Student Portal";
-    }
-
-    const child = currentItem.children?.find(
-      (child) => child.path === location.pathname
+    const currentItem = sidebarItems.find(
+      (item) => item.path === location.pathname
     );
 
-    return child ? child.name : currentItem.name;
+    if (currentItem) return currentItem.label;
+
+    return "Student Portal";
   };
 
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-
-  const handleLogout = async () => {
-    logout();
-
+  /* =========================================================
+     LOGOUT
+     ========================================================= */
+  const handleLogoutClick = () => {
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
-    setSelectedNotification(null);
-
-    navigate("/login", { replace: true });
+    setIsMobileSidebarOpen(false);
+    setShowLogoutConfirm(true);
   };
 
-  // =========================================================
-  // DARK MODE TOGGLE
-  // =========================================================
+  const confirmLogout = async () => {
+    if (isLoggingOut) return;
 
-  const toggleDarkMode = () => {
-    setDarkMode((prev) => !prev);
+    try {
+      setIsLoggingOut(true);
+
+      const { error } =
+        await supabaseStudent.auth.signOut();
+
+      if (error) {
+        console.error("Logout error:", error);
+        setIsLoggingOut(false);
+        return;
+      }
+
+      setShowLogoutConfirm(false);
+      setIsMobileSidebarOpen(false);
+
+      navigate("/login", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setIsLoggingOut(false);
+    }
   };
 
-  // =========================================================
-  // PROFILE INITIALS
-  // =========================================================
+  const cancelLogout = () => {
+    if (isLoggingOut) return;
 
+    setShowLogoutConfirm(false);
+  };
+
+  /* =========================================================
+     INITIALS
+     ========================================================= */
   const getInitials = (name) => {
     if (!name) return "ST";
 
-    const parts = name.trim().split(/\s+/).filter(Boolean);
+    const parts = name
+      .trim()
+      .split(" ")
+      .filter(Boolean);
 
     if (parts.length === 1) {
-      return parts[0].substring(0, 2).toUpperCase();
+      return parts[0]
+        .substring(0, 2)
+        .toUpperCase();
     }
 
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return (
+      parts[0][0] +
+      parts[parts.length - 1][0]
+    ).toUpperCase();
   };
 
-  const profileInitials = getInitials(studentProfile.fullName);
+  /* =========================================================
+     NOTIFICATION HANDLERS
+     ========================================================= */
+  const markNotificationRead = (id) => {
+    setNotifications((previous) =>
+      previous.map((notification) =>
+        notification.id === id
+          ? {
+              ...notification,
+              read: true,
+            }
+          : notification
+      )
+    );
+  };
 
-  // =========================================================
-  // RETURN
-  // =========================================================
+  const markAllNotificationsRead = () => {
+    setNotifications((previous) =>
+      previous.map((notification) => ({
+        ...notification,
+        read: true,
+      }))
+    );
+  };
 
-  return (
-    <div
-      className={`min-h-screen transition-colors duration-300 ${
-        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
-      }`}
-    >
-      <div className="flex min-h-screen">
-        {/* =====================================================
-            DESKTOP SIDEBAR
-        ===================================================== */}
+  const deleteNotification = (id) => {
+    setNotifications((previous) =>
+      previous.filter(
+        (notification) =>
+          notification.id !== id
+      )
+    );
 
-        <aside
-          style={{ width: `${sidebarWidth}px` }}
-          className={`relative hidden lg:flex flex-col flex-shrink-0 border-r transition-colors duration-300 ${
+    if (selectedNotification?.id === id) {
+      setSelectedNotification(null);
+    }
+  };
+
+  const openNotification = (notification) => {
+    markNotificationRead(notification.id);
+    setSelectedNotification(notification);
+    setIsNotificationOpen(false);
+  };
+
+  const closeNotificationModal = () => {
+    setSelectedNotification(null);
+  };
+
+  /* =========================================================
+     SIDEBAR CONTENT
+     ========================================================= */
+  const renderSidebarContent = (mobile = false) => {
+    return (
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+
+        {/* ===================================================
+            BRAND
+            =================================================== */}
+        <div
+          className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
             darkMode
-              ? "bg-slate-900 border-slate-700"
-              : "bg-white border-slate-200"
-          } ${isResizing ? "select-none" : ""}`}
+              ? "border-slate-800"
+              : "border-slate-100"
+          }`}
         >
-          {/* SIDEBAR HEADER */}
+          <div className="flex min-w-0 items-center gap-3">
 
-          <div
-            className={`h-20 px-6 flex items-center border-b ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${
-                darkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
-              }`}
-            >
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-xl font-bold text-white shadow-md">
               S
             </div>
 
-            <div className="ml-3">
-              <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
-
-              <p
-                className={`text-xs ${
-                  darkMode ? "text-slate-400" : "text-slate-400"
+            <div className="min-w-0">
+              <h1
+                className={`truncate text-lg font-bold ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
                 }`}
               >
-                Student Environment
+                SIMS
+              </h1>
+
+              <p
+                className={`truncate text-xs ${
+                  darkMode
+                    ? "text-slate-400"
+                    : "text-slate-500"
+                }`}
+              >
+                Student Portal
               </p>
             </div>
           </div>
 
-          {/* SIDEBAR NAVIGATION */}
-
-          <div className="flex-1 overflow-y-auto px-3 py-4">
-            <nav className="space-y-1">
-              {sidebarItems.map((item) => {
-                const hasChildren = item.children?.length > 0;
-                const isExpanded = expandedMenus[item.name];
-
-                const active =
-                  isPathActive(item.path) || isChildActive(item.children);
-
-                return (
-                  <div key={item.name}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (hasChildren) {
-                          toggleSubmenu(item.name);
-                        } else if (item.path) {
-                          navigateTo(item.path);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        active
-                          ? darkMode
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "bg-slate-900 text-white shadow-sm"
-                          : darkMode
-                          ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-base ${
-                            active
-                              ? darkMode
-                                ? "bg-slate-900/10"
-                                : "bg-white/10"
-                              : darkMode
-                              ? "bg-slate-800"
-                              : "bg-slate-100"
-                          }`}
-                        >
-                          {item.icon}
-                        </span>
-
-                        <span className="truncate">{item.name}</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {item.badge && (
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              active ? "bg-current" : "bg-blue-500"
-                            }`}
-                          />
-                        )}
-
-                        {hasChildren && (
-                          <span
-                            className={`text-xs transition-transform duration-200 ${
-                              isExpanded ? "rotate-180" : ""
-                            }`}
-                          >
-                            ▼
-                          </span>
-                        )}
-                      </div>
-                    </button>
-
-                    {hasChildren && isExpanded && (
-                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
-                        <div
-                          className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode ? "bg-slate-700" : "bg-slate-200"
-                          }`}
-                        />
-
-                        {item.children.map((child) => {
-                          const childActive = isPathActive(child.path);
-
-                          return (
-                            <button
-                              key={child.name}
-                              type="button"
-                              onClick={() => navigateTo(child.path)}
-                              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left ${
-                                childActive
-                                  ? darkMode
-                                    ? "bg-white text-slate-900"
-                                    : "bg-slate-900 text-white"
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                              }`}
-                            >
-                              <span
-                                className={`w-6 h-6 flex items-center justify-center rounded-md ${
-                                  childActive
-                                    ? darkMode
-                                      ? "bg-slate-900/10"
-                                      : "bg-white/10"
-                                    : darkMode
-                                    ? "bg-slate-800"
-                                    : "bg-slate-50"
-                                }`}
-                              >
-                                {child.icon}
-                              </span>
-
-                              <span className="truncate">{child.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* LOGOUT */}
-
-          <div
-            className={`p-4 border-t ${
-              darkMode ? "border-slate-700" : "border-slate-100"
-            }`}
-          >
+          {/* Mobile close button */}
+          {mobile && (
             <button
               type="button"
-              onClick={handleLogout}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold ${
+              onClick={() =>
+                setIsMobileSidebarOpen(false)
+              }
+              className={`ml-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition ${
                 darkMode
-                  ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
-                  : "text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  ? "text-slate-300 hover:bg-slate-800"
+                  : "text-slate-500 hover:bg-slate-100"
               }`}
+              aria-label="Close sidebar"
             >
-              <span>🚪</span>
-              <span>Logout</span>
+              ✕
             </button>
+          )}
+        </div>
+
+        {/* ===================================================
+            NAVIGATION
+            =================================================== */}
+        <div
+          className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
+            darkMode
+              ? "scrollbar-thumb-slate-700"
+              : "scrollbar-thumb-slate-300"
+          }`}
+          style={{
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
+          }}
+        >
+          <div className="space-y-1">
+            {sidebarItems.map((item) => {
+              const hasChildren =
+                Array.isArray(item.children) &&
+                item.children.length > 0;
+
+              const active =
+                isPathActive(item.path) ||
+                isChildActive(item.children);
+
+              return (
+                <div key={item.label}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (hasChildren) {
+                        toggleSubmenu(item.label);
+                      } else {
+                        navigateTo(item.path);
+                      }
+                    }}
+                    aria-current={
+                      isPathActive(item.path)
+                        ? "page"
+                        : undefined
+                    }
+                    className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all ${
+                      active
+                        ? darkMode
+                          ? "bg-blue-500/10 text-blue-400"
+                          : "bg-blue-50 text-blue-700"
+                        : darkMode
+                        ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    {active && (
+                      <span
+                        className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${
+                          darkMode
+                            ? "bg-blue-400"
+                            : "bg-blue-600"
+                        }`}
+                      />
+                    )}
+
+                    <span className="flex w-6 flex-shrink-0 items-center justify-center text-base">
+                      {item.icon}
+                    </span>
+
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.label}
+                    </span>
+
+                    {hasChildren && (
+                      <span className="text-xs">
+                        {expandedMenus[item.label]
+                          ? "▲"
+                          : "▼"}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* =================================================
+                      SUBMENU
+                      ================================================= */}
+                  {hasChildren &&
+                    expandedMenus[item.label] && (
+                      <div
+                        className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
+                          darkMode
+                            ? "border-slate-700"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        {item.children.map(
+                          (child) => (
+                            <button
+                              key={child.path}
+                              type="button"
+                              onClick={() =>
+                                navigateTo(
+                                  child.path
+                                )
+                              }
+                              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition ${
+                                isPathActive(
+                                  child.path
+                                )
+                                  ? darkMode
+                                    ? "bg-blue-500/10 text-blue-400"
+                                    : "bg-blue-50 text-blue-700"
+                                  : darkMode
+                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
+                            >
+                              {child.label}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+                </div>
+              );
+            })}
           </div>
+        </div>
 
-          {/* RESIZE HANDLE */}
+        {/* ===================================================
+            FIXED LOGOUT FOOTER
+            =================================================== */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 border-t p-3 backdrop-blur-md ${
+            darkMode
+              ? "border-slate-800 bg-slate-900/95"
+              : "border-slate-100 bg-white/95"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={handleLogoutClick}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ${
+              darkMode
+                ? "text-red-400 hover:bg-red-500/10"
+                : "text-red-600 hover:bg-red-50"
+            }`}
+          >
+            <span className="flex w-6 items-center justify-center text-base">
+              ↪
+            </span>
 
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* =========================================================
+     RENDER
+     ========================================================= */
+  return (
+    <div
+      className={`min-h-screen w-full ${
+        darkMode
+          ? "bg-slate-950 text-white"
+          : "bg-slate-50 text-slate-900"
+      }`}
+      style={{
+        touchAction: "pan-y",
+      }}
+    >
+      <div className="flex min-h-screen w-full">
+
+        {/* ===================================================
+            DESKTOP SIDEBAR
+            =================================================== */}
+        <aside
+          style={{
+            width: `${sidebarWidth}px`,
+          }}
+          className={`fixed inset-y-0 left-0 z-[70] hidden h-screen flex-shrink-0 overflow-hidden border-r lg:flex ${
+            darkMode
+              ? "border-slate-800 bg-slate-900"
+              : "border-slate-100 bg-white"
+          }`}
+        >
+          {renderSidebarContent(false)}
+
+          {/* Resize Handle */}
           <div
-            role="separator"
-            aria-label="Resize sidebar"
-            aria-orientation="vertical"
-            onPointerDown={handleSidebarResizeStart}
-            onPointerMove={handleSidebarResize}
-            onPointerUp={handleSidebarResizeEnd}
-            onPointerCancel={handleSidebarResizeEnd}
-            className={`absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize touch-none ${
+            onMouseDown={() =>
+              setIsResizing(true)
+            }
+            className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition ${
               isResizing
-                ? "bg-blue-500"
-                : darkMode
-                ? "hover:bg-slate-700"
-                : "hover:bg-slate-300"
+                ? darkMode
+                  ? "bg-blue-500"
+                  : "bg-blue-400"
+                : "hover:bg-blue-300"
             }`}
           />
         </aside>
 
-        {/* =====================================================
+        {/* ===================================================
+            DESKTOP SIDEBAR SPACER
+            =================================================== */}
+        <div
+          className="hidden flex-shrink-0 lg:block"
+          style={{
+            width: `${sidebarWidth}px`,
+          }}
+          aria-hidden="true"
+        />
+
+        {/* ===================================================
             MAIN AREA
-        ===================================================== */}
+            =================================================== */}
+        <div className="flex min-w-0 flex-1 flex-col">
 
-        <div className="flex-1 min-w-0">
-          {/* ===================================================
-              NAVBAR
-          =================================================== */}
-
+          {/* =================================================
+              HEADER
+              ================================================= */}
           <header
-            className={`h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 relative ${
+            className={`sticky top-0 z-50 flex h-20 flex-shrink-0 items-center justify-between border-b px-3 shadow-sm sm:px-6 ${
               darkMode
-                ? "bg-slate-900 border-slate-700 text-white"
-                : "bg-white border-slate-200 text-slate-900"
-            }`}
+                ? "border-slate-800 bg-slate-900/95"
+                : "border-slate-100 bg-white/95"
+            } backdrop-blur`}
           >
-            {/* LEFT */}
+            {/* LEFT SIDE */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
 
-            <div className="flex items-center min-w-0">
+              {/* Mobile Menu */}
+              <button
+                type="button"
+                onClick={() =>
+                  setIsMobileSidebarOpen(true)
+                }
+                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl lg:hidden ${
+                  darkMode
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+                aria-label="Open sidebar"
+              >
+                ☰
+              </button>
+
               <div className="min-w-0">
-                <p
-                  className={`text-sm ${
-                    darkMode ? "text-slate-400" : "text-slate-400"
+                <h2
+                  className={`truncate text-lg font-bold sm:text-xl ${
+                    darkMode
+                      ? "text-white"
+                      : "text-slate-900"
                   }`}
                 >
-                  Student Portal
-                </p>
-
-                <h2 className="font-bold text-base sm:text-lg truncate">
                   {getPageTitle()}
                 </h2>
+
+                <p
+                  className={`hidden truncate text-xs sm:block ${
+                    darkMode
+                      ? "text-slate-400"
+                      : "text-slate-500"
+                  }`}
+                >
+                  Student Internship Management System
+                </p>
               </div>
             </div>
 
-            {/* RIGHT SIDE CONTROLS */}
+            {/* RIGHT SIDE */}
+            <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
 
-            <div className="flex items-center gap-1 sm:gap-3 ml-auto">
-              {/* NOTIFICATIONS */}
+              {/* =================================================
+                  DARK MODE
+                  NOW IN NAVBAR
+                  ================================================= */}
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                aria-label={
+                  darkMode
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+                }
+                title={
+                  darkMode
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+                }
+                className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg transition ${
+                  darkMode
+                    ? "text-yellow-300 hover:bg-slate-800"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {darkMode ? "☀️" : "🌙"}
+              </button>
 
-              <div className="relative" ref={notificationRef}>
+              {/* =================================================
+                  NOTIFICATIONS
+                  ================================================= */}
+              <div
+                ref={notificationRef}
+                className="relative"
+              >
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen((prev) => !prev);
+                    setIsNotificationOpen(
+                      (previous) => !previous
+                    );
                     setIsProfileOpen(false);
                   }}
-                  className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition ${
-                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-xl text-lg transition ${
+                    darkMode
+                      ? "text-slate-300 hover:bg-slate-800"
+                      : "text-slate-600 hover:bg-slate-100"
                   }`}
+                  aria-label="Notifications"
                 >
-                  <span className="text-lg">🔔</span>
+                  🔔
 
                   {unreadCount > 0 && (
-                    <span
-                      className={`absolute top-1 right-1 min-w-4 h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full border-2 ${
-                        darkMode ? "border-slate-900" : "border-white"
-                      }`}
-                    >
-                      {unreadCount > 9 ? "9+" : unreadCount}
+                    <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                      {unreadCount > 9
+                        ? "9+"
+                        : unreadCount}
                     </span>
                   )}
                 </button>
 
+                {/* Notification Dropdown */}
                 {isNotificationOpen && (
                   <div
-                    className={`absolute right-0 top-12 w-[calc(100vw-2rem)] max-w-80 border rounded-xl shadow-xl z-50 overflow-hidden ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-white border-slate-200"
-                    }`}
+                    className={`
+                      fixed left-3 right-3 top-[84px]
+                      z-[100]
+                      w-auto max-w-none
+                      overflow-hidden rounded-2xl border shadow-xl
+                      sm:absolute sm:left-auto sm:right-0 sm:top-12
+                      sm:w-[340px] sm:max-w-[calc(100vw-2rem)]
+                      ${
+                        darkMode
+                          ? "border-slate-700 bg-slate-900"
+                          : "border-slate-200 bg-white"
+                      }
+                    `}
                   >
+                    {/* HEADER */}
                     <div
-                      className={`px-4 py-3 border-b flex items-center justify-between ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
+                      className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
+                        darkMode
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
-                      <div>
-                        <h3 className="text-sm font-bold">Notifications</h3>
-
-                        <p
-                          className={`text-xs mt-0.5 ${
-                            darkMode ? "text-slate-400" : "text-slate-500"
+                      <div className="min-w-0">
+                        <h3
+                          className={`font-bold ${
+                            darkMode
+                              ? "text-white"
+                              : "text-slate-900"
                           }`}
                         >
-                          {unreadCount > 0
-                            ? `${unreadCount} unread`
-                            : "All caught up"}
+                          Notifications
+                        </h3>
+
+                        <p
+                          className={`text-xs ${
+                            darkMode
+                              ? "text-slate-400"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {unreadCount} unread
                         </p>
                       </div>
 
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={markAllNotificationsRead}
-                          className="text-[10px] font-bold text-blue-500 hover:underline"
+                          onClick={
+                            markAllNotificationsRead
+                          }
+                          className={`flex-shrink-0 text-xs font-semibold ${
+                            darkMode
+                              ? "text-blue-400"
+                              : "text-blue-600"
+                          } hover:underline`}
                         >
                           Mark all read
                         </button>
                       )}
                     </div>
 
-                    <div className="max-h-80 overflow-y-auto">
+                    {/* LIST */}
+                    <div
+                      className="
+                        max-h-[calc(100vh-210px)]
+                        overflow-y-auto
+                        overscroll-y-auto
+                        sm:max-h-[380px]
+                      "
+                      style={{
+                        WebkitOverflowScrolling:
+                          "touch",
+                        touchAction: "pan-y",
+                      }}
+                    >
                       {notifications.length === 0 ? (
-                        <div className="p-6 text-center">
-                          <div className="text-2xl mb-2">🔔</div>
+                        <div className="px-5 py-8 text-center">
+                          <div className="mb-2 text-3xl">
+                            🔔
+                          </div>
 
                           <p
-                            className={`text-xs ${
-                              darkMode ? "text-slate-400" : "text-slate-500"
+                            className={`text-sm ${
+                              darkMode
+                                ? "text-slate-400"
+                                : "text-slate-500"
                             }`}
                           >
                             No notifications
                           </p>
                         </div>
                       ) : (
-                        notifications.map((notification) => (
-                          <button
-                            key={notification.id}
-                            type="button"
-                            onClick={() => openNotification(notification)}
-                            className={`w-full text-left px-4 py-3 border-b transition ${
-                              darkMode
-                                ? "border-slate-700 hover:bg-slate-700"
-                                : "border-slate-100 hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex gap-3">
-                              <div className="pt-1.5">
-                                <span
-                                  className={`block w-2 h-2 rounded-full ${
-                                    notification.readAt
-                                      ? darkMode
-                                        ? "bg-slate-600"
-                                        : "bg-slate-300"
-                                      : "bg-blue-500"
-                                  }`}
-                                />
-                              </div>
+                        notifications.map(
+                          (notification) => (
+                            <div
+                              key={notification.id}
+                              className={`group relative border-b px-4 py-3 transition ${
+                                darkMode
+                                  ? "border-slate-800 hover:bg-slate-800/70"
+                                  : "border-slate-100 hover:bg-slate-50"
+                              } ${
+                                !notification.read
+                                  ? darkMode
+                                    ? "bg-blue-500/5"
+                                    : "bg-blue-50/50"
+                                  : ""
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openNotification(
+                                    notification
+                                  )
+                                }
+                                className="w-full pr-8 text-left"
+                              >
+                                <div className="flex gap-3">
+                                  <div className="mt-0.5 flex-shrink-0">
+                                    <span className="text-lg">
+                                      {notification.type ===
+                                      "application"
+                                        ? "📝"
+                                        : notification.type ===
+                                          "document"
+                                        ? "📄"
+                                        : "🔔"}
+                                    </span>
+                                  </div>
 
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-xs font-bold truncate">
-                                    {notification.title}
-                                  </p>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start gap-2">
+                                      <h4
+                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                          darkMode
+                                            ? "text-white"
+                                            : "text-slate-800"
+                                        }`}
+                                      >
+                                        {
+                                          notification.title
+                                        }
+                                      </h4>
 
-                                  <span
-                                    className={`text-[10px] whitespace-nowrap ${
-                                      darkMode
-                                        ? "text-slate-500"
-                                        : "text-slate-400"
-                                    }`}
-                                  >
-                                    {new Date(
-                                      notification.createdAt
-                                    ).toLocaleDateString()}
-                                  </span>
+                                      {!notification.read && (
+                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                                      )}
+                                    </div>
+
+                                    <p
+                                      className={`mt-1 break-words text-xs leading-5 ${
+                                        darkMode
+                                          ? "text-slate-400"
+                                          : "text-slate-500"
+                                      }`}
+                                    >
+                                      {
+                                        notification.message
+                                      }
+                                    </p>
+
+                                    <p
+                                      className={`mt-1.5 text-[10px] ${
+                                        darkMode
+                                          ? "text-slate-500"
+                                          : "text-slate-400"
+                                      }`}
+                                    >
+                                      {
+                                        notification.time
+                                      }
+                                    </p>
+                                  </div>
                                 </div>
+                              </button>
 
-                                <p
-                                  className={`text-xs mt-1 line-clamp-2 ${
+                              {/* DELETE */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteNotification(
+                                    notification.id
+                                  )
+                                }
+                                className={`
+                                  absolute right-3 top-3
+                                  flex h-7 w-7
+                                  items-center justify-center
+                                  rounded-lg text-xs
+                                  opacity-100
+                                  transition
+                                  sm:opacity-0 sm:group-hover:opacity-100
+                                  ${
                                     darkMode
-                                      ? "text-slate-400"
-                                      : "text-slate-500"
-                                  }`}
-                                >
-                                  {notification.message}
-                                </p>
-                              </div>
+                                      ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+                                      : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                  }
+                                `}
+                                aria-label="Delete notification"
+                              >
+                                ✕
+                              </button>
                             </div>
-                          </button>
-                        ))
+                          )
+                        )
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => navigateTo("/student/notifications")}
-                      className={`w-full py-3 text-xs font-bold ${
+                    {/* VIEW ALL */}
+                    <div
+                      className={`border-t p-2 ${
                         darkMode
-                          ? "text-blue-400 hover:bg-slate-700"
-                          : "text-slate-700 hover:bg-slate-50"
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
-                      View All Notifications
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigateTo(
+                            "/student/notifications"
+                          )
+                        }
+                        className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
+                          darkMode
+                            ? "text-blue-400 hover:bg-slate-800"
+                            : "text-blue-600 hover:bg-blue-50"
+                        }`}
+                      >
+                        View all notifications
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* PROFILE */}
-
-              <div className="relative" ref={profileMenuRef}>
+              {/* =================================================
+                  PROFILE
+                  ================================================= */}
+              <div
+                ref={profileRef}
+                className="relative"
+              >
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen((prev) => !prev);
+                    setIsProfileOpen(
+                      (previous) => !previous
+                    );
                     setIsNotificationOpen(false);
                   }}
-                  className={`flex items-center gap-3 px-2 py-1.5 rounded-xl ${
-                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                  className={`flex items-center gap-2 rounded-xl p-1.5 transition ${
+                    darkMode
+                      ? "hover:bg-slate-800"
+                      : "hover:bg-slate-100"
                   }`}
                 >
-                  {/* PROFILE PHOTO */}
+                  {profilePhoto ? (
+                    <img
+                      src={profilePhoto}
+                      alt={fullName}
+                      className="h-9 w-9 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                      {getInitials(fullName)}
+                    </div>
+                  )}
 
-                  <div
-                    className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm ${
-                      darkMode
-                        ? "bg-white text-slate-900"
-                        : "bg-slate-900 text-white"
-                    }`}
-                  >
-                    {studentProfile.profilePhoto ? (
-                      <img
-                        src={studentProfile.profilePhoto}
-                        alt={studentProfile.fullName}
-                        className="w-full h-full object-cover"
-                        onError={() => {
-                          console.error("Profile image failed to load.");
-
-                          setStudentProfile((prev) => ({
-                            ...prev,
-                            profilePhoto: null,
-                          }));
-                        }}
-                      />
-                    ) : (
-                      profileInitials
-                    )}
-                  </div>
-
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold">
-                      {isStudentLoading
-                        ? "Loading..."
-                        : studentProfile.fullName}
+                  <div className="hidden text-left sm:block">
+                    <p
+                      className={`max-w-[140px] truncate text-sm font-semibold ${
+                        darkMode
+                          ? "text-white"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      {fullName}
                     </p>
 
                     <p
-                      className={`text-xs ${
-                        darkMode ? "text-slate-400" : "text-slate-400"
+                      className={`max-w-[140px] truncate text-[10px] ${
+                        darkMode
+                          ? "text-slate-400"
+                          : "text-slate-500"
                       }`}
                     >
-                      {isStudentLoading
-                        ? "Loading..."
-                        : studentProfile.program || "Student"}
+                      {program}
                     </p>
                   </div>
 
                   <span
-                    className={`text-xs transition-transform ${
-                      isProfileOpen ? "rotate-180" : ""
+                    className={`hidden text-xs sm:block ${
+                      darkMode
+                        ? "text-slate-400"
+                        : "text-slate-500"
                     }`}
                   >
                     ▼
                   </span>
                 </button>
 
+                {/* =================================================
+                    PROFILE DROPDOWN
+                    DARK MODE REMOVED FROM HERE
+                    ================================================= */}
                 {isProfileOpen && (
                   <div
-                    className={`absolute right-0 top-14 w-60 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
+                    className={`absolute right-0 top-12 z-[100] w-56 overflow-hidden rounded-2xl border shadow-xl ${
                       darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-white border-slate-200"
+                        ? "border-slate-700 bg-slate-900"
+                        : "border-slate-200 bg-white"
                     }`}
                   >
-                    {/* PROFILE INFO */}
-
+                    {/* PROFILE HEADER */}
                     <div
-                      className={`px-4 py-4 border-b ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
+                      className={`border-b px-4 py-4 ${
+                        darkMode
+                          ? "border-slate-800"
+                          : "border-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm ${
-                            darkMode
-                              ? "bg-white text-slate-900"
-                              : "bg-slate-900 text-white"
-                          }`}
-                        >
-                          {studentProfile.profilePhoto ? (
-                            <img
-                              src={studentProfile.profilePhoto}
-                              alt={studentProfile.fullName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            profileInitials
-                          )}
-                        </div>
+                        {profilePhoto ? (
+                          <img
+                            src={profilePhoto}
+                            alt={fullName}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                            {getInitials(fullName)}
+                          </div>
+                        )}
 
                         <div className="min-w-0">
-                          <p className="text-sm font-bold truncate">
-                            {studentProfile.fullName}
+                          <p
+                            className={`truncate text-sm font-semibold ${
+                              darkMode
+                                ? "text-white"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            {fullName}
                           </p>
 
                           <p
-                            className={`text-xs mt-1 truncate ${
-                              darkMode ? "text-slate-400" : "text-slate-500"
+                            className={`truncate text-xs ${
+                              darkMode
+                                ? "text-slate-400"
+                                : "text-slate-500"
                             }`}
                           >
-                            {studentProfile.program || "Student Account"}
+                            {program}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* PROFILE */}
-
-                    <button
-                      type="button"
-                      onClick={() => navigateTo("/student/profile")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>👤</span>
-                      <span>My Profile</span>
-                    </button>
-
-                    {/* SETTINGS */}
-
-                    <button
-                      type="button"
-                      onClick={() => navigateTo("/student/settings")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                        darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <span>⚙️</span>
-                      <span>Settings</span>
-                    </button>
-
-                    {/* DARK MODE */}
-
-                    <div
-                      className={`border-t ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
-                      }`}
-                    >
+                    <div className="p-2">
+                      {/* MY PROFILE */}
                       <button
                         type="button"
-                        onClick={toggleDarkMode}
-                        className={`w-full flex items-center justify-between px-4 py-3 text-sm text-left ${
-                          darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span>{darkMode ? "☀️" : "🌙"}</span>
-
-                          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
-                        </div>
-
-                        <div
-                          className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
-                            darkMode ? "bg-blue-600" : "bg-slate-300"
-                          }`}
-                        >
-                          <div
-                            className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                              darkMode ? "translate-x-4" : "translate-x-0"
-                            }`}
-                          />
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* LOGOUT */}
-
-                    <div
-                      className={`border-t ${
-                        darkMode ? "border-slate-700" : "border-slate-200"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={handleLogout}
-                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
+                        onClick={() =>
+                          navigateTo(
+                            "/student/profile"
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                           darkMode
-                            ? "text-red-400 hover:bg-red-950"
-                            : "text-red-500 hover:bg-red-50"
+                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                         }`}
                       >
-                        <span>🚪</span>
+                        👤
+                        <span>My Profile</span>
+                      </button>
+
+                      {/* SETTINGS */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigateTo(
+                            "/student/settings"
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
+                          darkMode
+                            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                        }`}
+                      >
+                        ⚙️
+                        <span>Settings</span>
+                      </button>
+
+                      <div
+                        className={`my-1 border-t ${
+                          darkMode
+                            ? "border-slate-800"
+                            : "border-slate-100"
+                        }`}
+                      />
+
+                      {/* LOGOUT */}
+                      <button
+                        type="button"
+                        onClick={handleLogoutClick}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                          darkMode
+                            ? "text-red-400 hover:bg-red-500/10"
+                            : "text-red-600 hover:bg-red-50"
+                        }`}
+                      >
+                        ↪
                         <span>Logout</span>
                       </button>
                     </div>
@@ -1257,24 +1435,25 @@ const StudentPortalLayout = () => {
 
           {/* ===================================================
               PAGE CONTENT
-          =================================================== */}
-
+              =================================================== */}
           <main
-            className={`min-w-0 min-h-[calc(100vh-5rem)] transition-colors duration-300 ${
-              darkMode ? "bg-slate-950" : "bg-slate-50"
+            className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 ${
+              darkMode
+                ? "bg-slate-950"
+                : "bg-slate-50"
             }`}
+            style={{
+              touchAction: "pan-y",
+            }}
           >
             <Outlet
               context={{
                 darkMode,
-
                 notifications,
                 unreadCount,
-
                 markNotificationRead,
                 markAllNotificationsRead,
                 deleteNotification,
-
                 selectedNotification,
                 openNotification,
                 closeNotificationModal,
@@ -1285,197 +1464,237 @@ const StudentPortalLayout = () => {
       </div>
 
       {/* =====================================================
-          NOTIFICATION MODAL
-      ===================================================== */}
+          MOBILE OVERLAY
+          ===================================================== */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
+          onClick={() =>
+            setIsMobileSidebarOpen(false)
+          }
+        />
+      )}
 
+      {/* =====================================================
+          MOBILE SIDEBAR
+          ===================================================== */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
+          isMobileSidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full"
+        } ${
+          darkMode
+            ? "bg-slate-900"
+            : "bg-white"
+        }`}
+      >
+        {renderSidebarContent(true)}
+      </aside>
+
+      {/* =====================================================
+          NOTIFICATION MODAL
+          ===================================================== */}
       {selectedNotification && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
           onClick={closeNotificationModal}
         >
           <div
-            className={`w-full max-w-lg rounded-2xl shadow-2xl border overflow-hidden transition-colors ${
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
-                ? "bg-slate-900 border-slate-700 text-white"
-                : "bg-white border-slate-200 text-slate-900"
+                ? "border-slate-700 bg-slate-900"
+                : "border-slate-200 bg-white"
             }`}
-            onClick={(e) => e.stopPropagation()}
           >
-            {/* MODAL HEADER */}
-
             <div
-              className={`px-6 py-5 border-b flex items-start justify-between ${
-                darkMode ? "border-slate-700" : "border-slate-200"
+              className={`flex items-center justify-between border-b px-5 py-4 ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
               }`}
             >
-              <div className="flex gap-3">
-                <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center ${
-                    darkMode
-                      ? "bg-blue-950 text-blue-400"
-                      : "bg-blue-100 text-blue-600"
-                  }`}
-                >
-                  🔔
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-wider font-bold text-slate-400">
-                    Notification
-                  </p>
-
-                  <h2 className="text-lg font-black">
-                    {selectedNotification.title}
-                  </h2>
-                </div>
-              </div>
+              <h3
+                className={`font-bold ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
+                }`}
+              >
+                Notification
+              </h3>
 
               <button
                 type="button"
                 onClick={closeNotificationModal}
-                className={`w-8 h-8 rounded-lg text-xl text-slate-400 ${
-                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  darkMode
+                    ? "text-slate-400 hover:bg-slate-800"
+                    : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
-                ×
+                ✕
               </button>
             </div>
 
-            {/* MODAL CONTENT */}
+            <div className="px-5 py-6">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl dark:bg-blue-500/10">
+                  {selectedNotification.type ===
+                  "application"
+                    ? "📝"
+                    : selectedNotification.type ===
+                      "document"
+                    ? "📄"
+                    : "🔔"}
+                </div>
 
-            <div className="px-6 py-6">
+                <div>
+                  <h4
+                    className={`font-bold ${
+                      darkMode
+                        ? "text-white"
+                        : "text-slate-900"
+                    }`}
+                  >
+                    {selectedNotification.title}
+                  </h4>
+
+                  <p
+                    className={`mt-1 text-xs ${
+                      darkMode
+                        ? "text-slate-500"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {selectedNotification.time}
+                  </p>
+                </div>
+              </div>
+
               <p
-                className={`text-sm leading-relaxed ${
-                  darkMode ? "text-slate-300" : "text-slate-600"
+                className={`text-sm leading-6 ${
+                  darkMode
+                    ? "text-slate-300"
+                    : "text-slate-600"
                 }`}
               >
                 {selectedNotification.message}
               </p>
+            </div>
 
-              {/* RELATED RECORD */}
+            <div
+              className={`border-t px-5 py-3 text-right ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={closeNotificationModal}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* =====================================================
+          LOGOUT CONFIRMATION MODAL
+          ===================================================== */}
+      {showLogoutConfirm && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
+          onClick={cancelLogout}
+        >
+          <div
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${
+              darkMode
+                ? "border-slate-700 bg-slate-900"
+                : "border-slate-200 bg-white"
+            }`}
+          >
+            {/* ICON */}
+            <div className="flex justify-center pt-7">
               <div
-                className={`mt-5 p-4 rounded-xl border ${
+                className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
                   darkMode
-                    ? "bg-slate-800 border-slate-700"
-                    : "bg-slate-50 border-slate-100"
+                    ? "bg-red-500/10"
+                    : "bg-red-50"
                 }`}
               >
-                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                  Related Record
-                </p>
-
-                <p className="text-sm font-semibold mt-1">
-                  {selectedNotification.relatedEntityType}
-                </p>
-
-                <p
-                  className={`text-xs mt-1 ${
-                    darkMode ? "text-slate-400" : "text-slate-500"
-                  }`}
-                >
-                  ID: {selectedNotification.relatedEntityId}
-                </p>
-
-                <p
-                  className={`text-xs mt-2 ${
-                    darkMode ? "text-slate-500" : "text-slate-400"
-                  }`}
-                >
-                  {new Date(selectedNotification.createdAt).toLocaleString()}
-                </p>
+                ↪
               </div>
+            </div>
 
-              {/* CONTROLS */}
+            {/* CONTENT */}
+            <div className="px-6 pb-5 pt-4 text-center">
+              <h3
+                className={`text-lg font-bold ${
+                  darkMode
+                    ? "text-white"
+                    : "text-slate-900"
+                }`}
+              >
+                Are you sure?
+              </h3>
 
-              <div className="mt-6 flex flex-wrap justify-end gap-2">
-                {selectedNotification.relatedEntityType ===
-                  "InternshipApplication" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeNotificationModal();
-                      navigateTo("/student/application");
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
-                  >
-                    View Application
-                  </button>
-                )}
+              <p
+                className={`mt-2 text-sm leading-6 ${
+                  darkMode
+                    ? "text-slate-400"
+                    : "text-slate-500"
+                }`}
+              >
+                Are you sure you want to log out of
+                your student account?
+              </p>
+            </div>
 
-                {selectedNotification.relatedEntityType ===
-                  "DocumentSubmission" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeNotificationModal();
-                      navigateTo("/student/documents");
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
-                  >
-                    View Documents
-                  </button>
-                )}
+            {/* BUTTONS */}
+            <div
+              className={`flex gap-3 border-t p-4 ${
+                darkMode
+                  ? "border-slate-800"
+                  : "border-slate-100"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={cancelLogout}
+                disabled={isLoggingOut}
+                className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  darkMode
+                    ? "bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                Cancel
+              </button>
 
-                {selectedNotification.relatedEntityType ===
-                  "InformationItem" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeNotificationModal();
-                      navigateTo("/student/info");
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition"
-                  >
-                    View Information
-                  </button>
-                )}
-
-                {!selectedNotification.readAt && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      markNotificationRead(selectedNotification.id);
-
-                      setSelectedNotification((previous) =>
-                        previous
-                          ? {
-                              ...previous,
-                              readAt: new Date().toISOString(),
-                            }
-                          : previous
-                      );
-                    }}
-                    className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
-                      darkMode
-                        ? "border-slate-700 text-slate-300 hover:bg-slate-800"
-                        : "border-slate-200 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    Mark as Read
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    deleteNotification(selectedNotification.id);
-                  }}
-                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
-                    darkMode
-                      ? "border-red-900 text-red-400 hover:bg-red-950"
-                      : "border-red-200 text-red-500 hover:bg-red-50"
-                  }`}
-                >
-                  Delete
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                disabled={isLoggingOut}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoggingOut
+                  ? "Logging out..."
+                  : "Logout"}
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-};
-
-export default StudentPortalLayout;
+}

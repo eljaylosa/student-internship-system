@@ -1,86 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseRegistrar } from "../../supabaseClient";
 
 const StudentLists = () => {
   const { darkMode } = useOutletContext();
 
   // =========================================================
-  // STUDENT DATA
-  // =========================================================
-
-  const students = [
-    {
-      id: "2024-001",
-      name: "John Dela Cruz",
-      email: "john.delacruz@example.com",
-      status: "Active",
-      progress: 75,
-      program: "BS Information Technology",
-      company: "ABC Technologies",
-      position: "Web Developer Intern",
-      startDate: "June 3, 2026",
-    },
-    {
-      id: "2024-002",
-      name: "Maria Santos",
-      email: "maria.santos@example.com",
-      status: "Active",
-      progress: 60,
-      program: "BS Information Technology",
-      company: "XYZ Solutions",
-      position: "UI/UX Design Intern",
-      startDate: "June 10, 2026",
-    },
-    {
-      id: "2024-003",
-      name: "Kevin Reyes",
-      email: "kevin.reyes@example.com",
-      status: "Pending",
-      progress: 40,
-      program: "BS Computer Science",
-      company: "Tech Innovations",
-      position: "Software Developer Intern",
-      startDate: "June 17, 2026",
-    },
-    {
-      id: "2024-004",
-      name: "Angela Garcia",
-      email: "angela.garcia@example.com",
-      status: "Active",
-      progress: 85,
-      program: "BS Information Technology",
-      company: "Digital Works",
-      position: "Frontend Developer Intern",
-      startDate: "May 27, 2026",
-    },
-    {
-      id: "2024-005",
-      name: "Daniel Cruz",
-      email: "daniel.cruz@example.com",
-      status: "Completed",
-      progress: 100,
-      program: "BS Information Technology",
-      company: "ABC Technologies",
-      position: "Backend Developer Intern",
-      startDate: "April 15, 2026",
-    },
-    {
-      id: "2024-006",
-      name: "Sofia Mendoza",
-      email: "sofia.mendoza@example.com",
-      status: "Active",
-      progress: 70,
-      program: "BS Information Technology",
-      company: "Creative Labs",
-      position: "Graphic Design Intern",
-      startDate: "June 1, 2026",
-    },
-  ];
-
-  // =========================================================
   // STATE
   // =========================================================
 
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -116,7 +46,344 @@ const StudentLists = () => {
   const tableTextClass = darkMode ? "text-slate-100" : "text-slate-900";
 
   // =========================================================
-  // FILTER STUDENTS
+  // LOAD STUDENTS
+  // =========================================================
+
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  const formatDate = (value) => {
+    if (!value) return "Not set";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Not set";
+    }
+
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const getProgress = (assignment) => {
+    if (!assignment) return 0;
+
+    const status = assignment.status?.toLowerCase();
+
+    if (status === "completed") return 100;
+
+    if (status !== "active" && status !== "suspended") {
+      return 0;
+    }
+
+    if (!assignment.start_date || !assignment.end_date) {
+      return 0;
+    }
+
+    const start = new Date(`${assignment.start_date}T00:00:00`);
+    const end = new Date(`${assignment.end_date}T23:59:59`);
+    const now = new Date();
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      end <= start
+    ) {
+      return 0;
+    }
+
+    const total = end.getTime() - start.getTime();
+    const elapsed = now.getTime() - start.getTime();
+
+    return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
+  };
+
+  const loadStudents = async () => {
+    setLoading(true);
+
+    try {
+      // =======================================================
+      // 1. GET AUTH USER
+      // =======================================================
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      // =======================================================
+      // 2. GET REGISTRAR SCHOOL
+      // =======================================================
+
+      const { data: registrarData, error: registrarError } =
+        await supabaseRegistrar
+          .from("registrars")
+          .select("id, school_id")
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (registrarError) {
+        throw registrarError;
+      }
+
+      if (!registrarData) {
+        throw new Error("Registrar profile could not be found.");
+      }
+
+      if (!registrarData.school_id) {
+        setStudents([]);
+        return;
+      }
+
+      const schoolId = registrarData.school_id;
+
+      // =======================================================
+      // 3. LOAD ALL STUDENTS IN THIS REGISTRAR'S CAMPUS
+      // =======================================================
+
+      const { data: studentData, error: studentError } = await supabaseRegistrar
+        .from("students")
+        .select(
+          `
+            id,
+            student_id,
+            program,
+            year_level,
+            department,
+            phone,
+            address,
+            emergency_contact,
+            gwa,
+            school_id,
+            created_at,
+            users (
+              id,
+              email,
+              first_name,
+              middle_name,
+              last_name
+            )
+          `
+        )
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false });
+
+      if (studentError) {
+        throw studentError;
+      }
+
+      // =======================================================
+      // 4. LOAD APPLICATIONS FOR THIS CAMPUS
+      // =======================================================
+
+      const { data: applicationData, error: applicationError } =
+        await supabaseRegistrar
+          .from("applications")
+          .select(
+            `
+            id,
+            student_id,
+            opportunity_id,
+            status,
+            submitted_at,
+            created_at,
+            updated_at,
+            opportunities (
+              id,
+              title,
+              company_id,
+              companies (
+                id,
+                company_name
+              )
+            ),
+            students!inner (
+              id,
+              school_id
+            )
+          `
+          )
+          .eq("students.school_id", schoolId)
+          .order("updated_at", { ascending: false });
+
+      if (applicationError) {
+        throw applicationError;
+      }
+
+      // =======================================================
+      // 5. LOAD ASSIGNMENTS FOR THIS CAMPUS
+      // =======================================================
+
+      const { data: assignmentData, error: assignmentError } =
+        await supabaseRegistrar
+          .from("assignments")
+          .select(
+            `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at,
+            students!inner (
+              id,
+              school_id
+            ),
+            companies (
+              id,
+              company_name
+            ),
+            opportunities (
+              id,
+              title
+            )
+          `
+          )
+          .eq("students.school_id", schoolId)
+          .order("updated_at", { ascending: false });
+
+      if (assignmentError) {
+        throw assignmentError;
+      }
+
+      // =======================================================
+      // 6. INDEX LATEST APPLICATION / ASSIGNMENT PER STUDENT
+      // =======================================================
+
+      const latestAssignments = new Map();
+
+      (assignmentData || []).forEach((assignment) => {
+        if (!latestAssignments.has(assignment.student_id)) {
+          latestAssignments.set(assignment.student_id, assignment);
+        }
+      });
+
+      const latestApplications = new Map();
+
+      (applicationData || []).forEach((application) => {
+        if (!latestApplications.has(application.student_id)) {
+          latestApplications.set(application.student_id, application);
+        }
+      });
+
+      // =======================================================
+      // 7. BUILD STUDENT LIST
+      // =======================================================
+
+      const formattedStudents = (studentData || []).map((student) => {
+        const userRecord = Array.isArray(student.users)
+          ? student.users[0]
+          : student.users;
+
+        const assignment = latestAssignments.get(student.id);
+        const application = latestApplications.get(student.id);
+
+        const studentName = [
+          userRecord?.first_name,
+          userRecord?.middle_name,
+          userRecord?.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+        const assignmentStatus = assignment?.status?.toLowerCase();
+        const applicationStatus = application?.status?.toLowerCase();
+
+        let status = "Not Started";
+
+        if (assignmentStatus === "active" || assignmentStatus === "suspended") {
+          status = "Active";
+        } else if (assignmentStatus === "completed") {
+          status = "Completed";
+        } else if (assignmentStatus === "terminated") {
+          status = "Terminated";
+        } else if (assignmentStatus === "pending") {
+          status = "Pending";
+        } else if (
+          applicationStatus === "submitted" ||
+          applicationStatus === "info_requested" ||
+          applicationStatus === "approved"
+        ) {
+          status = "Pending";
+        }
+
+        const progress = getProgress(assignment);
+
+        const company =
+          assignment?.companies?.company_name ||
+          application?.opportunities?.companies?.company_name ||
+          "Not assigned";
+
+        const position =
+          assignment?.opportunities?.title ||
+          application?.opportunities?.title ||
+          "No internship opportunity";
+
+        const startDate = assignment?.start_date || null;
+
+        return {
+          uuid: student.id,
+          id: student.student_id || "N/A",
+          name: studentName || "Unknown Student",
+          email: userRecord?.email || "No email",
+          status,
+          progress,
+          program: student.program || "Not specified",
+          yearLevel: student.year_level || "Not specified",
+          department: student.department || "Not specified",
+          company,
+          position,
+          startDate: startDate ? formatDate(startDate) : "Not started",
+          rawStartDate: startDate,
+          endDate: assignment?.end_date
+            ? formatDate(assignment.end_date)
+            : "Not set",
+          phone: student.phone || "Not provided",
+          address: student.address || "Not provided",
+          emergencyContact: student.emergency_contact || "Not provided",
+          gwa:
+            student.gwa !== null && student.gwa !== undefined
+              ? String(student.gwa)
+              : "Not available",
+          assignmentStatus: assignment?.status || null,
+          applicationStatus: application?.status || null,
+          assignmentId: assignment?.id || null,
+          applicationId: application?.id || null,
+        };
+      });
+
+      setStudents(formattedStudents);
+
+      console.log("👥 Campus-scoped students loaded:", formattedStudents);
+    } catch (error) {
+      console.error("❌ Load student list error:", error);
+      setStudents([]);
+      alert(error.message || "Unable to load students.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================================================
+  // SEARCH + FILTER
   // =========================================================
 
   const filteredStudents = useMemo(() => {
@@ -124,10 +391,13 @@ const StudentLists = () => {
 
     return students.filter((student) => {
       const matchesSearch =
+        !query ||
         student.id.toLowerCase().includes(query) ||
         student.name.toLowerCase().includes(query) ||
         student.email.toLowerCase().includes(query) ||
         student.program.toLowerCase().includes(query) ||
+        student.yearLevel.toLowerCase().includes(query) ||
+        student.department.toLowerCase().includes(query) ||
         student.company.toLowerCase().includes(query) ||
         student.position.toLowerCase().includes(query);
 
@@ -136,7 +406,7 @@ const StudentLists = () => {
 
       return matchesSearch && matchesStatus;
     });
-  }, [searchQuery, statusFilter]);
+  }, [students, searchQuery, statusFilter]);
 
   // =========================================================
   // STATUS STYLE
@@ -232,6 +502,10 @@ const StudentLists = () => {
       "Assigned Company",
       "Position",
       "Start Date",
+      "End Date",
+      "Year Level",
+      "Department",
+      "GWA",
     ];
 
     const rows = filteredStudents.map((student) => [
@@ -244,6 +518,10 @@ const StudentLists = () => {
       student.company,
       student.position,
       student.startDate,
+      student.endDate,
+      student.yearLevel,
+      student.department,
+      student.gwa,
     ]);
 
     const csvContent = [headers, ...rows]
@@ -272,6 +550,24 @@ const StudentLists = () => {
   // =========================================================
   // RENDER
   // =========================================================
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
+        <div
+          className={`max-w-[1400px] mx-auto border rounded-xl p-10 text-center ${mainContainerClass}`}
+        >
+          <div className="text-2xl mb-3">⏳</div>
+          <h2 className={`text-sm font-bold ${headingClass}`}>
+            Loading Student List...
+          </h2>
+          <p className={`text-xs mt-1 ${mutedClass}`}>
+            Loading students from your assigned campus.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
@@ -1116,6 +1412,153 @@ const StudentLists = () => {
 
                   <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.id}
+                  </p>
+                </div>
+
+                {/* YEAR LEVEL */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Year Level
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.yearLevel}
+                  </p>
+                </div>
+
+                {/* DEPARTMENT */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Department
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.department}
+                  </p>
+                </div>
+
+                {/* GWA */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    GWA
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.gwa}
+                  </p>
+                </div>
+
+                {/* PHONE */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Phone
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.phone}
+                  </p>
+                </div>
+
+                {/* ADDRESS */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Address
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.address}
+                  </p>
+                </div>
+
+                {/* EMERGENCY CONTACT */}
+
+                <div className="sm:col-span-2">
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Emergency Contact
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.emergencyContact}
+                  </p>
+                </div>
+
+                {/* END DATE */}
+
+                <div>
+                  <p
+                    className={`
+                      text-[10px]
+                      uppercase
+                      tracking-wide
+                      font-bold
+                      mb-1
+                      ${mutedClass}
+                    `}
+                  >
+                    Internship End
+                  </p>
+
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    {selectedStudent.endDate}
                   </p>
                 </div>
               </div>
