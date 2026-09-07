@@ -37,6 +37,75 @@ const ManageApplications = () => {
   const RESUME_BUCKET = "verification-documents";
 
   // =========================================================
+  // SEND APPLICATION DECISION EMAIL
+  // =========================================================
+
+  const sendApplicationDecisionEmail = async ({
+    application,
+    decision,
+    reason = "",
+  }) => {
+    if (!application?.email || application.email === "No email") {
+      console.warn(
+        "Application decision email was not sent because the student email is missing."
+      );
+
+      return {
+        success: false,
+        skipped: true,
+      };
+    }
+
+    try {
+      const { data, error } = await supabaseCompany.functions.invoke(
+        "send-application-decision-email",
+        {
+          body: {
+            email: application.email,
+            name: application.studentName,
+            decision,
+            decidedBy: "company",
+            opportunityName: application.internshipPosition,
+            companyName: application.companyName || "Your Internship Company",
+            reason: reason || "",
+          },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(
+          data?.error || "The application decision email could not be sent."
+        );
+      }
+
+      console.log(
+        `Company application decision email sent successfully to ${application.email}`
+      );
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (emailError) {
+      console.error(
+        "Failed to send company application decision email:",
+        emailError
+      );
+
+      return {
+        success: false,
+        error:
+          emailError?.message ||
+          "The application decision email could not be sent.",
+      };
+    }
+  };
+
+  // =========================================================
   // LOAD COMPANY APPLICATIONS
   // =========================================================
 
@@ -572,6 +641,12 @@ const ManageApplications = () => {
             school: school?.name || "Not specified",
 
             // ---------------------------------------------------
+            // COMPANY
+            // ---------------------------------------------------
+
+            companyName: company.company_name || "Unknown Company",
+
+            // ---------------------------------------------------
             // RESUME / CV
             // ---------------------------------------------------
 
@@ -709,16 +784,6 @@ const ManageApplications = () => {
     try {
       setViewingResumeId(application.id);
 
-      /*
-       * resume_url stores the Storage path.
-       *
-       * Example:
-       * resumes/<student-user-id>/resume.pdf
-       *
-       * We generate a temporary signed URL instead of making
-       * the Resume/CV publicly accessible.
-       */
-
       const { data, error } = await supabaseCompany.storage
         .from(RESUME_BUCKET)
         .createSignedUrl(application.resumeUrl, 60 * 10);
@@ -764,6 +829,10 @@ const ManageApplications = () => {
       setProcessingId(applicationId);
       setError("");
 
+      // -------------------------------------------------------
+      // 1. ACCEPT INTERNSHIP PLACEMENT
+      // -------------------------------------------------------
+
       const { data, error } = await supabaseCompany.rpc(
         "accept_internship_assignment",
         {
@@ -783,9 +852,36 @@ const ManageApplications = () => {
 
       console.log("Internship placement accepted:", result);
 
+      // -------------------------------------------------------
+      // 2. SEND EMAIL TO STUDENT
+      // -------------------------------------------------------
+
+      const emailResult = await sendApplicationDecisionEmail({
+        application,
+        decision: "accepted",
+      });
+
+      // -------------------------------------------------------
+      // 3. RELOAD APPLICATIONS
+      // -------------------------------------------------------
+
       await loadApplications();
 
       setSelectedApplication(null);
+
+      // -------------------------------------------------------
+      // 4. SUCCESS MESSAGE
+      // -------------------------------------------------------
+
+      if (emailResult.success) {
+        alert(
+          `Internship placement accepted successfully.\n\nAn acceptance email has been sent to ${application.email}.`
+        );
+      } else {
+        alert(
+          `Internship placement accepted successfully.\n\nHowever, the email notification could not be sent to the student.`
+        );
+      }
     } catch (err) {
       console.error("Error accepting internship placement:", err);
 
@@ -905,7 +1001,17 @@ const ManageApplications = () => {
       }
 
       // -------------------------------------------------------
-      // 3. CLOSE MODAL
+      // 3. SEND REJECTION EMAIL
+      // -------------------------------------------------------
+
+      const emailResult = await sendApplicationDecisionEmail({
+        application: selectedApplication,
+        decision: "rejected",
+        reason,
+      });
+
+      // -------------------------------------------------------
+      // 4. CLOSE MODAL
       // -------------------------------------------------------
 
       setShowRejectModal(false);
@@ -913,10 +1019,24 @@ const ManageApplications = () => {
       setRejectReason("");
 
       // -------------------------------------------------------
-      // 4. RELOAD
+      // 5. RELOAD
       // -------------------------------------------------------
 
       await loadApplications();
+
+      // -------------------------------------------------------
+      // 6. SUCCESS MESSAGE
+      // -------------------------------------------------------
+
+      if (emailResult.success) {
+        alert(
+          `Internship placement rejected successfully.\n\nA rejection email has been sent to ${selectedApplication.email}.`
+        );
+      } else {
+        alert(
+          `Internship placement rejected successfully.\n\nHowever, the email notification could not be sent to the student.`
+        );
+      }
     } catch (err) {
       console.error("Error rejecting internship placement:", err);
 
@@ -1256,8 +1376,6 @@ const ManageApplications = () => {
                       darkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"
                     }`}
                   >
-                    {/* STUDENT */}
-
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div
@@ -1290,23 +1408,17 @@ const ManageApplications = () => {
                       </div>
                     </td>
 
-                    {/* SCHOOL */}
-
                     <td className="px-5 py-4">
                       <p className={`text-xs font-semibold ${headingClass}`}>
                         {application.school}
                       </p>
                     </td>
 
-                    {/* YEAR LEVEL */}
-
                     <td className="px-5 py-4">
                       <p className={`text-xs font-semibold ${headingClass}`}>
                         {application.yearLevel}
                       </p>
                     </td>
-
-                    {/* INTERNSHIP */}
 
                     <td className="px-5 py-4">
                       <p className={`text-xs font-semibold ${headingClass}`}>
@@ -1318,8 +1430,6 @@ const ManageApplications = () => {
                       </p>
                     </td>
 
-                    {/* DEPLOYMENT */}
-
                     <td className="px-5 py-4">
                       <p className={`text-xs font-semibold ${headingClass}`}>
                         {application.deploymentDate}
@@ -1330,8 +1440,6 @@ const ManageApplications = () => {
                       </p>
                     </td>
 
-                    {/* STATUS */}
-
                     <td className="px-5 py-4">
                       <span
                         className={`inline-flex px-2.5 py-1 rounded-full border text-[10px] font-bold ${getStatusClass(
@@ -1341,8 +1449,6 @@ const ManageApplications = () => {
                         {application.status}
                       </span>
                     </td>
-
-                    {/* ACTION */}
 
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2 flex-wrap">
@@ -1469,8 +1575,6 @@ const ManageApplications = () => {
                 </div>
 
                 <div className="mt-4 space-y-2">
-                  {/* SCHOOL */}
-
                   <div>
                     <p
                       className={`text-[9px] uppercase tracking-wider font-bold ${bodyTextClass}`}
@@ -1484,8 +1588,6 @@ const ManageApplications = () => {
                       {application.school}
                     </p>
                   </div>
-
-                  {/* COURSE */}
 
                   <div>
                     <p
@@ -1501,8 +1603,6 @@ const ManageApplications = () => {
                     </p>
                   </div>
 
-                  {/* YEAR LEVEL */}
-
                   <div>
                     <p
                       className={`text-[9px] uppercase tracking-wider font-bold ${bodyTextClass}`}
@@ -1516,8 +1616,6 @@ const ManageApplications = () => {
                       {application.yearLevel}
                     </p>
                   </div>
-
-                  {/* INTERNSHIP */}
 
                   <div>
                     <p
@@ -1537,8 +1635,6 @@ const ManageApplications = () => {
                     </p>
                   </div>
 
-                  {/* DURATION */}
-
                   <div>
                     <p
                       className={`text-[9px] uppercase tracking-wider font-bold ${bodyTextClass}`}
@@ -1552,8 +1648,6 @@ const ManageApplications = () => {
                       {application.internshipDuration}
                     </p>
                   </div>
-
-                  {/* RESUME */}
 
                   <div>
                     <p
@@ -1726,117 +1820,34 @@ const ManageApplications = () => {
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
+                  {[
+                    ["Full Name", selectedApplication.studentName],
+                    ["Student ID", selectedApplication.studentId],
+                    ["Email", selectedApplication.email],
+                    ["Phone", selectedApplication.phone],
+                    ["School", selectedApplication.school],
+                    ["Course", selectedApplication.course],
+                    ["Year Level", selectedApplication.yearLevel],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className={`p-3 rounded-xl border ${borderClass} ${
+                        darkMode ? "bg-slate-800" : "bg-slate-50"
+                      }`}
                     >
-                      Full Name
-                    </p>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
+                      >
+                        {label}
+                      </p>
 
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.studentName}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      Student ID
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.studentId}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      Email
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.email}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      Phone
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.phone}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      School
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.school}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      Course
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.course}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`p-3 rounded-xl border ${borderClass} ${
-                      darkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[9px] uppercase font-bold ${bodyTextClass}`}
-                    >
-                      Year Level
-                    </p>
-
-                    <p className={`text-xs font-semibold mt-1 ${headingClass}`}>
-                      {selectedApplication.yearLevel}
-                    </p>
-                  </div>
+                      <p
+                        className={`text-xs font-semibold mt-1 ${headingClass}`}
+                      >
+                        {value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </section>
 

@@ -27,7 +27,8 @@ import Footer from "./components/layout/Footer.jsx";
 
 import SignUp from "./pages/public/Signup.jsx";
 import Login from "./pages/public/Login.jsx";
-import ResetPassword from "./pages/public/ResetPassword";
+import ForgotPassword from "./pages/public/ForgotPassword.jsx";
+import ResetPassword from "./pages/public/ResetPassword.jsx";
 import TermsAndConditions from "./pages/public/Terms-&-Condition.jsx";
 import PrivacyPolicy from "./pages/public/Privacy-Policy.jsx";
 
@@ -208,7 +209,11 @@ function AppContent() {
 
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
+
+        {/* PASSWORD RECOVERY */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
 
@@ -230,6 +235,7 @@ function AppContent() {
             path="/student/certificate/:certificateId"
             element={<Certificate />}
           />
+
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="profile" element={<StudentProfile />} />
           <Route path="application" element={<StudentApplication />} />
@@ -260,10 +266,12 @@ function AppContent() {
           <Route path="dashboard" element={<RegistrarDashboard />} />
           <Route path="profile" element={<RegistrarProfile />} />
           <Route path="students" element={<RegistrarStudentLists />} />
+
           <Route
             path="applications"
             element={<RegistrarReviewApplications />}
           />
+
           <Route path="documents" element={<RegistrarDocuments />} />
           <Route path="deployment" element={<RegistrarManageDeployments />} />
           <Route path="evaluations" element={<RegistrarEvaluations />} />
@@ -274,9 +282,9 @@ function AppContent() {
         </Route>
 
         {/* =====================================================
-    COMPANY VERIFICATION DOCUMENT UPLOAD
-    Public route accessed through secure email link
-===================================================== */}
+            COMPANY VERIFICATION DOCUMENT UPLOAD
+            Public route accessed through secure email link
+        ===================================================== */}
 
         <Route
           path="/company/verification-upload"

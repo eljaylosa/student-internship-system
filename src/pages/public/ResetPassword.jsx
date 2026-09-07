@@ -1,9 +1,45 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../../supabaseClient";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import {
+  supabase,
+  supabaseStudent,
+  supabaseRegistrar,
+  supabaseCompany,
+} from "../../supabaseClient";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // =========================================================
+  // DETERMINE RECOVERY PORTAL
+  // =========================================================
+
+  const roleFromUrl = searchParams.get("role");
+
+  const getSupabaseClient = (role) => {
+    switch (role) {
+      case "student":
+        return supabaseStudent;
+
+      case "registrar":
+        return supabaseRegistrar;
+
+      case "company":
+        return supabaseCompany;
+
+      default:
+        // Fallback for the existing invitation/password setup
+        // flow which uses the default Supabase client.
+        return supabase;
+    }
+  };
+
+  const supabaseClient = getSupabaseClient(roleFromUrl);
+
+  // =========================================================
+  // FORM
+  // =========================================================
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -14,33 +50,77 @@ const ResetPassword = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // =========================================================
+  // CHECK RECOVERY SESSION
+  // =========================================================
+
   useEffect(() => {
+    let mounted = true;
+
     const checkSession = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        // =====================================================
+        // IMPORTANT:
+        // Supabase's detectSessionInUrl is enabled in your
+        // portal clients.
+        //
+        // When the user clicks the recovery email, Supabase
+        // processes the recovery tokens and establishes a
+        // temporary authenticated session.
+        // =====================================================
 
-        if (error) {
-          console.error("Session check error:", error);
-          setError("Unable to verify your invitation session.");
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabaseClient.auth.getSession();
+
+        if (!mounted) {
           return;
         }
 
-        if (!data.session) {
-          setError(
-            "This password setup link is invalid, expired, or has already been used."
-          );
-        }
-      } catch (err) {
-        console.error("Unexpected session error:", err);
+        if (sessionError) {
+          console.error("Password recovery session error:", sessionError);
 
-        setError("Unable to verify your password setup session.");
+          setError("Unable to verify your password recovery session.");
+
+          return;
+        }
+
+        if (!session) {
+          setError(
+            "This password reset link is invalid, expired, or has already been used."
+          );
+
+          return;
+        }
+
+        console.log("Password recovery session verified:", {
+          email: session.user?.email,
+          role: roleFromUrl || "default",
+        });
+      } catch (err) {
+        console.error("Unexpected password recovery session error:", err);
+
+        if (mounted) {
+          setError("Unable to verify your password recovery session.");
+        }
       } finally {
-        setCheckingSession(false);
+        if (mounted) {
+          setCheckingSession(false);
+        }
       }
     };
 
     checkSession();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [supabaseClient, roleFromUrl]);
+
+  // =========================================================
+  // UPDATE PASSWORD
+  // =========================================================
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,233 +146,333 @@ const ResetPassword = () => {
     try {
       setLoading(true);
 
-      const { error: updateError } = await supabase.auth.updateUser({
+      // =====================================================
+      // UPDATE SUPABASE AUTH PASSWORD
+      // =====================================================
+
+      const { error: updateError } = await supabaseClient.auth.updateUser({
         password,
       });
 
       if (updateError) {
         console.error("Password update error:", updateError);
 
-        setError(updateError.message);
+        setError(updateError.message || "Unable to update your password.");
+
         return;
       }
 
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+
       setMessage(
-        "Your password has been created successfully. You can now log in."
+        "Your password has been updated successfully. You can now log in."
       );
 
       setPassword("");
       setConfirmPassword("");
 
+      // =====================================================
+      // SIGN OUT THE TEMPORARY RECOVERY SESSION
+      // =====================================================
+
+      await supabaseClient.auth.signOut();
+
+      // =====================================================
+      // RETURN TO LOGIN
+      // =====================================================
+
       setTimeout(() => {
-        navigate("/login", { replace: true });
+        navigate("/login", {
+          replace: true,
+          state: {
+            role: roleFromUrl || "student",
+          },
+        });
       }, 2000);
     } catch (err) {
       console.error("Unexpected password update error:", err);
 
-      setError("Something went wrong while creating your password.");
+      setError("Something went wrong while updating your password.");
     } finally {
       setLoading(false);
     }
   };
 
+  // =========================================================
+  // LOADING SCREEN
+  // =========================================================
+
   if (checkingSession) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <p>Verifying your invitation...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-8 text-center max-w-md w-full">
+          <div className="w-12 h-12 mx-auto mb-5 rounded-xl bg-slate-100 flex items-center justify-center">
+            <svg
+              className="w-6 h-6 text-slate-500 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+          </div>
+
+          <h2 className="text-xl font-bold text-slate-800">
+            Verifying Reset Link
+          </h2>
+
+          <p className="text-sm text-slate-500 mt-2">
+            Please wait while we verify your password recovery session.
+          </p>
+        </div>
       </div>
     );
   }
 
+  // =========================================================
+  // DETERMINE PORTAL STYLING
+  // =========================================================
+
+  const portalConfig = {
+    student: {
+      label: "Student",
+      accent: "from-blue-500 to-indigo-600",
+      iconColor: "text-blue-600",
+    },
+
+    registrar: {
+      label: "Registrar Advisor",
+      accent: "from-emerald-500 to-teal-600",
+      iconColor: "text-emerald-600",
+    },
+
+    company: {
+      label: "Company Supervisor",
+      accent: "from-purple-500 to-purple-700",
+      iconColor: "text-purple-600",
+    },
+  };
+
+  const activePortal = portalConfig[roleFromUrl] || {
+    label: "SIMS",
+    accent: "from-slate-600 to-slate-800",
+    iconColor: "text-slate-600",
+  };
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-        background: "#f8fafc",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "440px",
-          background: "#ffffff",
-          borderRadius: "16px",
-          padding: "32px",
-          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.08)",
-        }}
-      >
-        <div style={{ marginBottom: "24px" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "28px",
-              color: "#111827",
-            }}
-          >
-            Create Your Password
-          </h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
+      <main className="flex-1 flex flex-col items-center justify-center py-20 px-4 w-full">
+        <div className="w-full max-w-lg">
+          {/* =================================================
+              CARD
+          ================================================= */}
 
-          <p
-            style={{
-              marginTop: "10px",
-              color: "#6b7280",
-              lineHeight: 1.6,
-            }}
-          >
-            Your SIMS registration has been approved. Create a password below to
-            activate your account.
-          </p>
+          <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100">
+            {/* ICON */}
+
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
+                <svg
+                  className={`w-8 h-8 ${activePortal.iconColor}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 text-center">
+              Reset Your Password
+            </h1>
+
+            <p className="text-sm text-slate-500 text-center mt-2 mb-8">
+              Create a new password for your{" "}
+              <span className="font-semibold text-slate-700">
+                {activePortal.label}
+              </span>{" "}
+              account.
+            </p>
+
+            {/* =================================================
+                ERROR
+            ================================================= */}
+
+            {error && (
+              <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* =================================================
+                SUCCESS
+            ================================================= */}
+
+            {message && (
+              <div className="mb-6 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {message}
+              </div>
+            )}
+
+            {/* =================================================
+                FORM
+            ================================================= */}
+
+            {!error && (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* NEW PASSWORD */}
+
+                <div>
+                  <label
+                    htmlFor="new-password"
+                    className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5"
+                  >
+                    New Password
+                  </label>
+
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your new password"
+                    autoComplete="new-password"
+                    disabled={loading || !!message}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
+                  />
+
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    Password must be at least 8 characters.
+                  </p>
+                </div>
+
+                {/* CONFIRM PASSWORD */}
+
+                <div>
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5"
+                  >
+                    Confirm Password
+                  </label>
+
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your new password"
+                    autoComplete="new-password"
+                    disabled={loading || !!message}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
+                  />
+                </div>
+
+                {/* SUBMIT */}
+
+                <button
+                  type="submit"
+                  disabled={loading || !!message}
+                  className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  {loading ? "Updating Password..." : "Update Password"}
+                </button>
+              </form>
+            )}
+
+            {/* =================================================
+                ERROR → LOGIN
+            ================================================= */}
+
+            {error && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate("/login", {
+                    replace: true,
+                    state: {
+                      role: roleFromUrl || "student",
+                    },
+                  })
+                }
+                className="w-full mt-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Back to Login
+              </button>
+            )}
+
+            {/* =================================================
+                SUCCESS → LOGIN
+            ================================================= */}
+
+            {message && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate("/login", {
+                    replace: true,
+                    state: {
+                      role: roleFromUrl || "student",
+                    },
+                  })
+                }
+                className="w-full mt-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                Back to Login
+              </button>
+            )}
+          </div>
+
+          {/* =================================================
+              FOOTER
+          ================================================= */}
+
+          <div className="text-center mt-6">
+            <p className="text-xs text-slate-400">
+              © 2026 SIMS |{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/privacy")}
+                className="hover:text-slate-700"
+              >
+                Privacy Policy
+              </button>{" "}
+              |{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/terms")}
+                className="hover:text-slate-700"
+              >
+                Terms of Service
+              </button>
+            </p>
+          </div>
         </div>
-
-        {error && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              fontSize: "14px",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              background: "#ecfdf5",
-              color: "#047857",
-              fontSize: "14px",
-            }}
-          >
-            {message}
-          </div>
-        )}
-
-        {!error && (
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "18px" }}>
-              <label
-                htmlFor="password"
-                style={{
-                  display: "block",
-                  marginBottom: "7px",
-                  fontWeight: "600",
-                  color: "#374151",
-                }}
-              >
-                New Password
-              </label>
-
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="new-password"
-                disabled={loading}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "12px 14px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "15px",
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "22px" }}>
-              <label
-                htmlFor="confirmPassword"
-                style={{
-                  display: "block",
-                  marginBottom: "7px",
-                  fontWeight: "600",
-                  color: "#374151",
-                }}
-              >
-                Confirm Password
-              </label>
-
-              <input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                autoComplete="new-password"
-                disabled={loading}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "12px 14px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "15px",
-                }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: "100%",
-                padding: "13px",
-                border: "none",
-                borderRadius: "8px",
-                background: loading ? "#9ca3af" : "#2563eb",
-                color: "#ffffff",
-                fontSize: "15px",
-                fontWeight: "600",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
-              {loading ? "Creating Password..." : "Create Password"}
-            </button>
-          </form>
-        )}
-
-        {error && (
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            style={{
-              width: "100%",
-              marginTop: "16px",
-              padding: "12px",
-              border: "1px solid #d1d5db",
-              borderRadius: "8px",
-              background: "#ffffff",
-              color: "#374151",
-              fontWeight: "600",
-              cursor: "pointer",
-            }}
-          >
-            Back to Login
-          </button>
-        )}
-      </div>
+      </main>
     </div>
   );
 };

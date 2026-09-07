@@ -11,6 +11,28 @@ const SignUp = () => {
 
   /*
    * =========================================================
+   * EMAIL VERIFICATION
+   * =========================================================
+   */
+
+  const emptyVerification = {
+    email: "",
+    code: "",
+    isCodeSent: false,
+    isVerified: false,
+    isSending: false,
+    isVerifying: false,
+    expiresAt: null,
+    resendAvailableAt: null,
+    attemptsRemaining: null,
+  };
+
+  const [verification, setVerification] = useState(emptyVerification);
+
+  const [verificationCountdown, setVerificationCountdown] = useState(0);
+
+  /*
+   * =========================================================
    * SCHOOLS
    * =========================================================
    */
@@ -22,6 +44,7 @@ const SignUp = () => {
   /*
    * Load all active schools from Supabase.
    */
+
   useEffect(() => {
     const loadSchools = async () => {
       try {
@@ -32,7 +55,9 @@ const SignUp = () => {
           .from("schools")
           .select("id, name, code")
           .eq("status", "active")
-          .order("name", { ascending: true });
+          .order("name", {
+            ascending: true,
+          });
 
         if (error) {
           console.error("Error loading schools:", error);
@@ -58,6 +83,50 @@ const SignUp = () => {
 
     loadSchools();
   }, []);
+
+  /*
+   * =========================================================
+   * VERIFICATION COUNTDOWN
+   * =========================================================
+   */
+
+  useEffect(() => {
+    if (!verification.resendAvailableAt) {
+      setVerificationCountdown(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil(
+          (new Date(verification.resendAvailableAt).getTime() - Date.now()) /
+            1000
+        )
+      );
+
+      setVerificationCountdown(remaining);
+
+      if (remaining <= 0) {
+        setVerification((prev) => ({
+          ...prev,
+          resendAvailableAt: null,
+        }));
+      }
+    };
+
+    updateCountdown();
+
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [verification.resendAvailableAt]);
+
+  /*
+   * =========================================================
+   * FORMS
+   * =========================================================
+   */
 
   const [forms, setForms] = useState({
     student: {
@@ -117,6 +186,12 @@ const SignUp = () => {
     },
   });
 
+  /*
+   * =========================================================
+   * HANDLE FORM CHANGE
+   * =========================================================
+   */
+
   const handleChange = (role, field, value) => {
     setForms((prev) => ({
       ...prev,
@@ -125,10 +200,360 @@ const SignUp = () => {
         [field]: value,
       },
     }));
+
+    /*
+     * Email verification belongs to the email address.
+     *
+     * If ANY role changes their email, the previous
+     * verification is immediately invalidated.
+     */
+
+    if (field === "email") {
+      setVerification({
+        ...emptyVerification,
+      });
+    }
   };
 
   const handleFileChange = (role, field, file) => {
     handleChange(role, field, file);
+  };
+
+  /*
+   * =========================================================
+   * EMAIL VERIFICATION HELPERS
+   * =========================================================
+   */
+
+  const normalizeEmail = (email) => {
+    return email.trim().toLowerCase();
+  };
+
+  /*
+   * =========================================================
+   * SEND VERIFICATION CODE
+   * =========================================================
+   */
+
+  const sendVerificationCode = async () => {
+    const email = normalizeEmail(currentForm.email);
+
+    if (!email) {
+      alert("Please enter your email address first.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+
+    // Prevent frontend resend while cooldown is active
+    if (
+      verification.resendAvailableAt &&
+      Date.now() < verification.resendAvailableAt
+    ) {
+      const remainingSeconds = Math.ceil(
+        (verification.resendAvailableAt - Date.now()) / 1000
+      );
+
+      alert(
+        `⏳ Please wait ${remainingSeconds} second${
+          remainingSeconds !== 1 ? "s" : ""
+        } before requesting another code.`
+      );
+
+      return;
+    }
+
+    setVerification((prev) => ({
+      ...prev,
+      isSending: true,
+    }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "send-email-verification",
+        {
+          body: {
+            email,
+          },
+        }
+      );
+
+      // =====================================================
+      // GET ACTUAL EDGE FUNCTION ERROR BODY
+      // =====================================================
+
+      let response = data;
+
+      if (error?.context?.json) {
+        try {
+          const errorBody = await error.context.json();
+
+          if (errorBody) {
+            response = errorBody;
+          }
+        } catch (parseError) {
+          console.error("Unable to parse Edge Function error:", parseError);
+        }
+      }
+
+      // =====================================================
+      // HANDLE SERVER ERROR
+      // =====================================================
+
+      if (error && !response) {
+        throw new Error(error.message || "Unable to send verification code.");
+      }
+
+      if (!response?.success) {
+        // -----------------------------------------------
+        // COOLDOWN
+        // -----------------------------------------------
+
+        if (response?.cooldown) {
+          const retryAfter = Number(response.retryAfter) || 60;
+
+          setVerification((prev) => ({
+            ...prev,
+            resendAvailableAt: Date.now() + retryAfter * 1000,
+          }));
+
+          alert(
+            `⏳ Please wait ${retryAfter} second${
+              retryAfter !== 1 ? "s" : ""
+            } before requesting another verification code.`
+          );
+
+          return;
+        }
+
+        // -----------------------------------------------
+        // OTHER ERROR
+        // -----------------------------------------------
+
+        throw new Error(
+          response?.error ||
+            response?.message ||
+            "Unable to send verification code."
+        );
+      }
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+
+      const cooldownSeconds = Number(response.cooldownSeconds) || 60;
+
+      setVerification({
+        email,
+        code: "",
+        isCodeSent: true,
+        isVerified: false,
+        isSending: false,
+        isVerifying: false,
+        expiresAt: response.expiresAt
+          ? new Date(response.expiresAt).getTime()
+          : null,
+        resendAvailableAt: Date.now() + cooldownSeconds * 1000,
+        attemptsRemaining: 5,
+      });
+
+      alert("📧 A new verification code has been sent to your email.");
+    } catch (error) {
+      console.error("Send verification code error:", error);
+
+      alert(
+        `❌ ${
+          error?.message ||
+          "Unable to send verification code. Please try again."
+        }`
+      );
+    } finally {
+      setVerification((prev) => ({
+        ...prev,
+        isSending: false,
+      }));
+    }
+  };
+
+  /*
+   * =========================================================
+   * VERIFY EMAIL CODE
+   * =========================================================
+   */
+
+  const verifyEmailCode = async () => {
+    const email = normalizeEmail(currentForm.email);
+    const code = verification.code.trim();
+
+    if (!email) {
+      alert("Please enter your email address first.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      alert("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setVerification((prev) => ({
+      ...prev,
+      isVerifying: true,
+    }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "verify-email-code",
+        {
+          body: {
+            email,
+            code,
+          },
+        }
+      );
+
+      // =====================================================
+      // GET THE ACTUAL ERROR BODY FROM THE EDGE FUNCTION
+      // =====================================================
+
+      let response = data;
+
+      if (error?.context?.json) {
+        try {
+          const errorBody = await error.context.json();
+
+          if (errorBody) {
+            response = errorBody;
+          }
+        } catch (parseError) {
+          console.error("Unable to parse Edge Function error:", parseError);
+        }
+      }
+
+      // =====================================================
+      // HANDLE ERROR RESPONSE
+      // =====================================================
+
+      if (error && !response) {
+        throw new Error(
+          error.message || "Unable to verify your email address."
+        );
+      }
+
+      if (!response?.success) {
+        // -----------------------------------------------
+        // MAX ATTEMPTS
+        // -----------------------------------------------
+
+        if (response?.maxAttemptsReached) {
+          setVerification((prev) => ({
+            ...prev,
+            isCodeSent: false,
+            isVerified: false,
+            code: "",
+            expiresAt: null,
+            resendAvailableAt: prev.resendAvailableAt,
+            attemptsRemaining: 0,
+          }));
+
+          alert(
+            "🔒 Maximum verification attempts reached.\n\nPlease request a new verification code."
+          );
+
+          return;
+        }
+
+        // -----------------------------------------------
+        // EXPIRED CODE
+        // -----------------------------------------------
+
+        if (response?.expired) {
+          setVerification((prev) => ({
+            ...prev,
+            isCodeSent: false,
+            isVerified: false,
+            code: "",
+            expiresAt: null,
+            resendAvailableAt: null,
+            attemptsRemaining: null,
+          }));
+
+          alert(
+            "⏰ Your verification code has expired.\n\nPlease request a new verification code."
+          );
+
+          return;
+        }
+
+        // -----------------------------------------------
+        // WRONG CODE
+        // -----------------------------------------------
+
+        if (response?.attemptsRemaining !== undefined) {
+          setVerification((prev) => ({
+            ...prev,
+            attemptsRemaining: response.attemptsRemaining,
+          }));
+
+          alert(
+            `❌ Incorrect verification code.\n\nAttempts remaining: ${response.attemptsRemaining}`
+          );
+
+          return;
+        }
+
+        // -----------------------------------------------
+        // OTHER SERVER ERROR
+        // -----------------------------------------------
+
+        throw new Error(
+          response?.error ||
+            response?.message ||
+            "Unable to verify your email address."
+        );
+      }
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
+
+      setVerification((prev) => ({
+        ...prev,
+        isVerified: true,
+        isVerifying: false,
+        attemptsRemaining: null,
+      }));
+
+      alert("✅ Email address verified successfully!");
+    } catch (error) {
+      console.error("Email verification error:", error);
+
+      alert(
+        `❌ ${
+          error?.message ||
+          "Unable to verify your email address. Please try again."
+        }`
+      );
+    } finally {
+      setVerification((prev) => ({
+        ...prev,
+        isVerifying: false,
+      }));
+    }
+  };
+
+  /*
+   * =========================================================
+   * CHANGE EMAIL
+   * =========================================================
+   */
+
+  const changeVerificationEmail = () => {
+    setVerification({
+      ...emptyVerification,
+    });
   };
 
   /*
@@ -187,24 +612,24 @@ const SignUp = () => {
       appointmentLetterFile = await fileToBase64(currentForm.appointmentLetter);
     }
 
-    /*
-     * Call the Edge Function.
-     *
-     * schoolId is now included for Student + Registrar.
-     */
-
     const { data, error } = await supabase.functions.invoke(
       "create-registration-request",
       {
         body: {
           email: currentForm.email.trim(),
+
           password: currentForm.password,
 
           role: activeRole,
 
           firstName: currentForm.firstName.trim(),
 
-          resubmission: true,
+          /*
+           * Removed the old resubmission:true.
+           *
+           * The backend determines whether this
+           * is a rejected resubmission itself.
+           */
 
           middleInitial: currentForm.middleInitial?.trim() || "",
 
@@ -215,6 +640,7 @@ const SignUp = () => {
           /*
            * SCHOOL
            */
+
           schoolId:
             activeRole === "student" || activeRole === "registrar"
               ? currentForm.schoolId
@@ -250,7 +676,9 @@ const SignUp = () => {
       console.error("Registration Edge Function error:", error);
 
       throw new Error(
-        error.message || "Unable to submit your registration request."
+        data?.error ||
+          error.message ||
+          "Unable to submit your registration request."
       );
     }
 
@@ -285,26 +713,35 @@ const SignUp = () => {
       {
         body: {
           email: currentForm.email.trim(),
+
           password: currentForm.password,
 
           firstName: currentForm.firstName.trim(),
+
           middleInitial: currentForm.middleInitial?.trim() || "",
+
           lastName: currentForm.lastName.trim(),
 
           phone: currentForm.phone.trim(),
 
           companyName: currentForm.companyName.trim(),
+
           companyEmail: currentForm.companyEmail.trim(),
+
           companyPhone: currentForm.companyPhone.trim(),
+
           companyAddress: currentForm.companyAddress.trim(),
 
           website: currentForm.website?.trim() || "",
 
           industry: currentForm.industry.trim(),
+
           designation: currentForm.designation.trim(),
 
           businessRegistration,
+
           birRegistration,
+
           supportingDocument,
         },
       }
@@ -314,7 +751,7 @@ const SignUp = () => {
       console.error("Company Registration Edge Function error:", error);
 
       throw new Error(
-        error.message || "Unable to submit company registration."
+        data?.error || error.message || "Unable to submit company registration."
       );
     }
 
@@ -339,21 +776,54 @@ const SignUp = () => {
     const currentForm = forms[activeRole];
 
     /*
+     * =======================================================
+     * EMAIL VERIFICATION
+     * =======================================================
+     *
+     * ALL PORTALS now require email verification:
+     *
+     * Student
+     * Registrar Adviser
+     * Company Supervisor
+     */
+
+    if (!verification.isVerified) {
+      alert("Please verify your email address before creating your account.");
+
+      return;
+    }
+
+    const currentEmail = normalizeEmail(currentForm.email);
+
+    if (verification.email !== currentEmail) {
+      alert(
+        "The verified email does not match your current email address. Please verify this email again."
+      );
+
+      return;
+    }
+
+    /*
+     * =======================================================
      * PASSWORD VALIDATION
+     * =======================================================
      */
 
     if (currentForm.password !== currentForm.confirmPassword) {
       alert("Passwords do not match.");
+
       return;
     }
 
     if (currentForm.password.length < 8) {
       alert("Password must be at least 8 characters long.");
+
       return;
     }
 
     if (!currentForm.agreeTerms) {
       alert("You must agree to the Terms & Conditions and Privacy Policy.");
+
       return;
     }
 
@@ -361,13 +831,12 @@ const SignUp = () => {
      * =======================================================
      * SCHOOL VALIDATION
      * =======================================================
-     *
-     * Only Student and Registrar need a school.
      */
 
     if (activeRole === "student" || activeRole === "registrar") {
       if (!currentForm.schoolId) {
         alert("Please select your school before continuing.");
+
         return;
       }
 
@@ -375,6 +844,7 @@ const SignUp = () => {
         alert(
           "There are currently no active schools available for registration."
         );
+
         return;
       }
     }
@@ -388,11 +858,13 @@ const SignUp = () => {
     if (activeRole === "company") {
       if (!currentForm.businessRegistration) {
         alert("Please upload your business registration document.");
+
         return;
       }
 
       if (!currentForm.birRegistration) {
         alert("Please upload your BIR registration document.");
+
         return;
       }
 
@@ -431,11 +903,13 @@ const SignUp = () => {
     if (activeRole === "student") {
       if (!currentForm.cor) {
         alert("Please upload your Certificate of Registration (COR).");
+
         return;
       }
 
       if (!currentForm.studentIdDocument) {
         alert("Please upload your Student ID.");
+
         return;
       }
     }
@@ -449,6 +923,7 @@ const SignUp = () => {
     if (activeRole === "registrar") {
       if (!currentForm.employeeIdDocument) {
         alert("Please upload your University / Employee ID.");
+
         return;
       }
 
@@ -456,9 +931,16 @@ const SignUp = () => {
         alert(
           "Please upload your Proof of Appointment / Authorization Letter."
         );
+
         return;
       }
     }
+
+    /*
+     * =======================================================
+     * STUDENT / REGISTRAR SUBMISSION
+     * =======================================================
+     */
 
     try {
       setIsSubmitting(true);
@@ -511,6 +993,7 @@ const SignUp = () => {
             strokeLinejoin="round"
             d="M12 14l9-5-9-5-9 5 9 5z"
           />
+
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -596,9 +1079,13 @@ const SignUp = () => {
     let strength = 0;
 
     if (password.length >= 8) strength++;
+
     if (/[A-Z]/.test(password)) strength++;
+
     if (/[a-z]/.test(password)) strength++;
+
     if (/[0-9]/.test(password)) strength++;
+
     if (/[^A-Za-z0-9]/.test(password)) strength++;
 
     if (strength <= 1) {
@@ -765,6 +1252,154 @@ const SignUp = () => {
 
   /*
    * =========================================================
+   * EMAIL VERIFICATION UI
+   * =========================================================
+   */
+
+  const renderEmailVerification = () => {
+    const email = normalizeEmail(currentForm.email);
+
+    return (
+      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
+        {!verification.isVerified ? (
+          <>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={sendVerificationCode}
+                disabled={
+                  verification.isSending || verificationCountdown > 0 || !email
+                }
+                className={`sm:w-auto px-5 py-3 rounded-xl text-xs font-bold transition-all ${
+                  verification.isSending || verificationCountdown > 0 || !email
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : activeRole === "student"
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : activeRole === "registrar"
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-purple-600 text-white hover:bg-purple-700"
+                }`}
+              >
+                {verification.isSending
+                  ? "Sending..."
+                  : verificationCountdown > 0
+                  ? `Resend in ${verificationCountdown}s`
+                  : verification.isCodeSent
+                  ? "Resend Code"
+                  : "Send Verification Code"}
+              </button>
+
+              {verification.isCodeSent && (
+                <button
+                  type="button"
+                  onClick={changeVerificationEmail}
+                  className="px-5 py-3 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Change Email
+                </button>
+              )}
+            </div>
+
+            {verification.isCodeSent && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <label className={labelClass}>6-Digit Verification Code</label>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="Enter 6-digit code"
+                    value={verification.code}
+                    onChange={(event) => {
+                      const value = event.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 6);
+
+                      setVerification((prev) => ({
+                        ...prev,
+                        code: value,
+                      }));
+                    }}
+                    className={`${inputClass} tracking-[0.35em] text-center font-bold`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={verifyEmailCode}
+                    disabled={
+                      verification.isVerifying || verification.code.length !== 6
+                    }
+                    className={`sm:w-36 px-5 py-3 rounded-xl text-xs font-bold transition ${
+                      verification.isVerifying || verification.code.length !== 6
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : "bg-slate-900 text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {verification.isVerifying ? "Verifying..." : "Verify Code"}
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 mt-2">
+                  <p className="text-[10px] text-slate-400">
+                    We sent a verification code to{" "}
+                    <span className="font-semibold text-slate-600">
+                      {verification.email}
+                    </span>
+                  </p>
+
+                  {verification.expiresAt && (
+                    <p className="text-[10px] text-slate-400">
+                      Code expires in 10 minutes.
+                    </p>
+                  )}
+                </div>
+
+                {verification.attemptsRemaining !== null && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Attempts remaining:{" "}
+                    <span className="font-semibold">
+                      {verification.attemptsRemaining}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
+                ✓
+              </div>
+
+              <div>
+                <p className="text-sm font-bold text-emerald-700">
+                  Email Verified
+                </p>
+
+                <p className="text-[10px] text-slate-400">
+                  {verification.email}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={changeVerificationEmail}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 hover:underline"
+            >
+              Change Email
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /*
+   * =========================================================
    * PASSWORD FIELDS
    * =========================================================
    */
@@ -867,8 +1502,9 @@ const SignUp = () => {
               </p>
 
               <p className="text-xs text-purple-700 leading-relaxed mt-1">
-                Your registration and submitted documents will be reviewed by a
-                SIMS administrator.
+                Your email must be verified first. Your registration and
+                submitted documents will then be reviewed by a SIMS
+                administrator.
               </p>
             </div>
           </div>
@@ -888,8 +1524,8 @@ const SignUp = () => {
               </p>
 
               <p className="text-xs text-emerald-700 leading-relaxed mt-1">
-                Your credentials will be reviewed before your Registrar Adviser
-                account can be activated.
+                Your email must be verified first. Your credentials will then be
+                reviewed before your Registrar Adviser account can be activated.
               </p>
             </div>
           </div>
@@ -908,13 +1544,32 @@ const SignUp = () => {
             </p>
 
             <p className="text-xs text-blue-700 leading-relaxed mt-1">
-              Your COR and Student ID will be reviewed before your account can
-              be fully activated.
+              Your email must be verified first. Your COR and Student ID will
+              then be reviewed before your account can be fully activated.
             </p>
           </div>
         </div>
       </div>
     );
+  };
+
+  /*
+   * =========================================================
+   * ROLE CHANGE
+   * =========================================================
+   */
+
+  const handleRoleChange = (role) => {
+    setActiveRole(role);
+
+    /*
+     * Always reset verification when
+     * switching signup portals.
+     */
+
+    setVerification({
+      ...emptyVerification,
+    });
   };
 
   /*
@@ -946,7 +1601,7 @@ const SignUp = () => {
             <button
               key={portal.key}
               type="button"
-              onClick={() => setActiveRole(portal.key)}
+              onClick={() => handleRoleChange(portal.key)}
               className={`py-3 px-2 rounded-lg text-xs font-bold tracking-wider transition-all duration-200 uppercase ${
                 activeRole === portal.key
                   ? `bg-gradient-to-r ${portal.accent} text-white shadow-md scale-[1.02]`
@@ -1001,21 +1656,32 @@ const SignUp = () => {
                 <div>
                   <label className={labelClass}>Email Address</label>
 
-                  <input
-                    type="email"
-                    required
-                    placeholder="Enter your email address"
-                    value={currentForm.email}
-                    onChange={(event) =>
-                      handleChange(activeRole, "email", event.target.value)
-                    }
-                    className={inputClass}
-                  />
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="email"
+                      required
+                      placeholder="Enter your email address"
+                      value={currentForm.email}
+                      disabled={
+                        verification.isCodeSent && !verification.isVerified
+                      }
+                      onChange={(event) =>
+                        handleChange(activeRole, "email", event.target.value)
+                      }
+                      className={`${inputClass} ${
+                        verification.isVerified
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          : ""
+                      }`}
+                    />
+                  </div>
 
                   <p className="text-[10px] text-slate-400 mt-1.5">
                     This email will be used for account verification and
                     important SIMS notifications.
                   </p>
+
+                  {renderEmailVerification()}
                 </div>
 
                 {/* PHONE */}
@@ -1037,7 +1703,9 @@ const SignUp = () => {
               </div>
             </section>
 
-            {/* STUDENT INFORMATION */}
+            {/* =================================================
+                STUDENT INFORMATION
+            ================================================= */}
 
             {activeRole === "student" && (
               <>
@@ -1053,11 +1721,7 @@ const SignUp = () => {
                   </div>
 
                   <div className="space-y-5">
-                    {/* SCHOOL */}
-
                     {renderSchoolField()}
-
-                    {/* STUDENT ID */}
 
                     <div>
                       <label className={labelClass}>Student ID</label>
@@ -1078,8 +1742,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* DEPARTMENT */}
-
                     <div>
                       <label className={labelClass}>College / Department</label>
 
@@ -1099,8 +1761,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* PROGRAM */}
-
                     <div>
                       <label className={labelClass}>Program</label>
 
@@ -1115,8 +1775,6 @@ const SignUp = () => {
                         className={inputClass}
                       />
                     </div>
-
-                    {/* YEAR LEVEL */}
 
                     <div>
                       <label className={labelClass}>Year Level</label>
@@ -1223,7 +1881,9 @@ const SignUp = () => {
               </>
             )}
 
-            {/* REGISTRAR INFORMATION */}
+            {/* =================================================
+                REGISTRAR INFORMATION
+            ================================================= */}
 
             {activeRole === "registrar" && (
               <>
@@ -1239,11 +1899,7 @@ const SignUp = () => {
                   </div>
 
                   <div className="space-y-5">
-                    {/* SCHOOL */}
-
                     {renderSchoolField()}
-
-                    {/* EMPLOYEE ID */}
 
                     <div>
                       <label className={labelClass}>Employee ID</label>
@@ -1264,8 +1920,6 @@ const SignUp = () => {
                       />
                     </div>
 
-                    {/* DEPARTMENT */}
-
                     <div>
                       <label className={labelClass}>College / Department</label>
 
@@ -1284,8 +1938,6 @@ const SignUp = () => {
                         className={inputClass}
                       />
                     </div>
-
-                    {/* POSITION */}
 
                     <div>
                       <label className={labelClass}>
@@ -1371,7 +2023,9 @@ const SignUp = () => {
               </>
             )}
 
-            {/* COMPANY INFORMATION */}
+            {/* =================================================
+                COMPANY INFORMATION
+            ================================================= */}
 
             {activeRole === "company" && (
               <>
@@ -1605,20 +2259,11 @@ const SignUp = () => {
                           </button>
 
                           <span
-                            className={`
-        absolute left-1/2 bottom-full mb-2 -translate-x-1/2
-        w-80 sm:w-96 max-h-80 overflow-y-auto
-        px-4 py-3 rounded-lg bg-slate-800 text-white
-        text-xs font-normal normal-case leading-relaxed
-        shadow-lg z-50
-        transition-all duration-200
-        ${
-          showSupportingInfo
-            ? "opacity-100 visible"
-            : "opacity-0 invisible pointer-events-none"
-        }
-        md:group-hover:opacity-100 md:group-hover:visible
-      `}
+                            className={`absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-80 sm:w-96 max-h-80 overflow-y-auto px-4 py-3 rounded-lg bg-slate-800 text-white text-xs font-normal normal-case leading-relaxed shadow-lg z-50 transition-all duration-200 ${
+                              showSupportingInfo
+                                ? "opacity-100 visible"
+                                : "opacity-0 invisible pointer-events-none"
+                            } md:group-hover:opacity-100 md:group-hover:visible`}
                           >
                             <span className="block font-semibold text-sm mb-2">
                               Supporting Document Examples
@@ -1818,17 +2463,19 @@ const SignUp = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !verification.isVerified}
               className={`w-full bg-gradient-to-r ${
                 activePortal.accent
               } text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm transition-all duration-200 ${
-                isSubmitting
+                isSubmitting || !verification.isVerified
                   ? "opacity-60 cursor-not-allowed"
                   : "hover:opacity-95"
               }`}
             >
               {isSubmitting
                 ? "Submitting Registration..."
+                : !verification.isVerified
+                ? "Verify Email First"
                 : activeRole === "company"
                 ? "Submit Company Registration"
                 : `Create ${activePortal.label} Account`}

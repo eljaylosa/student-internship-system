@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   supabaseStudent,
   supabaseRegistrar,
@@ -7,11 +7,29 @@ import {
 } from "../../supabaseClient";
 
 const Login = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // =========================================================
+  // INITIAL ROLE
+  // =========================================================
+  //
+  // If the user came back from Forgot Password,
+  // preserve the portal they were using.
+  //
+  // Otherwise default to Student.
+  // =========================================================
+
+  const initialRole =
+    location.state?.role === "registrar" || location.state?.role === "company"
+      ? location.state.role
+      : "student";
+
   // =========================================================
   // ACTIVE ROLE TAB
   // =========================================================
 
-  const [activeRole, setActiveRole] = useState("student");
+  const [activeRole, setActiveRole] = useState(initialRole);
 
   // =========================================================
   // FORM STATES
@@ -36,21 +54,15 @@ const Login = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const navigate = useNavigate();
-
   // =========================================================
   // GET ROLE-SPECIFIC SUPABASE CLIENT
   // =========================================================
-  //
-  // IMPORTANT:
-  // Each portal uses its own Supabase auth storage.
   //
   // Student   → sims-student-auth
   // Registrar → sims-registrar-auth
   // Company   → sims-company-auth
   //
-  // This allows different accounts to stay logged in
-  // simultaneously in different browser tabs.
+  // Each portal keeps its own auth session.
   // =========================================================
 
   const getSupabaseClient = (role) => {
@@ -320,6 +332,18 @@ const Login = () => {
   };
 
   // =========================================================
+  // GO TO FORGOT PASSWORD
+  // =========================================================
+
+  const handleForgotPassword = () => {
+    navigate("/forgot-password", {
+      state: {
+        role: activeRole,
+      },
+    });
+  };
+
+  // =========================================================
   // PORTAL CONFIGURATION
   // =========================================================
 
@@ -421,6 +445,10 @@ const Login = () => {
           </p>
         </div>
 
+        {/* =====================================================
+            PORTAL TABS
+        ===================================================== */}
+
         <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
           {portals.map((portal) => (
             <button
@@ -439,6 +467,10 @@ const Login = () => {
           ))}
         </div>
 
+        {/* =====================================================
+            LOGIN CARD
+        ===================================================== */}
+
         <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full transition-all duration-300">
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
@@ -455,6 +487,8 @@ const Login = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* EMAIL */}
+
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                 Email Address
@@ -472,6 +506,8 @@ const Login = () => {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
               />
             </div>
+
+            {/* PASSWORD */}
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
@@ -491,6 +527,8 @@ const Login = () => {
               />
             </div>
 
+            {/* LOGIN BUTTON */}
+
             <button
               type="submit"
               disabled={isSubmitting}
@@ -501,12 +539,12 @@ const Login = () => {
                 : `Sign In as ${activePortal.label}`}
             </button>
 
+            {/* FORGOT PASSWORD */}
+
             <div className="text-center">
               <button
                 type="button"
-                onClick={() =>
-                  alert("Password recovery will be available soon.")
-                }
+                onClick={handleForgotPassword}
                 disabled={isSubmitting}
                 className="text-xs font-semibold text-slate-400 hover:text-slate-800 hover:underline transition disabled:opacity-50"
               >
@@ -514,6 +552,8 @@ const Login = () => {
               </button>
             </div>
           </form>
+
+          {/* CREATE ACCOUNT */}
 
           <div className="border-t border-slate-100 mt-8 pt-6 text-center">
             <p className="text-sm text-slate-500">
@@ -527,6 +567,8 @@ const Login = () => {
             </p>
           </div>
         </div>
+
+        {/* FOOTER */}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
           © 2026 SIMS |{" "}

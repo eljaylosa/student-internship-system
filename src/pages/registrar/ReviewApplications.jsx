@@ -73,11 +73,6 @@ export default function ReviewApplications() {
 
       // -------------------------------------------------------
       // GET APPLICATIONS
-      //
-      // IMPORTANT:
-      // Approved applications are intentionally NOT included
-      // here because approval means the application is now
-      // waiting for the student's confirmation.
       // -------------------------------------------------------
 
       const { data, error } = await supabaseRegistrar
@@ -291,6 +286,92 @@ export default function ReviewApplications() {
   };
 
   // =========================================================
+  // SEND APPLICATION DECISION EMAIL
+  //
+  // IMPORTANT:
+  // This runs AFTER the database decision succeeds.
+  //
+  // If the email fails, the application decision remains
+  // successful. We do NOT throw the email error back into
+  // the main approval/rejection transaction.
+  // =========================================================
+
+  const sendApplicationDecisionEmail = async ({
+    application,
+    decision,
+    reason = "",
+  }) => {
+    const student = application?.students;
+    const user = student?.users;
+    const opportunity = application?.opportunities;
+
+    const email = user?.email;
+    const name = getStudentName(student);
+    const opportunityName = opportunity?.title || "Internship Opportunity";
+    const companyName = getCompanyName(application);
+
+    if (!email) {
+      console.warn(
+        "Application decision saved, but student email was not found."
+      );
+
+      return {
+        success: false,
+        error: "Student email address was not found.",
+      };
+    }
+
+    try {
+      const { data, error } =
+        await supabaseRegistrar.functions.invoke(
+          "send-application-decision-email",
+          {
+            body: {
+              email,
+              name,
+              decision,
+              decidedBy: "registrar",
+              opportunityName,
+              companyName,
+              reason,
+            },
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(
+          data?.error || "The application decision email could not be sent."
+        );
+      }
+
+      console.log(
+        "Application decision email sent successfully:",
+        data
+      );
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error(
+        "Application decision email failed:",
+        error
+      );
+
+      return {
+        success: false,
+        error:
+          error?.message ||
+          "Unable to send the application decision email.",
+      };
+    }
+  };
+
+  // =========================================================
   // GROUP APPLICATIONS BY STUDENT
   // =========================================================
 
@@ -391,7 +472,7 @@ export default function ReviewApplications() {
   // APPROVE APPLICATION
   //
   // IMPORTANT:
-  // Registrar approval DOES NOT create an assignment anymore.
+  // Registrar approval DOES NOT create an assignment.
   //
   // The student must later confirm the approved application
   // from Student Portal → View Status.
@@ -432,21 +513,21 @@ export default function ReviewApplications() {
 
       // -------------------------------------------------------
       // UPDATE APPLICATION ONLY
-      //
-      // DO NOT CREATE AN ASSIGNMENT HERE.
       // -------------------------------------------------------
 
-      const { data, error: applicationUpdateError } = await supabaseRegistrar
-        .from("applications")
-        .update({
-          status: STATUS.application.APPROVED,
-          reviewer_id: user.id,
-          notes: "Approved by registrar. Awaiting student confirmation.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", application.id)
-        .select(
-          `
+      const { data, error: applicationUpdateError } =
+        await supabaseRegistrar
+          .from("applications")
+          .update({
+            status: STATUS.application.APPROVED,
+            reviewer_id: user.id,
+            notes:
+              "Approved by registrar. Awaiting student confirmation.",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", application.id)
+          .select(
+            `
               id,
               student_id,
               opportunity_id,
@@ -501,8 +582,8 @@ export default function ReviewApplications() {
                 )
               )
             `
-        )
-        .single();
+          )
+          .single();
 
       if (applicationUpdateError) {
         throw applicationUpdateError;
@@ -519,16 +600,44 @@ export default function ReviewApplications() {
       setSelectedApplication(null);
 
       // -------------------------------------------------------
+      // SEND STUDENT EMAIL
+      //
+      // IMPORTANT:
+      // DB approval already succeeded.
+      //
+      // If email fails, we DO NOT throw the error because the
+      // application is already approved.
+      // -------------------------------------------------------
+
+      const emailResult = await sendApplicationDecisionEmail({
+        application: data || application,
+        decision: "approved",
+      });
+
+      // -------------------------------------------------------
       // SUCCESS
       // -------------------------------------------------------
 
-      alert(
-        `Application approved successfully.\n\n` +
-          `Student: ${studentName}\n` +
-          `Application Status: Approved\n\n` +
-          `The student must now go to View Status and confirm this internship placement.\n\n` +
-          `No assignment was created yet.`
-      );
+      if (emailResult.success) {
+        alert(
+          `Application approved successfully.\n\n` +
+            `Student: ${studentName}\n` +
+            `Application Status: Approved\n` +
+            `Email Notification: Sent\n\n` +
+            `The student must now go to View Status and confirm this internship placement.\n\n` +
+            `No assignment was created yet.`
+        );
+      } else {
+        alert(
+          `Application approved successfully.\n\n` +
+            `Student: ${studentName}\n` +
+            `Application Status: Approved\n` +
+            `Email Notification: Failed to send\n\n` +
+            `The student can still see the updated status in the Student Portal.\n\n` +
+            `Email error: ${emailResult.error || "Unknown error"}\n\n` +
+            `No assignment was created yet.`
+        );
+      }
     } catch (error) {
       console.error("Error approving application:", error);
 
@@ -573,7 +682,8 @@ export default function ReviewApplications() {
         .update({
           status: STATUS.application.INFO_REQUESTED,
           reviewer_id: user.id,
-          notes: notes.trim() || "Additional information requested.",
+          notes:
+            notes.trim() || "Additional information requested.",
           updated_at: new Date().toISOString(),
         })
         .eq("id", application.id)
@@ -686,15 +796,76 @@ export default function ReviewApplications() {
         throw new Error("You are not logged in.");
       }
 
-      const { error } = await supabaseRegistrar
+      const rejectionReason =
+        reason.trim() || "Application rejected by registrar.";
+
+      const { data, error } = await supabaseRegistrar
         .from("applications")
         .update({
           status: STATUS.application.REJECTED,
           reviewer_id: user.id,
-          notes: reason.trim() || "Application rejected by registrar.",
+          notes: rejectionReason,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", application.id);
+        .eq("id", application.id)
+        .select(
+          `
+            id,
+            student_id,
+            opportunity_id,
+            cover_letter,
+            status,
+            reviewer_id,
+            notes,
+            submitted_at,
+            created_at,
+            students (
+              id,
+              student_id,
+              phone,
+              address,
+              program,
+              year_level,
+              department,
+              gwa,
+              users (
+                id,
+                email,
+                first_name,
+                middle_name,
+                last_name
+              )
+            ),
+            opportunities (
+              id,
+              company_id,
+              title,
+              description,
+              location,
+              position_type,
+              availability,
+              requirements,
+              openings,
+              status,
+              internship_start_date,
+              internship_end_date,
+              internship_start,
+              internship_end,
+              companies (
+                id,
+                company_name,
+                company_email,
+                company_phone,
+                company_address,
+                website,
+                industry,
+                designation,
+                status
+              )
+            )
+          `
+        )
+        .single();
 
       if (error) {
         throw error;
@@ -706,7 +877,36 @@ export default function ReviewApplications() {
 
       setSelectedApplication(null);
 
-      alert("Application rejected.");
+      // -------------------------------------------------------
+      // SEND STUDENT EMAIL
+      //
+      // DB rejection already succeeded.
+      // Email failure does NOT undo the rejection.
+      // -------------------------------------------------------
+
+      const emailResult = await sendApplicationDecisionEmail({
+        application: data || application,
+        decision: "rejected",
+        reason: rejectionReason,
+      });
+
+      if (emailResult.success) {
+        alert(
+          `Application rejected successfully.\n\n` +
+            `Student: ${getStudentName(application.students)}\n` +
+            `Application Status: Rejected\n` +
+            `Email Notification: Sent`
+        );
+      } else {
+        alert(
+          `Application rejected successfully.\n\n` +
+            `Student: ${getStudentName(application.students)}\n` +
+            `Application Status: Rejected\n` +
+            `Email Notification: Failed to send\n\n` +
+            `The student can still see the updated status in the Student Portal.\n\n` +
+            `Email error: ${emailResult.error || "Unknown error"}`
+        );
+      }
     } catch (error) {
       console.error("Error rejecting application:", error);
 
@@ -798,7 +998,9 @@ export default function ReviewApplications() {
                 Applications
               </p>
 
-              <p className="text-2xl font-black mt-1">{applications.length}</p>
+              <p className="text-2xl font-black mt-1">
+                {applications.length}
+              </p>
             </div>
 
             <div
@@ -920,7 +1122,9 @@ export default function ReviewApplications() {
             }`}
           >
             <option value="all">All Statuses</option>
-            <option value={STATUS.application.SUBMITTED}>Submitted</option>
+            <option value={STATUS.application.SUBMITTED}>
+              Submitted
+            </option>
             <option value={STATUS.application.UNDER_REVIEW}>
               Under Review
             </option>
@@ -936,7 +1140,8 @@ export default function ReviewApplications() {
             <span className={`font-bold ${heading}`}>
               {filteredStudentGroups.length}
             </span>{" "}
-            student{filteredStudentGroups.length !== 1 ? "s" : ""}
+            student
+            {filteredStudentGroups.length !== 1 ? "s" : ""}
           </p>
 
           {(searchTerm || statusFilter !== "all") && (
@@ -966,8 +1171,8 @@ export default function ReviewApplications() {
             <h2 className="font-bold text-lg">Students</h2>
 
             <p className={`text-xs mt-1 ${body}`}>
-              Each student contains all of their applications currently awaiting
-              Registrar action.
+              Each student contains all of their applications currently
+              awaiting Registrar action.
             </p>
           </div>
 
@@ -1059,8 +1264,12 @@ export default function ReviewApplications() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <div className={`px-3 py-2 rounded-lg border ${border}`}>
-                        <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      <div
+                        className={`px-3 py-2 rounded-lg border ${border}`}
+                      >
+                        <p
+                          className={`text-[9px] uppercase font-bold ${body}`}
+                        >
                           Applications
                         </p>
 
@@ -1149,7 +1358,8 @@ export default function ReviewApplications() {
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="font-bold text-sm md:text-base truncate">
-                                  {opportunity?.title || "Unknown Opportunity"}
+                                  {opportunity?.title ||
+                                    "Unknown Opportunity"}
                                 </h4>
 
                                 <span
@@ -1216,8 +1426,12 @@ export default function ReviewApplications() {
 
                               <button
                                 type="button"
-                                disabled={processingId === application.id}
-                                onClick={() => handleApprove(application)}
+                                disabled={
+                                  processingId === application.id
+                                }
+                                onClick={() =>
+                                  handleApprove(application)
+                                }
                                 className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
                               >
                                 {processingId === application.id
@@ -1227,7 +1441,9 @@ export default function ReviewApplications() {
 
                               <button
                                 type="button"
-                                disabled={processingId === application.id}
+                                disabled={
+                                  processingId === application.id
+                                }
                                 onClick={() =>
                                   handleRequestInformation(application)
                                 }
@@ -1238,8 +1454,12 @@ export default function ReviewApplications() {
 
                               <button
                                 type="button"
-                                disabled={processingId === application.id}
-                                onClick={() => handleReject(application)}
+                                disabled={
+                                  processingId === application.id
+                                }
+                                onClick={() =>
+                                  handleReject(application)
+                                }
                                 className="px-3 py-2 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50"
                               >
                                 Reject
@@ -1286,7 +1506,9 @@ export default function ReviewApplications() {
                         : "bg-slate-100 text-slate-700"
                     }`}
                   >
-                    {getStudentInitials(selectedApplication.students)}
+                    {getStudentInitials(
+                      selectedApplication.students
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -1302,7 +1524,8 @@ export default function ReviewApplications() {
 
                     <p className={`text-xs mt-1 ${body}`}>
                       Student ID:{" "}
-                      {selectedApplication.students?.student_id || "N/A"}
+                      {selectedApplication.students?.student_id ||
+                        "N/A"}
                     </p>
                   </div>
                 </div>
@@ -1365,41 +1588,55 @@ export default function ReviewApplications() {
               {/* STUDENT INFORMATION */}
 
               <section>
-                <h3 className="font-bold mb-3">Student Information</h3>
+                <h3 className="font-bold mb-3">
+                  Student Information
+                </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Full Name
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {getStudentName(selectedApplication.students)}
+                      {getStudentName(
+                        selectedApplication.students
+                      )}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Student ID
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.students?.student_id || "N/A"}
+                      {selectedApplication.students?.student_id ||
+                        "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Email
                     </p>
 
                     <p className="text-sm font-semibold mt-1 break-all">
-                      {selectedApplication.students?.users?.email || "N/A"}
+                      {selectedApplication.students?.users?.email ||
+                        "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Phone
                     </p>
 
@@ -1409,37 +1646,48 @@ export default function ReviewApplications() {
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Program
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.students?.program || "N/A"}
+                      {selectedApplication.students?.program ||
+                        "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Year Level
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.students?.year_level || "N/A"}
+                      {selectedApplication.students?.year_level ||
+                        "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Department
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.students?.department || "N/A"}
+                      {selectedApplication.students?.department ||
+                        "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       GWA
                     </p>
 
@@ -1451,12 +1699,15 @@ export default function ReviewApplications() {
                   <div
                     className={`p-3 rounded-xl border sm:col-span-2 ${border}`}
                   >
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Address
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.students?.address || "N/A"}
+                      {selectedApplication.students?.address ||
+                        "N/A"}
                     </p>
                   </div>
                 </div>
@@ -1465,9 +1716,13 @@ export default function ReviewApplications() {
               {/* INTERNSHIP INFORMATION */}
 
               <section>
-                <h3 className="font-bold mb-3">Internship Information</h3>
+                <h3 className="font-bold mb-3">
+                  Internship Information
+                </h3>
 
-                <div className={`rounded-xl border overflow-hidden ${border}`}>
+                <div
+                  className={`rounded-xl border overflow-hidden ${border}`}
+                >
                   <div
                     className={`p-4 ${
                       darkMode ? "bg-slate-800/50" : "bg-slate-50"
@@ -1480,7 +1735,8 @@ export default function ReviewApplications() {
                     </p>
 
                     <p className="font-black text-lg mt-1">
-                      {selectedApplication.opportunities?.title || "N/A"}
+                      {selectedApplication.opportunities?.title ||
+                        "N/A"}
                     </p>
 
                     <p className={`text-xs mt-1 ${body}`}>
@@ -1490,28 +1746,35 @@ export default function ReviewApplications() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
                     <div>
-                      <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${body}`}
+                      >
                         Location
                       </p>
 
                       <p className="text-sm font-semibold mt-1">
-                        {selectedApplication.opportunities?.location || "N/A"}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className={`text-[9px] uppercase font-bold ${body}`}>
-                        Position Type
-                      </p>
-
-                      <p className="text-sm font-semibold mt-1">
-                        {selectedApplication.opportunities?.position_type ||
+                        {selectedApplication.opportunities?.location ||
                           "N/A"}
                       </p>
                     </div>
 
                     <div>
-                      <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${body}`}
+                      >
+                        Position Type
+                      </p>
+
+                      <p className="text-sm font-semibold mt-1">
+                        {selectedApplication.opportunities
+                          ?.position_type || "N/A"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${body}`}
+                      >
                         Internship Start
                       </p>
 
@@ -1525,7 +1788,9 @@ export default function ReviewApplications() {
                     </div>
 
                     <div>
-                      <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${body}`}
+                      >
                         Internship End
                       </p>
 
@@ -1539,13 +1804,15 @@ export default function ReviewApplications() {
                     </div>
 
                     <div className="sm:col-span-2">
-                      <p className={`text-[9px] uppercase font-bold ${body}`}>
+                      <p
+                        className={`text-[9px] uppercase font-bold ${body}`}
+                      >
                         Availability
                       </p>
 
                       <p className="text-sm font-semibold mt-1">
-                        {selectedApplication.opportunities?.availability ||
-                          "N/A"}
+                        {selectedApplication.opportunities
+                          ?.availability || "N/A"}
                       </p>
                     </div>
                   </div>
@@ -1574,11 +1841,15 @@ export default function ReviewApplications() {
               {/* COMPANY INFORMATION */}
 
               <section>
-                <h3 className="font-bold mb-3">Company Information</h3>
+                <h3 className="font-bold mb-3">
+                  Company Information
+                </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Company
                     </p>
 
@@ -1588,18 +1859,22 @@ export default function ReviewApplications() {
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Industry
                     </p>
 
                     <p className="text-sm font-semibold mt-1">
-                      {selectedApplication.opportunities?.companies?.industry ||
-                        "N/A"}
+                      {selectedApplication.opportunities?.companies
+                        ?.industry || "N/A"}
                     </p>
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Address
                     </p>
 
@@ -1610,7 +1885,9 @@ export default function ReviewApplications() {
                   </div>
 
                   <div className={`p-3 rounded-xl border ${border}`}>
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Company Email
                     </p>
 
@@ -1623,13 +1900,15 @@ export default function ReviewApplications() {
                   <div
                     className={`p-3 rounded-xl border sm:col-span-2 ${border}`}
                   >
-                    <p className={`text-[9px] uppercase font-bold ${body}`}>
+                    <p
+                      className={`text-[9px] uppercase font-bold ${body}`}
+                    >
                       Website
                     </p>
 
                     <p className="text-sm font-semibold mt-1 break-all">
-                      {selectedApplication.opportunities?.companies?.website ||
-                        "N/A"}
+                      {selectedApplication.opportunities?.companies
+                        ?.website || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -1639,7 +1918,9 @@ export default function ReviewApplications() {
 
               {selectedApplication.notes && (
                 <section>
-                  <h3 className="font-bold mb-3">Registrar Notes</h3>
+                  <h3 className="font-bold mb-3">
+                    Registrar Notes
+                  </h3>
 
                   <div
                     className={`p-4 rounded-xl border ${
@@ -1673,7 +1954,9 @@ export default function ReviewApplications() {
 
                   <button
                     type="button"
-                    disabled={processingId === selectedApplication.id}
+                    disabled={
+                      processingId === selectedApplication.id
+                    }
                     onClick={() =>
                       handleRequestInformation(selectedApplication)
                     }
@@ -1684,8 +1967,12 @@ export default function ReviewApplications() {
 
                   <button
                     type="button"
-                    disabled={processingId === selectedApplication.id}
-                    onClick={() => handleReject(selectedApplication)}
+                    disabled={
+                      processingId === selectedApplication.id
+                    }
+                    onClick={() =>
+                      handleReject(selectedApplication)
+                    }
                     className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50"
                   >
                     Reject
@@ -1693,8 +1980,12 @@ export default function ReviewApplications() {
 
                   <button
                     type="button"
-                    disabled={processingId === selectedApplication.id}
-                    onClick={() => handleApprove(selectedApplication)}
+                    disabled={
+                      processingId === selectedApplication.id
+                    }
+                    onClick={() =>
+                      handleApprove(selectedApplication)
+                    }
                     className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {processingId === selectedApplication.id
@@ -1710,3 +2001,4 @@ export default function ReviewApplications() {
     </div>
   );
 }
+

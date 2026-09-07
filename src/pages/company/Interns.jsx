@@ -456,6 +456,78 @@ export default function Interns() {
   const totalCount = assignments.length;
 
   // =========================================================
+  // SEND INTERNSHIP COMPLETION EMAIL
+  // =========================================================
+
+  const sendInternshipCompletionEmail = async ({
+    student,
+    opportunity,
+    assignment,
+    companyName,
+  }) => {
+    if (!student?.email) {
+      console.warn(
+        "Internship completion email skipped because the student email is missing."
+      );
+
+      return {
+        success: false,
+        skipped: true,
+        error: "Student email is unavailable.",
+      };
+    }
+
+    try {
+      const { data, error } = await supabaseCompany.functions.invoke(
+        "send-internship-completion-email",
+        {
+          body: {
+            email: student.email,
+            name: student.fullName,
+            companyName: companyName || "Your Internship Company",
+            opportunityName: opportunity?.title || "Internship",
+            startDate: assignment?.start_date || null,
+            endDate: assignment?.end_date || null,
+            completionDate: new Date().toISOString(),
+          },
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(
+          data?.error || "The internship completion email could not be sent."
+        );
+      }
+
+      console.log(
+        `Internship completion email sent successfully to ${student.email}`
+      );
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (emailError) {
+      console.error("Failed to send internship completion email:", emailError);
+
+      return {
+        success: false,
+        error:
+          emailError?.message ||
+          "The internship completion email could not be sent.",
+      };
+    }
+  };
+
+  // =========================================================
+  // MARK INTERNSHIP AS COMPLETED
+  // =========================================================
+
+  // =========================================================
   // MARK INTERNSHIP AS COMPLETED
   // =========================================================
 
@@ -470,11 +542,28 @@ export default function Interns() {
       setProcessingId(assignmentId);
       setError("");
 
-      const now = new Date().toISOString();
+      // -------------------------------------------------------
+      // GET THE ASSIGNMENT DETAILS BEFORE UPDATING
+      // -------------------------------------------------------
+
+      const assignment = assignments.find((item) => item.id === assignmentId);
+
+      if (!assignment) {
+        throw new Error("The internship assignment could not be found.");
+      }
+
+      const student = getStudent(assignment.student_id);
+      const opportunity = getOpportunity(assignment.opportunity_id);
+
+      if (!student) {
+        throw new Error("The student information could not be found.");
+      }
 
       // -------------------------------------------------------
       // UPDATE REAL DATABASE ASSIGNMENT
       // -------------------------------------------------------
+
+      const now = new Date().toISOString();
 
       const { data: updatedAssignment, error: updateError } =
         await supabaseCompany
@@ -487,10 +576,10 @@ export default function Interns() {
           .eq("status", ASSIGNMENT_STATUS.ACTIVE)
           .select(
             `
-              id,
-              status,
-              updated_at
-            `
+            id,
+            status,
+            updated_at
+          `
           )
           .maybeSingle();
 
@@ -505,12 +594,54 @@ export default function Interns() {
       }
 
       // -------------------------------------------------------
+      // SEND COMPLETION EMAIL
+      // -------------------------------------------------------
+      //
+      // IMPORTANT:
+      // The database update has already succeeded.
+      //
+      // If the email fails, we DO NOT undo the completion.
+      // -------------------------------------------------------
+
+      const { data: companyData, error: companyError } = await supabaseCompany
+        .from("companies")
+        .select("company_name")
+        .eq("id", assignment.company_id)
+        .maybeSingle();
+
+      if (companyError) {
+        console.warn(
+          "Unable to retrieve company name for completion email:",
+          companyError
+        );
+      }
+
+      const emailResult = await sendInternshipCompletionEmail({
+        student,
+        opportunity,
+        assignment,
+        companyName: companyData?.company_name || "Your Internship Company",
+      });
+
+      // -------------------------------------------------------
       // RELOAD DATA
       // -------------------------------------------------------
 
       await loadInterns();
 
-      alert("Internship marked as completed. You can now evaluate the intern.");
+      // -------------------------------------------------------
+      // SUCCESS MESSAGE
+      // -------------------------------------------------------
+
+      if (emailResult.success) {
+        alert(
+          `Internship marked as completed successfully.\n\nA completion email has been sent to ${student.email}.`
+        );
+      } else {
+        alert(
+          `Internship marked as completed successfully.\n\nHowever, the completion email could not be sent to the student.`
+        );
+      }
     } catch (err) {
       console.error("Error completing internship:", err);
 
