@@ -1,149 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  supabaseStudent,
-  supabaseRegistrar,
-  supabaseCompany,
-} from "../../supabaseClient";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // =========================================================
-  // ACTIVE ROLE
-  // =========================================================
-
-  const [activeRole, setActiveRole] = useState(
-    location.state?.role || "student"
-  );
 
   // =========================================================
   // FORM
   // =========================================================
 
-  const [email, setEmail] = useState(location.state?.email || "");
+  const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  // =========================================================
-  // PORTAL CONFIGURATION
-  // =========================================================
-
-  const portals = [
-    {
-      key: "student",
-      label: "Student",
-      accent: "from-blue-500 to-indigo-600",
-      activeText: "text-blue-600",
-      ring: "focus:ring-blue-500",
-      icon: (
-        <svg
-          className="w-8 h-8 text-blue-600"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 14l9-5-9-5-9 5 9 5z"
-          />
-
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
-          />
-        </svg>
-      ),
-    },
-
-    {
-      key: "registrar",
-      label: "Registrar Advisor",
-      accent: "from-emerald-500 to-teal-600",
-      activeText: "text-emerald-600",
-      ring: "focus:ring-emerald-500",
-      icon: (
-        <svg
-          className="w-8 h-8 text-emerald-600"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6m-6 4h3"
-          />
-        </svg>
-      ),
-    },
-
-    {
-      key: "company",
-      label: "Company Supervisor",
-      accent: "from-purple-500 to-purple-700",
-      activeText: "text-purple-600",
-      ring: "focus:ring-purple-500",
-      icon: (
-        <svg
-          className="w-8 h-8 text-purple-600"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0 6.22-.62 9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-          />
-        </svg>
-      ),
-    },
-  ];
-
-  const activePortal = portals.find((portal) => portal.key === activeRole);
-
-  // =========================================================
-  // GET ROLE-SPECIFIC SUPABASE CLIENT
-  // =========================================================
-
-  const getSupabaseClient = (role) => {
-    switch (role) {
-      case "student":
-        return supabaseStudent;
-
-      case "registrar":
-        return supabaseRegistrar;
-
-      case "company":
-        return supabaseCompany;
-
-      default:
-        return null;
-    }
-  };
-
-  // =========================================================
-  // CHANGE PORTAL
-  // =========================================================
-
-  const handleRoleChange = (role) => {
-    if (isSubmitting) {
-      return;
-    }
-
-    setActiveRole(role);
-    setMessage("");
-    setError("");
-  };
 
   // =========================================================
   // SEND PASSWORD RECOVERY EMAIL
@@ -161,15 +31,12 @@ const ForgotPassword = () => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // =======================================================
+    // VALIDATE EMAIL
+    // =======================================================
+
     if (!normalizedEmail) {
       setError("Please enter your email address.");
-      return;
-    }
-
-    const supabaseClient = getSupabaseClient(activeRole);
-
-    if (!supabaseClient) {
-      setError("Invalid portal selected.");
       return;
     }
 
@@ -177,23 +44,37 @@ const ForgotPassword = () => {
       setIsSubmitting(true);
 
       // =====================================================
-      // IMPORTANT:
-      // Include the selected role in the reset URL.
+      // PASSWORD RESET EDGE FUNCTION
+      // =====================================================
       //
-      // This allows ResetPassword.jsx to know which
-      // portal-specific Supabase client should handle
-      // the recovery session.
+      // We intentionally do NOT send a role here.
+      //
+      // Password recovery is based on the email address.
+      // The Edge Function generates the secure Supabase
+      // recovery link and sends it through Gmail SMTP.
+      //
+      // We do NOT call:
+      //
+      // supabase.auth.resetPasswordForEmail(...)
+      //
+      // because that uses Supabase's built-in email provider.
       // =====================================================
 
-      const redirectUrl = `${window.location.origin}/reset-password?role=${activeRole}`;
+      const { data, error: functionError } = await supabase.functions.invoke(
+        "send-password-reset-email",
+        {
+          body: {
+            email: normalizedEmail,
+          },
+        }
+      );
 
-      const { error: resetError } =
-        await supabaseClient.auth.resetPasswordForEmail(normalizedEmail, {
-          redirectTo: redirectUrl,
-        });
+      // =====================================================
+      // EDGE FUNCTION ERROR
+      // =====================================================
 
-      if (resetError) {
-        console.error("Password recovery error:", resetError);
+      if (functionError) {
+        console.error("Password reset Edge Function error:", functionError);
 
         setError("Unable to send the password reset email. Please try again.");
 
@@ -201,10 +82,22 @@ const ForgotPassword = () => {
       }
 
       // =====================================================
-      // SECURITY:
-      // Always use a generic success message.
+      // FUNCTION RESPONSE ERROR
+      // =====================================================
+
+      if (data?.error) {
+        console.error("Password reset request failed:", data.error);
+
+        setError("Unable to send the password reset email. Please try again.");
+
+        return;
+      }
+
+      // =====================================================
+      // GENERIC SUCCESS MESSAGE
+      // =====================================================
       //
-      // Do not tell the user whether the email exists.
+      // Do not reveal whether the email exists in the system.
       // =====================================================
 
       setMessage(
@@ -227,7 +120,7 @@ const ForgotPassword = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      <main className="flex-1 flex flex-col items-center justify-center py-30 px-4 max-w-3xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center py-20 px-4 max-w-3xl mx-auto w-full">
         {/* ===================================================
             HEADER
         =================================================== */}
@@ -244,37 +137,29 @@ const ForgotPassword = () => {
         </div>
 
         {/* ===================================================
-            PORTAL SELECTOR
-        =================================================== */}
-
-        <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
-          {portals.map((portal) => (
-            <button
-              key={portal.key}
-              type="button"
-              onClick={() => handleRoleChange(portal.key)}
-              disabled={isSubmitting}
-              className={`py-3 px-2 rounded-lg text-xs font-bold tracking-wider transition-all duration-200 uppercase ${
-                activeRole === portal.key
-                  ? `bg-gradient-to-r ${portal.accent} text-white shadow-md scale-[1.02]`
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {portal.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ===================================================
             CARD
         =================================================== */}
 
-        <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full">
-          {/* ICON */}
+        <div className="bg-white rounded-2xl p-8 md:p-10 shadow-xl border border-slate-100 w-full max-w-lg">
+          {/* =================================================
+              ICON
+          ================================================= */}
 
           <div className="flex justify-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 shadow-inner">
-              {activePortal.icon}
+              <svg
+                className="w-8 h-8 text-slate-700"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
             </div>
           </div>
 
@@ -283,7 +168,7 @@ const ForgotPassword = () => {
           </h3>
 
           <p className="text-xs text-slate-400 mb-8 tracking-wide font-medium uppercase text-center">
-            {activePortal.label} Gateway
+            Account Recovery
           </p>
 
           {/* =================================================
@@ -310,40 +195,42 @@ const ForgotPassword = () => {
               FORM
           ================================================= */}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label
-                htmlFor="forgot-password-email"
-                className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5"
-              >
-                Email Address
-              </label>
+          {!message && (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="forgot-password-email"
+                  className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5"
+                >
+                  Email Address
+                </label>
 
-              <input
-                id="forgot-password-email"
-                type="email"
-                required
+                <input
+                  id="forgot-password-email"
+                  type="email"
+                  required
+                  disabled={isSubmitting}
+                  autoComplete="email"
+                  placeholder="Enter your registered email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setMessage("");
+                    setError("");
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
+                />
+              </div>
+
+              <button
+                type="submit"
                 disabled={isSubmitting}
-                autoComplete="email"
-                placeholder="Enter your registered email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setMessage("");
-                  setError("");
-                }}
-                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 ${activePortal.ring} focus:bg-white transition disabled:opacity-60`}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full bg-gradient-to-r ${activePortal.accent} text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed`}
-            >
-              {isSubmitting ? "Sending Reset Link..." : "Send Reset Link"}
-            </button>
-          </form>
+                className="w-full bg-gradient-to-r from-slate-700 to-slate-900 text-white py-3 rounded-xl text-sm font-semibold tracking-wide shadow-sm hover:opacity-95 transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Sending Reset Link..." : "Send Reset Link"}
+              </button>
+            </form>
+          )}
 
           {/* =================================================
               BACK TO LOGIN
@@ -355,7 +242,6 @@ const ForgotPassword = () => {
               onClick={() =>
                 navigate("/login", {
                   state: {
-                    role: activeRole,
                     email,
                   },
                 })
@@ -376,7 +262,7 @@ const ForgotPassword = () => {
               Don't have an account?{" "}
               <Link
                 to="/signup"
-                className={`font-bold ${activePortal.activeText} hover:underline`}
+                className="font-bold text-slate-700 hover:underline"
               >
                 Create Account
               </Link>
