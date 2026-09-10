@@ -44,8 +44,76 @@ const formatStatus = (status) => {
 
   return String(status)
     .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    )
     .join(" ");
+};
+
+/*
+  =========================================================
+  INTERNSHIP POSITION RESOLVER
+
+  Historical internship records must continue showing the
+  original internship position even when the opportunity has
+  already been closed or archived.
+
+  Priority:
+    1. Assignment snapshot
+    2. Application snapshot
+    3. Opportunity title / position fields
+========================================================= */
+
+const getInternshipPosition = (
+  assignment,
+  application,
+  opportunity
+) => {
+  const candidates = [
+    /* Assignment */
+    assignment?.position,
+    assignment?.internship_position,
+    assignment?.job_title,
+    assignment?.position_title,
+    assignment?.title,
+
+    /* Application */
+    application?.position,
+    application?.internship_position,
+    application?.job_title,
+    application?.position_title,
+
+    /* Opportunity */
+    opportunity?.title,
+    opportunity?.position,
+    opportunity?.internship_position,
+    opportunity?.job_title,
+    opportunity?.position_title,
+  ];
+
+  const position = candidates.find(
+    (value) =>
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== ""
+  );
+
+  return position ? String(position).trim() : "Not specified";
+};
+
+/*
+  =========================================================
+  COMPANY RESOLVER
+========================================================= */
+
+const getCompanyId = (assignment, application, opportunity) => {
+  return (
+    assignment?.company_id ||
+    application?.company_id ||
+    opportunity?.company_id ||
+    null
+  );
 };
 
 const getRejectionInfo = (application) => {
@@ -78,7 +146,11 @@ const formatDate = (date) => {
   if (parts.length === 3) {
     const [year, month, day] = parts;
 
-    const parsedDate = new Date(Number(year), Number(month) - 1, Number(day));
+    const parsedDate = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    );
 
     if (!Number.isNaN(parsedDate.getTime())) {
       return parsedDate.toLocaleDateString("en-US", {
@@ -150,21 +222,8 @@ export default function ViewStatus() {
   const [documentTypes, setDocumentTypes] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
   const [companies, setCompanies] = useState([]);
-
-  /*
-    All certificates belonging to the logged-in student.
-
-    A certificate is automatically created by the database
-    when an assignment is marked as completed.
-  */
   const [certificates, setCertificates] = useState([]);
 
-  /*
-    Selection is based on APPLICATION ID.
-
-    This allows applications without assignments to still
-    appear in the selector.
-  */
   const [selectedApplicationId, setSelectedApplicationId] = useState("");
 
   /* =======================================================
@@ -204,34 +263,43 @@ export default function ViewStatus() {
          STUDENT
       --------------------------------------------------- */
 
-      const { data: studentData, error: studentError } = await supabaseStudent
-        .from("students")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data: studentData, error: studentError } =
+        await supabaseStudent
+          .from("students")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle();
 
       if (studentError) {
         throw studentError;
       }
 
       if (!studentData) {
-        throw new Error("No student profile was found for your account.");
+        throw new Error(
+          "No student profile was found for your account."
+        );
       }
 
       setStudent(studentData);
 
       /* ---------------------------------------------------
          APPLICATIONS
+
+         IMPORTANT:
+         Historical applications remain visible.
+         We do NOT filter based on opportunity status.
       --------------------------------------------------- */
 
-      const { data: applicationData, error: applicationError } =
-        await supabaseStudent
-          .from("applications")
-          .select("*")
-          .eq("student_id", user.id)
-          .order("created_at", {
-            ascending: false,
-          });
+      const {
+        data: applicationData,
+        error: applicationError,
+      } = await supabaseStudent
+        .from("applications")
+        .select("*")
+        .eq("student_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (applicationError) {
         throw applicationError;
@@ -241,23 +309,32 @@ export default function ViewStatus() {
 
       /* ---------------------------------------------------
          ASSIGNMENTS
+
+         Historical assignments remain visible, including:
+           pending
+           active
+           completed
+           suspended
+           terminated
       --------------------------------------------------- */
 
-      const { data: assignmentData, error: assignmentError } =
-        await supabaseStudent
-          .from("assignments")
-          .select("*")
-          .eq("student_id", user.id)
-          .in("status", [
-            STATUS.assignment.PENDING,
-            STATUS.assignment.ACTIVE,
-            STATUS.assignment.COMPLETED,
-            STATUS.assignment.SUSPENDED,
-            STATUS.assignment.TERMINATED,
-          ])
-          .order("created_at", {
-            ascending: false,
-          });
+      const {
+        data: assignmentData,
+        error: assignmentError,
+      } = await supabaseStudent
+        .from("assignments")
+        .select("*")
+        .eq("student_id", user.id)
+        .in("status", [
+          STATUS.assignment.PENDING,
+          STATUS.assignment.ACTIVE,
+          STATUS.assignment.COMPLETED,
+          STATUS.assignment.SUSPENDED,
+          STATUS.assignment.TERMINATED,
+        ])
+        .order("created_at", {
+          ascending: false,
+        });
 
       if (assignmentError) {
         throw assignmentError;
@@ -267,17 +344,15 @@ export default function ViewStatus() {
 
       /* ---------------------------------------------------
          CERTIFICATES
-         
-         Certificates are automatically created by the
-         database trigger when an assignment becomes
-         completed.
       --------------------------------------------------- */
 
-      const { data: certificateData, error: certificateError } =
-        await supabaseStudent
-          .from("certificates")
-          .select(
-            `
+      const {
+        data: certificateData,
+        error: certificateError,
+      } = await supabaseStudent
+        .from("certificates")
+        .select(
+          `
             id,
             assignment_id,
             student_id,
@@ -288,18 +363,17 @@ export default function ViewStatus() {
             school_id,
             school_logo_url
           `
-          )
-          .eq("student_id", user.id)
-          .order("issued_at", {
-            ascending: false,
-          });
+        )
+        .eq("student_id", user.id)
+        .order("issued_at", {
+          ascending: false,
+        });
 
       if (certificateError) {
-        /*
-          Do not block the entire View Status page if the
-          certificate query has an issue.
-        */
-        console.error("Certificate loading error:", certificateError);
+        console.error(
+          "Certificate loading error:",
+          certificateError
+        );
 
         setCertificates([]);
       } else {
@@ -310,7 +384,10 @@ export default function ViewStatus() {
          DOCUMENTS
       --------------------------------------------------- */
 
-      const { data: documentData, error: documentError } = await supabaseStudent
+      const {
+        data: documentData,
+        error: documentError,
+      } = await supabaseStudent
         .from("documents")
         .select("*")
         .eq("student_id", user.id)
@@ -328,13 +405,15 @@ export default function ViewStatus() {
          DOCUMENT TYPES
       --------------------------------------------------- */
 
-      const { data: documentTypeData, error: documentTypeError } =
-        await supabaseStudent
-          .from("document_types")
-          .select("*")
-          .order("created_at", {
-            ascending: true,
-          });
+      const {
+        data: documentTypeData,
+        error: documentTypeError,
+      } = await supabaseStudent
+        .from("document_types")
+        .select("*")
+        .order("created_at", {
+          ascending: true,
+        });
 
       if (documentTypeError) {
         throw documentTypeError;
@@ -344,6 +423,20 @@ export default function ViewStatus() {
 
       /* ---------------------------------------------------
          OPPORTUNITIES
+
+         IMPORTANT:
+
+         We collect opportunity IDs from BOTH applications
+         and assignments.
+
+         We intentionally DO NOT filter by:
+           status
+           active
+           closed
+           archived
+
+         Historical internship records must still resolve
+         their original opportunity.
       --------------------------------------------------- */
 
       const opportunityIds = [
@@ -361,11 +454,13 @@ export default function ViewStatus() {
       let loadedOpportunities = [];
 
       if (opportunityIds.length > 0) {
-        const { data: opportunityData, error: opportunityError } =
-          await supabaseStudent
-            .from("opportunities")
-            .select("*")
-            .in("id", opportunityIds);
+        const {
+          data: opportunityData,
+          error: opportunityError,
+        } = await supabaseStudent
+          .from("opportunities")
+          .select("*")
+          .in("id", opportunityIds);
 
         if (opportunityError) {
           throw opportunityError;
@@ -378,6 +473,11 @@ export default function ViewStatus() {
 
       /* ---------------------------------------------------
          COMPANIES
+
+         Company IDs can come from:
+           1. Assignment
+           2. Application
+           3. Opportunity
       --------------------------------------------------- */
 
       const companyIds = [
@@ -397,16 +497,19 @@ export default function ViewStatus() {
       ];
 
       if (companyIds.length > 0) {
-        const { data: companyData, error: companyError } = await supabaseStudent
+        const {
+          data: companyData,
+          error: companyError,
+        } = await supabaseStudent
           .from("companies")
           .select(
             `
-            id,
-            company_name,
-            company_address,
-            industry,
-            status
-          `
+              id,
+              company_name,
+              company_address,
+              industry,
+              status
+            `
           )
           .in("id", companyIds);
 
@@ -419,9 +522,15 @@ export default function ViewStatus() {
         setCompanies([]);
       }
     } catch (error) {
-      console.error("Error loading internship status:", error);
+      console.error(
+        "Error loading internship status:",
+        error
+      );
 
-      alert(error.message || "Unable to load your internship status.");
+      alert(
+        error.message ||
+          "Unable to load your internship status."
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -455,27 +564,30 @@ export default function ViewStatus() {
     const options = applications.map((application) => {
       let assignment = null;
 
-      /*
-        PRIMARY MATCH:
-        application_id
-      */
+      /* ---------------------------------------------------
+         PRIMARY MATCH
+         
+         Always prefer application_id.
+      --------------------------------------------------- */
+
       if (application.id) {
         assignment =
-          assignments.find((item) => item.application_id === application.id) ||
-          null;
+          assignments.find(
+            (item) =>
+              item.application_id === application.id
+          ) || null;
       }
 
-      /*
-        LEGACY FALLBACK:
-        Only use opportunity_id when the assignment has
-        NO application_id AND there is exactly ONE
-        application for that opportunity.
-      */
+      /* ---------------------------------------------------
+         LEGACY FALLBACK
+      --------------------------------------------------- */
+
       if (!assignment && application.opportunity_id) {
         const legacyMatches = assignments.filter(
           (item) =>
             !item.application_id &&
-            item.opportunity_id === application.opportunity_id
+            item.opportunity_id ===
+              application.opportunity_id
         );
 
         if (legacyMatches.length === 1) {
@@ -483,16 +595,47 @@ export default function ViewStatus() {
         }
       }
 
-      const opportunity =
-        opportunities.find((item) => item.id === application.opportunity_id) ||
+      /* ---------------------------------------------------
+         OPPORTUNITY RESOLUTION
+         
+         Assignment opportunity is the source of truth for
+         an actual placement.
+      --------------------------------------------------- */
+
+      const opportunityId =
+        assignment?.opportunity_id ||
+        application.opportunity_id ||
         null;
 
-      const companyId =
-        assignment?.company_id ||
-        application.company_id ||
-        opportunity?.company_id;
+      const opportunity =
+        opportunities.find(
+          (item) => item.id === opportunityId
+        ) || null;
 
-      const company = companies.find((item) => item.id === companyId) || null;
+      /* ---------------------------------------------------
+         COMPANY RESOLUTION
+      --------------------------------------------------- */
+
+      const companyId = getCompanyId(
+        assignment,
+        application,
+        opportunity
+      );
+
+      const company =
+        companies.find(
+          (item) => item.id === companyId
+        ) || null;
+
+      /* ---------------------------------------------------
+         POSITION RESOLUTION
+      --------------------------------------------------- */
+
+      const position = getInternshipPosition(
+        assignment,
+        application,
+        opportunity
+      );
 
       const assignmentPriorityValue = assignment
         ? assignmentPriority[assignment.status] || 0
@@ -506,35 +649,50 @@ export default function ViewStatus() {
         assignment,
         opportunity,
         company,
-        assignmentPriority: assignmentPriorityValue,
-        applicationPriority: applicationPriorityValue,
+        position,
+        assignmentPriority:
+          assignmentPriorityValue,
+        applicationPriority:
+          applicationPriorityValue,
       };
     });
 
     return options.sort((a, b) => {
-      /*
-        Prefer active/current assignments first.
-      */
-      if (a.assignmentPriority !== b.assignmentPriority) {
-        return b.assignmentPriority - a.assignmentPriority;
+      if (
+        a.assignmentPriority !==
+        b.assignmentPriority
+      ) {
+        return (
+          b.assignmentPriority -
+          a.assignmentPriority
+        );
       }
 
-      /*
-        Then application status.
-      */
-      if (a.applicationPriority !== b.applicationPriority) {
-        return b.applicationPriority - a.applicationPriority;
+      if (
+        a.applicationPriority !==
+        b.applicationPriority
+      ) {
+        return (
+          b.applicationPriority -
+          a.applicationPriority
+        );
       }
 
-      /*
-        Finally newest application.
-      */
       return (
-        new Date(b.application.created_at || 0).getTime() -
-        new Date(a.application.created_at || 0).getTime()
+        new Date(
+          b.application.created_at || 0
+        ).getTime() -
+        new Date(
+          a.application.created_at || 0
+        ).getTime()
       );
     });
-  }, [applications, assignments, opportunities, companies]);
+  }, [
+    applications,
+    assignments,
+    opportunities,
+    companies,
+  ]);
 
   /* =======================================================
      DEFAULT SELECTED APPLICATION
@@ -549,13 +707,20 @@ export default function ViewStatus() {
     const selectedStillExists =
       selectedApplicationId &&
       applicationOptions.some(
-        (option) => option.application.id === selectedApplicationId
+        (option) =>
+          option.application.id ===
+          selectedApplicationId
       );
 
     if (!selectedStillExists) {
-      setSelectedApplicationId(applicationOptions[0].application.id);
+      setSelectedApplicationId(
+        applicationOptions[0].application.id
+      );
     }
-  }, [applicationOptions, selectedApplicationId]);
+  }, [
+    applicationOptions,
+    selectedApplicationId,
+  ]);
 
   /* =======================================================
      SELECTED OPTION
@@ -568,39 +733,62 @@ export default function ViewStatus() {
 
     return (
       applicationOptions.find(
-        (option) => option.application.id === selectedApplicationId
+        (option) =>
+          option.application.id ===
+          selectedApplicationId
       ) || null
     );
-  }, [applicationOptions, selectedApplicationId]);
+  }, [
+    applicationOptions,
+    selectedApplicationId,
+  ]);
 
   /* =======================================================
      SELECTED APPLICATION
   ======================================================= */
 
-  const selectedApplication = selectedOption?.application || null;
+  const selectedApplication =
+    selectedOption?.application || null;
 
   /* =======================================================
      SELECTED ASSIGNMENT
   ======================================================= */
 
-  const selectedAssignment = selectedOption?.assignment || null;
+  const selectedAssignment =
+    selectedOption?.assignment || null;
 
   /* =======================================================
      SELECTED OPPORTUNITY
   ======================================================= */
 
-  const selectedOpportunity = selectedOption?.opportunity || null;
+  const selectedOpportunity =
+    selectedOption?.opportunity || null;
 
   /* =======================================================
      SELECTED COMPANY
   ======================================================= */
 
-  const selectedCompany = selectedOption?.company || null;
+  const selectedCompany =
+    selectedOption?.company || null;
+
+  /* =======================================================
+     SELECTED POSITION
+  ======================================================= */
+
+  const selectedPosition = useMemo(() => {
+    return getInternshipPosition(
+      selectedAssignment,
+      selectedApplication,
+      selectedOpportunity
+    );
+  }, [
+    selectedAssignment,
+    selectedApplication,
+    selectedOpportunity,
+  ]);
 
   /* =======================================================
      SELECTED CERTIFICATE
-     
-     Certificate belongs directly to assignment_id.
   ======================================================= */
 
   const selectedCertificate = useMemo(() => {
@@ -610,10 +798,15 @@ export default function ViewStatus() {
 
     return (
       certificates.find(
-        (certificate) => certificate.assignment_id === selectedAssignment.id
+        (certificate) =>
+          certificate.assignment_id ===
+          selectedAssignment.id
       ) || null
     );
-  }, [certificates, selectedAssignment]);
+  }, [
+    certificates,
+    selectedAssignment,
+  ]);
 
   /* =======================================================
      SELECTED PLACEMENT DOCUMENTS
@@ -625,7 +818,9 @@ export default function ViewStatus() {
     }
 
     return documents.filter(
-      (document) => document.assignment_id === selectedAssignment.id
+      (document) =>
+        document.assignment_id ===
+        selectedAssignment.id
     );
   }, [documents, selectedAssignment]);
 
@@ -637,10 +832,6 @@ export default function ViewStatus() {
     const requiredTypes = documentTypes.filter(
       (type) => type.required === true
     );
-
-    /* -----------------------------------------------------
-       No assignment
-    ----------------------------------------------------- */
 
     if (!selectedAssignment?.id) {
       return {
@@ -655,16 +846,13 @@ export default function ViewStatus() {
       };
     }
 
-    /* -----------------------------------------------------
-       No document types configured
-    ----------------------------------------------------- */
-
     if (requiredTypes.length === 0) {
       if (placementDocuments.length === 0) {
         return {
           status: "not_started",
           label: "Not Submitted",
-          description: "No internship documents have been submitted yet.",
+          description:
+            "No internship documents have been submitted yet.",
           submitted: 0,
           required: 0,
           percentage: 0,
@@ -672,19 +860,26 @@ export default function ViewStatus() {
         };
       }
 
-      const hasRevision = placementDocuments.some(
-        (document) => document.status === STATUS.document.NEEDS_REVISION
-      );
+      const hasRevision =
+        placementDocuments.some(
+          (document) =>
+            document.status ===
+            STATUS.document.NEEDS_REVISION
+        );
 
-      const allApproved = placementDocuments.every(
-        (document) => document.status === STATUS.document.APPROVED
-      );
+      const allApproved =
+        placementDocuments.every(
+          (document) =>
+            document.status ===
+            STATUS.document.APPROVED
+        );
 
       if (allApproved) {
         return {
           status: "approved",
           label: "Documents Approved",
-          description: "All submitted internship documents have been approved.",
+          description:
+            "All submitted internship documents have been approved.",
           submitted: placementDocuments.length,
           required: placementDocuments.length,
           percentage: 100,
@@ -708,7 +903,8 @@ export default function ViewStatus() {
       return {
         status: "pending_review",
         label: "Pending Review",
-        description: "Your submitted documents are currently being reviewed.",
+        description:
+          "Your submitted documents are currently being reviewed.",
         submitted: placementDocuments.length,
         required: placementDocuments.length,
         percentage: 100,
@@ -716,46 +912,65 @@ export default function ViewStatus() {
       };
     }
 
-    /* -----------------------------------------------------
-       Latest document for every required type
-    ----------------------------------------------------- */
+    const latestDocuments =
+      requiredTypes.map((type) => {
+        const matches = placementDocuments
+          .filter(
+            (document) =>
+              document.document_type_id ===
+              type.id
+          )
+          .sort(
+            (a, b) =>
+              new Date(
+                b.created_at || 0
+              ).getTime() -
+              new Date(
+                a.created_at || 0
+              ).getTime()
+          );
 
-    const latestDocuments = requiredTypes.map((type) => {
-      const matches = placementDocuments
-        .filter((document) => document.document_type_id === type.id)
-        .sort(
-          (a, b) =>
-            new Date(b.created_at || 0).getTime() -
-            new Date(a.created_at || 0).getTime()
-        );
+        return matches[0] || null;
+      });
 
-      return matches[0] || null;
-    });
+    const submittedCount =
+      latestDocuments.filter(Boolean).length;
 
-    const submittedCount = latestDocuments.filter(Boolean).length;
-
-    const hasRevision = latestDocuments.some(
-      (document) => document?.status === STATUS.document.NEEDS_REVISION
-    );
-
-    const allApproved =
-      submittedCount === requiredTypes.length &&
-      latestDocuments.every(
-        (document) => document?.status === STATUS.document.APPROVED
+    const hasRevision =
+      latestDocuments.some(
+        (document) =>
+          document?.status ===
+          STATUS.document.NEEDS_REVISION
       );
 
-    const allSubmitted = submittedCount === requiredTypes.length;
+    const allApproved =
+      submittedCount ===
+        requiredTypes.length &&
+      latestDocuments.every(
+        (document) =>
+          document?.status ===
+          STATUS.document.APPROVED
+      );
+
+    const allSubmitted =
+      submittedCount ===
+      requiredTypes.length;
 
     const percentage =
       requiredTypes.length > 0
-        ? Math.round((submittedCount / requiredTypes.length) * 100)
+        ? Math.round(
+            (submittedCount /
+              requiredTypes.length) *
+              100
+          )
         : 0;
 
     if (allApproved) {
       return {
         status: "approved",
         label: "Documents Approved",
-        description: "All required internship documents have been approved.",
+        description:
+          "All required internship documents have been approved.",
         submitted: submittedCount,
         required: requiredTypes.length,
         percentage: 100,
@@ -767,7 +982,8 @@ export default function ViewStatus() {
       return {
         status: "needs_revision",
         label: "Needs Revision",
-        description: "One or more required documents need revision.",
+        description:
+          "One or more required documents need revision.",
         submitted: submittedCount,
         required: requiredTypes.length,
         percentage,
@@ -791,7 +1007,8 @@ export default function ViewStatus() {
     if (submittedCount > 0) {
       return {
         status: "in_progress",
-        label: "Document Submission In Progress",
+        label:
+          "Document Submission In Progress",
         description:
           "Some required documents have been submitted. Please complete the remaining requirements.",
         submitted: submittedCount,
@@ -804,26 +1021,35 @@ export default function ViewStatus() {
     return {
       status: "not_started",
       label: "Documents Not Submitted",
-      description: "Please submit your required internship documents.",
+      description:
+        "Please submit your required internship documents.",
       submitted: 0,
       required: requiredTypes.length,
       percentage: 0,
       hasRevision: false,
     };
-  }, [documentTypes, selectedAssignment, placementDocuments]);
+  }, [
+    documentTypes,
+    selectedAssignment,
+    placementDocuments,
+  ]);
 
   /* =======================================================
      APPLICATION STATUS
   ======================================================= */
 
-  const applicationStatus = selectedApplication?.status;
+  const applicationStatus =
+    selectedApplication?.status;
 
   /* =======================================================
      OVERALL STATUS
   ======================================================= */
 
   const overallStatus = useMemo(() => {
-    if (selectedAssignment?.status === STATUS.assignment.COMPLETED) {
+    if (
+      selectedAssignment?.status ===
+      STATUS.assignment.COMPLETED
+    ) {
       return {
         key: "completed",
         title: "Internship Completed",
@@ -834,7 +1060,10 @@ export default function ViewStatus() {
       };
     }
 
-    if (selectedAssignment?.status === STATUS.assignment.SUSPENDED) {
+    if (
+      selectedAssignment?.status ===
+      STATUS.assignment.SUSPENDED
+    ) {
       return {
         key: "suspended",
         title: "Internship Suspended",
@@ -845,17 +1074,24 @@ export default function ViewStatus() {
       };
     }
 
-    if (selectedAssignment?.status === STATUS.assignment.TERMINATED) {
+    if (
+      selectedAssignment?.status ===
+      STATUS.assignment.TERMINATED
+    ) {
       return {
         key: "terminated",
         title: "Placement Terminated",
-        subtitle: "This internship placement has been terminated.",
+        subtitle:
+          "This internship placement has been terminated.",
         icon: "⚠️",
         tone: "red",
       };
     }
 
-    if (selectedAssignment?.status === STATUS.assignment.ACTIVE) {
+    if (
+      selectedAssignment?.status ===
+      STATUS.assignment.ACTIVE
+    ) {
       return {
         key: "active",
         title: "Internship Active",
@@ -867,12 +1103,14 @@ export default function ViewStatus() {
     }
 
     if (
-      selectedAssignment?.status === STATUS.assignment.PENDING &&
+      selectedAssignment?.status ===
+        STATUS.assignment.PENDING &&
       selectedAssignment?.deployed_at
     ) {
       return {
         key: "deployed",
-        title: "Deployed — Waiting for Company",
+        title:
+          "Deployed — Waiting for Company",
         subtitle:
           "You have been deployed to the company. Please wait for the company to accept your placement.",
         icon: "🚀",
@@ -880,7 +1118,10 @@ export default function ViewStatus() {
       };
     }
 
-    if (selectedAssignment?.status === STATUS.assignment.PENDING) {
+    if (
+      selectedAssignment?.status ===
+      STATUS.assignment.PENDING
+    ) {
       return {
         key: "confirmed",
         title: "Placement Confirmed",
@@ -891,7 +1132,10 @@ export default function ViewStatus() {
       };
     }
 
-    if (applicationStatus === STATUS.application.APPROVED) {
+    if (
+      applicationStatus ===
+      STATUS.application.APPROVED
+    ) {
       return {
         key: "approved",
         title: "Placement Approved",
@@ -902,7 +1146,10 @@ export default function ViewStatus() {
       };
     }
 
-    if (applicationStatus === STATUS.application.INFO_REQUESTED) {
+    if (
+      applicationStatus ===
+      STATUS.application.INFO_REQUESTED
+    ) {
       return {
         key: "info_requested",
         title: "Information Requested",
@@ -914,8 +1161,10 @@ export default function ViewStatus() {
     }
 
     if (
-      applicationStatus === STATUS.application.UNDER_REVIEW ||
-      applicationStatus === STATUS.application.SUBMITTED
+      applicationStatus ===
+        STATUS.application.UNDER_REVIEW ||
+      applicationStatus ===
+        STATUS.application.SUBMITTED
     ) {
       return {
         key: "under_review",
@@ -927,8 +1176,12 @@ export default function ViewStatus() {
       };
     }
 
-    if (applicationStatus === STATUS.application.REJECTED) {
-      const rejectionInfo = getRejectionInfo(selectedApplication);
+    if (
+      applicationStatus ===
+      STATUS.application.REJECTED
+    ) {
+      const rejectionInfo =
+        getRejectionInfo(selectedApplication);
 
       return {
         key: "rejected",
@@ -939,17 +1192,24 @@ export default function ViewStatus() {
       };
     }
 
-    if (applicationStatus === STATUS.application.WITHDRAWN) {
+    if (
+      applicationStatus ===
+      STATUS.application.WITHDRAWN
+    ) {
       return {
         key: "withdrawn",
         title: "Application Withdrawn",
-        subtitle: "This application has been withdrawn.",
+        subtitle:
+          "This application has been withdrawn.",
         icon: "↩️",
         tone: "slate",
       };
     }
 
-    if (applicationStatus === STATUS.application.DRAFT) {
+    if (
+      applicationStatus ===
+      STATUS.application.DRAFT
+    ) {
       return {
         key: "draft",
         title: "Draft Application",
@@ -963,32 +1223,46 @@ export default function ViewStatus() {
     return {
       key: "none",
       title: "No Internship Application",
-      subtitle: "No internship application is associated with this placement.",
+      subtitle:
+        "No internship application is associated with this placement.",
       icon: "📋",
       tone: "slate",
     };
-  }, [selectedAssignment, applicationStatus, selectedApplication]);
+  }, [
+    selectedAssignment,
+    applicationStatus,
+    selectedApplication,
+  ]);
 
   /* =======================================================
      PROGRESS STEPS
   ======================================================= */
 
   const progressSteps = useMemo(() => {
-    const assignmentStatus = selectedAssignment?.status;
+    const assignmentStatus =
+      selectedAssignment?.status;
 
     const isApproved =
-      applicationStatus === STATUS.application.APPROVED ||
+      applicationStatus ===
+        STATUS.application.APPROVED ||
       Boolean(selectedAssignment);
 
-    const isConfirmed = Boolean(selectedAssignment);
+    const isConfirmed =
+      Boolean(selectedAssignment);
 
-    const documentsApproved = documentProgress.status === "approved";
+    const documentsApproved =
+      documentProgress.status === "approved";
 
-    const isDeployed = Boolean(selectedAssignment?.deployed_at);
+    const isDeployed =
+      Boolean(selectedAssignment?.deployed_at);
 
-    const isActive = assignmentStatus === STATUS.assignment.ACTIVE;
+    const isActive =
+      assignmentStatus ===
+      STATUS.assignment.ACTIVE;
 
-    const isCompleted = assignmentStatus === STATUS.assignment.COMPLETED;
+    const isCompleted =
+      assignmentStatus ===
+      STATUS.assignment.COMPLETED;
 
     return [
       {
@@ -1003,7 +1277,8 @@ export default function ViewStatus() {
       {
         key: "confirmed",
         label: "Placement Confirmed",
-        description: "You confirmed your internship placement.",
+        description:
+          "You confirmed your internship placement.",
         icon: "✅",
         completed: isConfirmed,
       },
@@ -1011,7 +1286,8 @@ export default function ViewStatus() {
       {
         key: "documents",
         label: "Documents Approval",
-        description: documentProgress.description,
+        description:
+          documentProgress.description,
         icon: "📄",
         completed: documentsApproved,
       },
@@ -1033,7 +1309,8 @@ export default function ViewStatus() {
           ? "The company accepted your placement and your internship is active."
           : "Waiting for the company to accept your placement.",
         icon: "💼",
-        completed: isActive || isCompleted,
+        completed:
+          isActive || isCompleted,
       },
 
       {
@@ -1046,20 +1323,31 @@ export default function ViewStatus() {
         completed: isCompleted,
       },
     ];
-  }, [selectedAssignment, applicationStatus, documentProgress]);
+  }, [
+    selectedAssignment,
+    applicationStatus,
+    documentProgress,
+  ]);
 
   /* =======================================================
      PROGRESS PERCENTAGE
   ======================================================= */
 
   const progressPercentage = useMemo(() => {
-    const assignmentStatus = selectedAssignment?.status;
+    const assignmentStatus =
+      selectedAssignment?.status;
 
-    if (assignmentStatus === STATUS.assignment.COMPLETED) {
+    if (
+      assignmentStatus ===
+      STATUS.assignment.COMPLETED
+    ) {
       return 100;
     }
 
-    if (assignmentStatus === STATUS.assignment.ACTIVE) {
+    if (
+      assignmentStatus ===
+      STATUS.assignment.ACTIVE
+    ) {
       return 80;
     }
 
@@ -1067,7 +1355,9 @@ export default function ViewStatus() {
       return 65;
     }
 
-    if (documentProgress.status === "approved") {
+    if (
+      documentProgress.status === "approved"
+    ) {
       return 50;
     }
 
@@ -1075,20 +1365,30 @@ export default function ViewStatus() {
       return 35;
     }
 
-    if (applicationStatus === STATUS.application.APPROVED) {
+    if (
+      applicationStatus ===
+      STATUS.application.APPROVED
+    ) {
       return 20;
     }
 
     if (
-      applicationStatus === STATUS.application.SUBMITTED ||
-      applicationStatus === STATUS.application.UNDER_REVIEW ||
-      applicationStatus === STATUS.application.INFO_REQUESTED
+      applicationStatus ===
+        STATUS.application.SUBMITTED ||
+      applicationStatus ===
+        STATUS.application.UNDER_REVIEW ||
+      applicationStatus ===
+        STATUS.application.INFO_REQUESTED
     ) {
       return 10;
     }
 
     return 0;
-  }, [selectedAssignment, documentProgress, applicationStatus]);
+  }, [
+    selectedAssignment,
+    documentProgress,
+    applicationStatus,
+  ]);
 
   /* =======================================================
      STATUS TONE CLASSES
@@ -1105,9 +1405,13 @@ export default function ViewStatus() {
           ? "bg-emerald-900/60 text-emerald-300"
           : "bg-emerald-100 text-emerald-700",
 
-        title: darkMode ? "text-emerald-300" : "text-emerald-700",
+        title: darkMode
+          ? "text-emerald-300"
+          : "text-emerald-700",
 
-        text: darkMode ? "text-emerald-200" : "text-emerald-800",
+        text: darkMode
+          ? "text-emerald-200"
+          : "text-emerald-800",
       },
 
       blue: {
@@ -1119,9 +1423,13 @@ export default function ViewStatus() {
           ? "bg-blue-900/60 text-blue-300"
           : "bg-blue-100 text-blue-700",
 
-        title: darkMode ? "text-blue-300" : "text-blue-700",
+        title: darkMode
+          ? "text-blue-300"
+          : "text-blue-700",
 
-        text: darkMode ? "text-blue-200" : "text-blue-800",
+        text: darkMode
+          ? "text-blue-200"
+          : "text-blue-800",
       },
 
       amber: {
@@ -1133,9 +1441,13 @@ export default function ViewStatus() {
           ? "bg-amber-900/60 text-amber-300"
           : "bg-amber-100 text-amber-700",
 
-        title: darkMode ? "text-amber-300" : "text-amber-700",
+        title: darkMode
+          ? "text-amber-300"
+          : "text-amber-700",
 
-        text: darkMode ? "text-amber-200" : "text-amber-800",
+        text: darkMode
+          ? "text-amber-200"
+          : "text-amber-800",
       },
 
       red: {
@@ -1147,9 +1459,13 @@ export default function ViewStatus() {
           ? "bg-red-900/60 text-red-300"
           : "bg-red-100 text-red-700",
 
-        title: darkMode ? "text-red-300" : "text-red-700",
+        title: darkMode
+          ? "text-red-300"
+          : "text-red-700",
 
-        text: darkMode ? "text-red-200" : "text-red-800",
+        text: darkMode
+          ? "text-red-200"
+          : "text-red-800",
       },
 
       slate: {
@@ -1161,13 +1477,20 @@ export default function ViewStatus() {
           ? "bg-slate-800 text-slate-300"
           : "bg-slate-200 text-slate-700",
 
-        title: darkMode ? "text-slate-200" : "text-slate-700",
+        title: darkMode
+          ? "text-slate-200"
+          : "text-slate-700",
 
-        text: darkMode ? "text-slate-400" : "text-slate-600",
+        text: darkMode
+          ? "text-slate-400"
+          : "text-slate-600",
       },
     };
 
-    return tones[overallStatus.tone] || tones.slate;
+    return (
+      tones[overallStatus.tone] ||
+      tones.slate
+    );
   }, [darkMode, overallStatus.tone]);
 
   /* =======================================================
@@ -1178,11 +1501,17 @@ export default function ViewStatus() {
     ? "bg-slate-900 border-slate-700"
     : "bg-white border-slate-200";
 
-  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+  const headingClass = darkMode
+    ? "text-slate-100"
+    : "text-slate-900";
 
-  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
+  const mutedClass = darkMode
+    ? "text-slate-400"
+    : "text-slate-500";
 
-  const borderClass = darkMode ? "border-slate-700" : "border-slate-200";
+  const borderClass = darkMode
+    ? "border-slate-700"
+    : "border-slate-200";
 
   /* =======================================================
      LOADING
@@ -1192,19 +1521,27 @@ export default function ViewStatus() {
     return (
       <div
         className={`p-5 md:p-6 lg:p-8 max-w-[1600px] mx-auto ${
-          darkMode ? "text-slate-100" : "text-slate-900"
+          darkMode
+            ? "text-slate-100"
+            : "text-slate-900"
         }`}
       >
-        <div className={`border rounded-2xl p-10 text-center ${cardClass}`}>
-          <div className="text-3xl mb-3">⏳</div>
+        <div
+          className={`border rounded-2xl p-10 text-center ${cardClass}`}
+        >
+          <div className="text-3xl mb-3">
+            ⏳
+          </div>
 
           <h2 className="text-lg font-bold">
             Loading your internship status...
           </h2>
 
-          <p className={`text-sm mt-2 ${mutedClass}`}>
-            Please wait while we retrieve your application and internship
-            progress.
+          <p
+            className={`text-sm mt-2 ${mutedClass}`}
+          >
+            Please wait while we retrieve your
+            application and internship progress.
           </p>
         </div>
       </div>
@@ -1216,10 +1553,12 @@ export default function ViewStatus() {
   ======================================================= */
 
   return (
-    <div className={`p-5 md:p-6 lg:p-8 max-w-[1600px] mx-auto ${headingClass}`}>
-      {/* ===================================================
+    <div
+      className={`p-5 md:p-6 lg:p-8 max-w-[1600px] mx-auto ${headingClass}`}
+    >
+      {/* =================================================
           HEADER
-      =================================================== */}
+      ================================================= */}
 
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
         <div>
@@ -1231,9 +1570,12 @@ export default function ViewStatus() {
             Internship Status
           </h1>
 
-          <p className={`text-sm mt-1 ${mutedClass}`}>
-            Track your application, placement, documents, deployment, and
-            internship completion.
+          <p
+            className={`text-sm mt-1 ${mutedClass}`}
+          >
+            Track your application, placement,
+            documents, deployment, and internship
+            completion.
           </p>
         </div>
 
@@ -1249,27 +1591,36 @@ export default function ViewStatus() {
               : "border-slate-300 text-slate-700 hover:bg-slate-50"
           }`}
         >
-          {refreshing ? "Refreshing..." : "↻ Refresh Status"}
+          {refreshing
+            ? "Refreshing..."
+            : "↻ Refresh Status"}
         </button>
       </div>
 
-      {/* ===================================================
+      {/* =================================================
           APPLICATION / INTERNSHIP SELECTOR
-      =================================================== */}
+      ================================================= */}
 
       {applicationOptions.length > 0 && (
-        <section className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}>
+        <section
+          className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}
+        >
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             <div className="flex-1">
               <p className="text-[10px] uppercase tracking-widest font-black text-slate-400">
                 Applications & Internship History
               </p>
 
-              <h2 className="text-lg font-bold mt-1">Select Application</h2>
+              <h2 className="text-lg font-bold mt-1">
+                Select Application
+              </h2>
 
-              <p className={`text-xs mt-1 ${mutedClass}`}>
-                Select an application to view its specific application,
-                placement, documents, and internship status.
+              <p
+                className={`text-xs mt-1 ${mutedClass}`}
+              >
+                Select an application to view its
+                specific application, placement,
+                documents, and internship status.
               </p>
             </div>
 
@@ -1277,7 +1628,9 @@ export default function ViewStatus() {
               <select
                 value={selectedApplicationId}
                 onChange={(event) =>
-                  setSelectedApplicationId(event.target.value)
+                  setSelectedApplicationId(
+                    event.target.value
+                  )
                 }
                 className={`w-full px-4 py-3 rounded-xl border text-sm font-semibold outline-none transition ${
                   darkMode
@@ -1285,25 +1638,39 @@ export default function ViewStatus() {
                     : "bg-white border-slate-300 text-slate-900 focus:border-blue-500"
                 }`}
               >
-                {applicationOptions.map((option) => {
-                  const { application, assignment, opportunity, company } =
-                    option;
+                {applicationOptions.map(
+                  (option) => {
+                    const {
+                      application,
+                      assignment,
+                      company,
+                      position,
+                    } = option;
 
-                  const companyName =
-                    company?.company_name || "Unknown Company";
+                    const companyName =
+                      company?.company_name ||
+                      "Unknown Company";
 
-                  const position = opportunity?.title || "Internship";
+                    const statusLabel =
+                      assignment
+                        ? formatStatus(
+                            assignment.status
+                          )
+                        : formatStatus(
+                            application.status
+                          );
 
-                  const statusLabel = assignment
-                    ? formatStatus(assignment.status)
-                    : formatStatus(application.status);
-
-                  return (
-                    <option key={application.id} value={application.id}>
-                      {companyName} — {position} [{statusLabel}]
-                    </option>
-                  );
-                })}
+                    return (
+                      <option
+                        key={application.id}
+                        value={application.id}
+                      >
+                        {companyName} — {position} [
+                        {statusLabel}]
+                      </option>
+                    );
+                  }
+                )}
               </select>
             </div>
           </div>
@@ -1311,7 +1678,9 @@ export default function ViewStatus() {
           {/* SELECTED APPLICATION SUMMARY */}
 
           {selectedApplication && (
-            <div className={`mt-4 rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`mt-4 rounded-xl border p-4 ${borderClass}`}
+            >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
@@ -1319,25 +1688,33 @@ export default function ViewStatus() {
                   </p>
 
                   <p className="font-bold text-sm mt-1">
-                    {selectedCompany?.company_name || "Unknown Company"}
+                    {selectedCompany?.company_name ||
+                      "Unknown Company"}
                   </p>
 
-                  <p className={`text-xs mt-1 ${mutedClass}`}>
-                    {selectedOpportunity?.title || "Internship Position"}
+                  <p
+                    className={`text-xs mt-1 ${mutedClass}`}
+                  >
+                    {selectedPosition}
                   </p>
 
                   {!selectedAssignment && (
-                    <p className={`text-[11px] mt-2 ${mutedClass}`}>
-                      This application has no internship assignment yet.
+                    <p
+                      className={`text-[11px] mt-2 ${mutedClass}`}
+                    >
+                      This application has no
+                      internship assignment yet.
                     </p>
                   )}
                 </div>
 
                 <span
                   className={`px-3 py-1.5 rounded-full text-[10px] font-bold w-fit ${
-                    selectedAssignment?.status === STATUS.assignment.COMPLETED
+                    selectedAssignment?.status ===
+                    STATUS.assignment.COMPLETED
                       ? "bg-emerald-100 text-emerald-700"
-                      : selectedAssignment?.status === STATUS.assignment.ACTIVE
+                      : selectedAssignment?.status ===
+                        STATUS.assignment.ACTIVE
                       ? "bg-blue-100 text-blue-700"
                       : selectedAssignment?.status ===
                         STATUS.assignment.TERMINATED
@@ -1347,16 +1724,22 @@ export default function ViewStatus() {
                       ? "bg-amber-100 text-amber-700"
                       : selectedAssignment
                       ? "bg-slate-100 text-slate-700"
-                      : applicationStatus === STATUS.application.APPROVED
+                      : applicationStatus ===
+                        STATUS.application.APPROVED
                       ? "bg-blue-100 text-blue-700"
-                      : applicationStatus === STATUS.application.REJECTED
+                      : applicationStatus ===
+                        STATUS.application.REJECTED
                       ? "bg-red-100 text-red-700"
                       : "bg-amber-100 text-amber-700"
                   }`}
                 >
                   {selectedAssignment
-                    ? formatStatus(selectedAssignment.status)
-                    : formatStatus(selectedApplication.status)}
+                    ? formatStatus(
+                        selectedAssignment.status
+                      )
+                    : formatStatus(
+                        selectedApplication.status
+                      )}
                 </span>
               </div>
             </div>
@@ -1364,9 +1747,9 @@ export default function ViewStatus() {
         </section>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           OVERALL STATUS
-      =================================================== */}
+      ================================================= */}
 
       <section
         className={`border rounded-2xl p-5 md:p-6 mb-6 ${toneClasses.wrapper}`}
@@ -1391,7 +1774,9 @@ export default function ViewStatus() {
               {overallStatus.title}
             </h2>
 
-            <p className={`text-sm mt-1 ${toneClasses.text}`}>
+            <p
+              className={`text-sm mt-1 ${toneClasses.text}`}
+            >
               {overallStatus.subtitle}
             </p>
           </div>
@@ -1403,7 +1788,9 @@ export default function ViewStatus() {
               Internship Progress
             </p>
 
-            <p className={`text-3xl font-black mt-1 ${toneClasses.title}`}>
+            <p
+              className={`text-3xl font-black mt-1 ${toneClasses.title}`}
+            >
               {progressPercentage}%
             </p>
           </div>
@@ -1412,7 +1799,9 @@ export default function ViewStatus() {
         <div className="mt-6">
           <div
             className={`h-2 rounded-full overflow-hidden ${
-              darkMode ? "bg-slate-800" : "bg-white/70"
+              darkMode
+                ? "bg-slate-800"
+                : "bg-white/70"
             }`}
           >
             <div
@@ -1425,17 +1814,24 @@ export default function ViewStatus() {
         </div>
       </section>
 
-      {/* ===================================================
+      {/* =================================================
           INTERNSHIP DETAILS
-      =================================================== */}
+      ================================================= */}
 
-      {(selectedAssignment || selectedApplication) && (
-        <section className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}>
+      {(selectedAssignment ||
+        selectedApplication) && (
+        <section
+          className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}
+        >
           <div className="flex items-center justify-between gap-3 mb-5">
             <div>
-              <h2 className="text-lg font-bold">Internship Details</h2>
+              <h2 className="text-lg font-bold">
+                Internship Details
+              </h2>
 
-              <p className={`text-xs mt-1 ${mutedClass}`}>
+              <p
+                className={`text-xs mt-1 ${mutedClass}`}
+              >
                 Details for the selected application.
               </p>
             </div>
@@ -1443,18 +1839,24 @@ export default function ViewStatus() {
             {selectedAssignment && (
               <span
                 className={`px-3 py-1.5 rounded-full text-[10px] font-bold ${
-                  selectedAssignment.status === STATUS.assignment.COMPLETED
+                  selectedAssignment.status ===
+                  STATUS.assignment.COMPLETED
                     ? "bg-emerald-100 text-emerald-700"
-                    : selectedAssignment.status === STATUS.assignment.ACTIVE
+                    : selectedAssignment.status ===
+                      STATUS.assignment.ACTIVE
                     ? "bg-blue-100 text-blue-700"
-                    : selectedAssignment.status === STATUS.assignment.TERMINATED
+                    : selectedAssignment.status ===
+                      STATUS.assignment.TERMINATED
                     ? "bg-red-100 text-red-700"
-                    : selectedAssignment.status === STATUS.assignment.SUSPENDED
+                    : selectedAssignment.status ===
+                      STATUS.assignment.SUSPENDED
                     ? "bg-amber-100 text-amber-700"
                     : "bg-slate-100 text-slate-700"
                 }`}
               >
-                {formatStatus(selectedAssignment.status)}
+                {formatStatus(
+                  selectedAssignment.status
+                )}
               </span>
             )}
           </div>
@@ -1462,17 +1864,22 @@ export default function ViewStatus() {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {/* COMPANY */}
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                 Company
               </p>
 
               <p className="font-bold text-sm mt-2">
-                {selectedCompany?.company_name || "Not assigned"}
+                {selectedCompany?.company_name ||
+                  "Not assigned"}
               </p>
 
               {selectedCompany?.industry && (
-                <p className={`text-xs mt-1 ${mutedClass}`}>
+                <p
+                  className={`text-xs mt-1 ${mutedClass}`}
+                >
                   {selectedCompany.industry}
                 </p>
               )}
@@ -1480,17 +1887,21 @@ export default function ViewStatus() {
 
             {/* POSITION */}
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                 Internship Position
               </p>
 
               <p className="font-bold text-sm mt-2">
-                {selectedOpportunity?.title || "Not specified"}
+                {selectedPosition}
               </p>
 
               {selectedOpportunity?.location && (
-                <p className={`text-xs mt-1 ${mutedClass}`}>
+                <p
+                  className={`text-xs mt-1 ${mutedClass}`}
+                >
                   📍 {selectedOpportunity.location}
                 </p>
               )}
@@ -1498,30 +1909,44 @@ export default function ViewStatus() {
 
             {/* PERIOD */}
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                 Internship Period
               </p>
 
               <p className="font-bold text-sm mt-2">
-                {formatPeriod(selectedAssignment, selectedOpportunity)}
+                {formatPeriod(
+                  selectedAssignment,
+                  selectedOpportunity
+                )}
               </p>
             </div>
 
             {/* APPLICATION */}
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                 Application
               </p>
 
               <p className="font-bold text-sm mt-2">
-                {formatStatus(selectedApplication?.status)}
+                {formatStatus(
+                  selectedApplication?.status
+                )}
               </p>
 
               {selectedApplication?.submitted_at && (
-                <p className={`text-xs mt-1 ${mutedClass}`}>
-                  Submitted {formatDate(selectedApplication.submitted_at)}
+                <p
+                  className={`text-xs mt-1 ${mutedClass}`}
+                >
+                  Submitted{" "}
+                  {formatDate(
+                    selectedApplication.submitted_at
+                  )}
                 </p>
               )}
             </div>
@@ -1529,174 +1954,221 @@ export default function ViewStatus() {
         </section>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           INTERNSHIP PROGRESS
-      =================================================== */}
+      ================================================= */}
 
-      <section className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}>
+      <section
+        className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}
+      >
         <div className="mb-6">
-          <h2 className="text-lg font-bold">Internship Progress</h2>
+          <h2 className="text-lg font-bold">
+            Internship Progress
+          </h2>
 
-          <p className={`text-xs mt-1 ${mutedClass}`}>
-            Follow each stage of the selected application or internship.
+          <p
+            className={`text-xs mt-1 ${mutedClass}`}
+          >
+            Follow each stage of the selected
+            application or internship.
           </p>
         </div>
 
         <div className="relative">
-          {progressSteps.map((step, index) => {
-            const previousStep = progressSteps[index - 1];
+          {progressSteps.map(
+            (step, index) => {
+              const previousStep =
+                progressSteps[index - 1];
 
-            const isCompleted = step.completed;
+              const isCompleted =
+                step.completed;
 
-            const isCurrent =
-              !isCompleted && (index === 0 || previousStep?.completed);
+              const isCurrent =
+                !isCompleted &&
+                (index === 0 ||
+                  previousStep?.completed);
 
-            return (
-              <div
-                key={step.key}
-                className="relative flex gap-4 pb-7 last:pb-0"
-              >
-                {index < progressSteps.length - 1 && (
-                  <div
-                    className={`absolute left-[15px] top-8 w-[2px] h-[calc(100%-8px)] ${
-                      isCompleted
-                        ? "bg-emerald-500"
-                        : darkMode
-                        ? "bg-slate-700"
-                        : "bg-slate-200"
-                    }`}
-                  />
-                )}
-
+              return (
                 <div
-                  className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${
-                    isCompleted
-                      ? "bg-emerald-500 text-white"
-                      : isCurrent
-                      ? "bg-blue-600 text-white"
-                      : darkMode
-                      ? "bg-slate-800 text-slate-500 border border-slate-700"
-                      : "bg-slate-100 text-slate-400 border border-slate-200"
-                  }`}
+                  key={step.key}
+                  className="relative flex gap-4 pb-7 last:pb-0"
                 >
-                  {isCompleted ? "✓" : step.icon}
-                </div>
-
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <h3
-                      className={`text-sm font-bold ${
+                  {index <
+                    progressSteps.length - 1 && (
+                    <div
+                      className={`absolute left-[15px] top-8 w-[2px] h-[calc(100%-8px)] ${
                         isCompleted
-                          ? darkMode
-                            ? "text-emerald-300"
-                            : "text-emerald-700"
-                          : isCurrent
-                          ? darkMode
-                            ? "text-blue-300"
-                            : "text-blue-700"
-                          : mutedClass
+                          ? "bg-emerald-500"
+                          : darkMode
+                          ? "bg-slate-700"
+                          : "bg-slate-200"
                       }`}
-                    >
-                      {step.label}
-                    </h3>
+                    />
+                  )}
 
-                    <span
-                      className={`text-[10px] font-bold ${
-                        isCompleted
-                          ? "text-emerald-600"
-                          : isCurrent
-                          ? "text-blue-600"
-                          : "text-slate-400"
-                      }`}
-                    >
-                      {isCompleted
-                        ? "Completed"
+                  <div
+                    className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${
+                      isCompleted
+                        ? "bg-emerald-500 text-white"
                         : isCurrent
-                        ? "Current"
-                        : "Pending"}
-                    </span>
+                        ? "bg-blue-600 text-white"
+                        : darkMode
+                        ? "bg-slate-800 text-slate-500 border border-slate-700"
+                        : "bg-slate-100 text-slate-400 border border-slate-200"
+                    }`}
+                  >
+                    {isCompleted
+                      ? "✓"
+                      : step.icon}
                   </div>
 
-                  <p className={`text-xs mt-1 ${mutedClass}`}>
-                    {step.description}
-                  </p>
-
-                  {step.key === "documents" && selectedAssignment && (
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span
-                          className={`text-[10px] font-semibold ${mutedClass}`}
-                        >
-                          {documentProgress.submitted} of{" "}
-                          {documentProgress.required} required documents
-                        </span>
-
-                        <span className="text-[10px] font-bold text-blue-600">
-                          {documentProgress.percentage}%
-                        </span>
-                      </div>
-
-                      <div
-                        className={`h-1.5 rounded-full overflow-hidden ${
-                          darkMode ? "bg-slate-800" : "bg-slate-100"
-                        }`}
-                      >
-                        <div
-                          className={`h-full rounded-full ${
-                            documentProgress.status === "approved"
-                              ? "bg-emerald-500"
-                              : documentProgress.status === "needs_revision"
-                              ? "bg-amber-500"
-                              : "bg-blue-500"
-                          }`}
-                          style={{
-                            width: `${documentProgress.percentage}%`,
-                          }}
-                        />
-                      </div>
-
-                      <p
-                        className={`text-[10px] mt-2 ${
-                          documentProgress.status === "approved"
-                            ? "text-emerald-600"
-                            : documentProgress.status === "needs_revision"
-                            ? "text-amber-600"
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                      <h3
+                        className={`text-sm font-bold ${
+                          isCompleted
+                            ? darkMode
+                              ? "text-emerald-300"
+                              : "text-emerald-700"
+                            : isCurrent
+                            ? darkMode
+                              ? "text-blue-300"
+                              : "text-blue-700"
                             : mutedClass
                         }`}
                       >
-                        {documentProgress.label}
-                      </p>
+                        {step.label}
+                      </h3>
+
+                      <span
+                        className={`text-[10px] font-bold ${
+                          isCompleted
+                            ? "text-emerald-600"
+                            : isCurrent
+                            ? "text-blue-600"
+                            : "text-slate-400"
+                        }`}
+                      >
+                        {isCompleted
+                          ? "Completed"
+                          : isCurrent
+                          ? "Current"
+                          : "Pending"}
+                      </span>
                     </div>
-                  )}
+
+                    <p
+                      className={`text-xs mt-1 ${mutedClass}`}
+                    >
+                      {step.description}
+                    </p>
+
+                    {step.key ===
+                      "documents" &&
+                      selectedAssignment && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span
+                              className={`text-[10px] font-semibold ${mutedClass}`}
+                            >
+                              {
+                                documentProgress.submitted
+                              }{" "}
+                              of{" "}
+                              {
+                                documentProgress.required
+                              }{" "}
+                              required documents
+                            </span>
+
+                            <span className="text-[10px] font-bold text-blue-600">
+                              {
+                                documentProgress.percentage
+                              }
+                              %
+                            </span>
+                          </div>
+
+                          <div
+                            className={`h-1.5 rounded-full overflow-hidden ${
+                              darkMode
+                                ? "bg-slate-800"
+                                : "bg-slate-100"
+                            }`}
+                          >
+                            <div
+                              className={`h-full rounded-full ${
+                                documentProgress.status ===
+                                "approved"
+                                  ? "bg-emerald-500"
+                                  : documentProgress.status ===
+                                    "needs_revision"
+                                  ? "bg-amber-500"
+                                  : "bg-blue-500"
+                              }`}
+                              style={{
+                                width: `${documentProgress.percentage}%`,
+                              }}
+                            />
+                          </div>
+
+                          <p
+                            className={`text-[10px] mt-2 ${
+                              documentProgress.status ===
+                              "approved"
+                                ? "text-emerald-600"
+                                : documentProgress.status ===
+                                  "needs_revision"
+                                ? "text-amber-600"
+                                : mutedClass
+                            }`}
+                          >
+                            {
+                              documentProgress.label
+                            }
+                          </p>
+                        </div>
+                      )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            }
+          )}
         </div>
       </section>
 
-      {/* ===================================================
+      {/* =================================================
           DOCUMENT SUBMISSION
-      =================================================== */}
+      ================================================= */}
 
       {selectedAssignment && (
-        <section className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}>
+        <section
+          className={`border rounded-2xl p-5 md:p-6 mb-6 ${cardClass}`}
+        >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
             <div>
-              <h2 className="text-lg font-bold">Document Submission</h2>
+              <h2 className="text-lg font-bold">
+                Document Submission
+              </h2>
 
-              <p className={`text-xs mt-1 ${mutedClass}`}>
-                Document status for the selected internship.
+              <p
+                className={`text-xs mt-1 ${mutedClass}`}
+              >
+                Document status for the selected
+                internship.
               </p>
             </div>
 
             <span
               className={`px-3 py-1.5 rounded-full text-[10px] font-bold w-fit ${
-                documentProgress.status === "approved"
+                documentProgress.status ===
+                "approved"
                   ? "bg-emerald-100 text-emerald-700"
-                  : documentProgress.status === "needs_revision"
+                  : documentProgress.status ===
+                    "needs_revision"
                   ? "bg-amber-100 text-amber-700"
-                  : documentProgress.status === "pending_review"
+                  : documentProgress.status ===
+                    "pending_review"
                   ? "bg-blue-100 text-blue-700"
                   : "bg-slate-100 text-slate-600"
               }`}
@@ -1706,17 +2178,23 @@ export default function ViewStatus() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase font-bold text-slate-400">
                 Submitted
               </p>
 
               <p className="text-2xl font-black mt-1">
-                {documentProgress.submitted}
+                {
+                  documentProgress.submitted
+                }
               </p>
             </div>
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase font-bold text-slate-400">
                 Required
               </p>
@@ -1726,24 +2204,31 @@ export default function ViewStatus() {
               </p>
             </div>
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase font-bold text-slate-400">
                 Completion
               </p>
 
               <p className="text-2xl font-black mt-1">
-                {documentProgress.percentage}%
+                {
+                  documentProgress.percentage
+                }
+                %
               </p>
             </div>
           </div>
 
           <div
             className={`mt-4 rounded-xl border p-4 ${
-              documentProgress.status === "approved"
+              documentProgress.status ===
+              "approved"
                 ? darkMode
                   ? "border-emerald-800 bg-emerald-950/20"
                   : "border-emerald-200 bg-emerald-50"
-                : documentProgress.status === "needs_revision"
+                : documentProgress.status ===
+                  "needs_revision"
                 ? darkMode
                   ? "border-amber-800 bg-amber-950/20"
                   : "border-amber-200 bg-amber-50"
@@ -1754,18 +2239,26 @@ export default function ViewStatus() {
           >
             <div className="flex items-start gap-3">
               <span className="text-lg">
-                {documentProgress.status === "approved"
+                {documentProgress.status ===
+                "approved"
                   ? "✅"
-                  : documentProgress.status === "needs_revision"
+                  : documentProgress.status ===
+                    "needs_revision"
                   ? "⚠️"
                   : "📄"}
               </span>
 
               <div>
-                <p className="text-xs font-bold">{documentProgress.label}</p>
+                <p className="text-xs font-bold">
+                  {documentProgress.label}
+                </p>
 
-                <p className={`text-xs mt-1 ${mutedClass}`}>
-                  {documentProgress.description}
+                <p
+                  className={`text-xs mt-1 ${mutedClass}`}
+                >
+                  {
+                    documentProgress.description
+                  }
                 </p>
               </div>
             </div>
@@ -1773,11 +2266,12 @@ export default function ViewStatus() {
         </section>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           COMPLETED INTERNSHIP
-      =================================================== */}
+      ================================================= */}
 
-      {selectedAssignment?.status === STATUS.assignment.COMPLETED && (
+      {selectedAssignment?.status ===
+        STATUS.assignment.COMPLETED && (
         <section
           className={`border rounded-2xl p-5 md:p-6 mb-6 ${
             darkMode
@@ -1797,29 +2291,34 @@ export default function ViewStatus() {
 
               <h2
                 className={`text-xl font-black mt-1 ${
-                  darkMode ? "text-emerald-300" : "text-emerald-800"
+                  darkMode
+                    ? "text-emerald-300"
+                    : "text-emerald-800"
                 }`}
               >
-                Congratulations on completing your internship!
+                Congratulations on completing
+                your internship!
               </h2>
 
               <p
                 className={`text-sm mt-1 ${
-                  darkMode ? "text-emerald-200" : "text-emerald-700"
+                  darkMode
+                    ? "text-emerald-200"
+                    : "text-emerald-700"
                 }`}
               >
-                You successfully completed your internship at{" "}
+                You successfully completed your
+                internship at{" "}
                 <strong>
-                  {selectedCompany?.company_name || "your assigned company"}
+                  {selectedCompany?.company_name ||
+                    "your assigned company"}
                 </strong>
                 .
               </p>
             </div>
           </div>
 
-          {/* =================================================
-              CERTIFICATE
-          ================================================== */}
+          {/* CERTIFICATE */}
 
           <div
             className={`mt-5 rounded-xl border p-5 ${
@@ -1831,19 +2330,17 @@ export default function ViewStatus() {
             {selectedCertificate ? (
               <div>
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
-                  {/* ICON */}
-
                   <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl flex-shrink-0">
                     📜
                   </div>
-
-                  {/* INFO */}
 
                   <div className="flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <p
                         className={`text-base font-black ${
-                          darkMode ? "text-slate-100" : "text-slate-900"
+                          darkMode
+                            ? "text-slate-100"
+                            : "text-slate-900"
                         }`}
                       >
                         Certificate of Completion
@@ -1854,44 +2351,53 @@ export default function ViewStatus() {
                       </span>
                     </div>
 
-                    <p className={`text-xs mt-1 ${mutedClass}`}>
-                      Your internship completion certificate has been officially
+                    <p
+                      className={`text-xs mt-1 ${mutedClass}`}
+                    >
+                      Your internship completion
+                      certificate has been officially
                       issued.
                     </p>
                   </div>
                 </div>
 
-                {/* CERTIFICATE DETAILS */}
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-                  <div className={`rounded-xl border p-4 ${borderClass}`}>
+                  <div
+                    className={`rounded-xl border p-4 ${borderClass}`}
+                  >
                     <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                       Certificate Number
                     </p>
 
                     <p className="font-mono font-bold text-sm mt-1">
-                      {selectedCertificate.certificate_number}
+                      {
+                        selectedCertificate.certificate_number
+                      }
                     </p>
                   </div>
 
-                  <div className={`rounded-xl border p-4 ${borderClass}`}>
+                  <div
+                    className={`rounded-xl border p-4 ${borderClass}`}
+                  >
                     <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
                       Date Issued
                     </p>
 
                     <p className="font-bold text-sm mt-1">
-                      {formatDate(selectedCertificate.issued_at)}
+                      {formatDate(
+                        selectedCertificate.issued_at
+                      )}
                     </p>
                   </div>
                 </div>
-
-                {/* BUTTON */}
 
                 <div className="mt-5">
                   <button
                     type="button"
                     onClick={() => {
-                      if (!selectedCertificate?.id) {
+                      if (
+                        !selectedCertificate?.id
+                      ) {
                         alert(
                           "Certificate ID is missing. Please refresh the page and try again."
                         );
@@ -1909,34 +2415,42 @@ export default function ViewStatus() {
                 </div>
               </div>
             ) : (
-              /* ------------------------------------------------
-                 CERTIFICATE NOT YET FOUND
-              ------------------------------------------------- */
-
               <div className="flex items-start gap-3">
-                <div className="text-xl">📜</div>
+                <div className="text-xl">
+                  📜
+                </div>
 
                 <div className="flex-1">
                   <p
                     className={`text-sm font-bold ${
-                      darkMode ? "text-slate-100" : "text-slate-900"
+                      darkMode
+                        ? "text-slate-100"
+                        : "text-slate-900"
                     }`}
                   >
                     Certificate Processing
                   </p>
 
-                  <p className={`text-xs mt-1 ${mutedClass}`}>
-                    Your internship is completed. The certificate record is
-                    being prepared. Please refresh the page shortly.
+                  <p
+                    className={`text-xs mt-1 ${mutedClass}`}
+                  >
+                    Your internship is completed. The
+                    certificate record is being
+                    prepared. Please refresh the page
+                    shortly.
                   </p>
 
                   <button
                     type="button"
-                    onClick={() => loadData(true)}
+                    onClick={() =>
+                      loadData(true)
+                    }
                     disabled={refreshing}
                     className="mt-3 px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition disabled:opacity-50"
                   >
-                    {refreshing ? "Refreshing..." : "↻ Check Certificate"}
+                    {refreshing
+                      ? "Refreshing..."
+                      : "↻ Check Certificate"}
                   </button>
                 </div>
               </div>
@@ -1945,70 +2459,97 @@ export default function ViewStatus() {
         </section>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           APPLICATION INFORMATION
-      =================================================== */}
+      ================================================= */}
 
       {selectedApplication && (
-        <section className={`border rounded-2xl p-5 md:p-6 ${cardClass}`}>
+        <section
+          className={`border rounded-2xl p-5 md:p-6 ${cardClass}`}
+        >
           <div className="mb-5">
-            <h2 className="text-lg font-bold">Application Information</h2>
+            <h2 className="text-lg font-bold">
+              Application Information
+            </h2>
 
-            <p className={`text-xs mt-1 ${mutedClass}`}>
-              Details about the selected internship application.
+            <p
+              className={`text-xs mt-1 ${mutedClass}`}
+            >
+              Details about the selected internship
+              application.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase font-bold text-slate-400">
                 Application Status
               </p>
 
               <p className="text-sm font-bold mt-2">
-                {formatStatus(selectedApplication.status)}
+                {formatStatus(
+                  selectedApplication.status
+                )}
               </p>
             </div>
 
-            <div className={`rounded-xl border p-4 ${borderClass}`}>
+            <div
+              className={`rounded-xl border p-4 ${borderClass}`}
+            >
               <p className="text-[10px] uppercase font-bold text-slate-400">
                 Application Date
               </p>
 
               <p className="text-sm font-bold mt-2">
-                {formatDate(selectedApplication.created_at)}
+                {formatDate(
+                  selectedApplication.created_at
+                )}
               </p>
             </div>
 
             {selectedApplication.submitted_at && (
-              <div className={`rounded-xl border p-4 ${borderClass}`}>
+              <div
+                className={`rounded-xl border p-4 ${borderClass}`}
+              >
                 <p className="text-[10px] uppercase font-bold text-slate-400">
                   Submitted Date
                 </p>
 
                 <p className="text-sm font-bold mt-2">
-                  {formatDate(selectedApplication.submitted_at)}
+                  {formatDate(
+                    selectedApplication.submitted_at
+                  )}
                 </p>
               </div>
             )}
 
             {selectedAssignment?.deployed_at && (
-              <div className={`rounded-xl border p-4 ${borderClass}`}>
+              <div
+                className={`rounded-xl border p-4 ${borderClass}`}
+              >
                 <p className="text-[10px] uppercase font-bold text-slate-400">
                   Deployment Date
                 </p>
 
                 <p className="text-sm font-bold mt-2">
-                  {formatDate(selectedAssignment.deployed_at)}
+                  {formatDate(
+                    selectedAssignment.deployed_at
+                  )}
                 </p>
               </div>
             )}
           </div>
 
           {selectedApplication.notes &&
-            (selectedApplication.status === STATUS.application.REJECTED ? (
+            (selectedApplication.status ===
+            STATUS.application.REJECTED ? (
               (() => {
-                const rejectionInfo = getRejectionInfo(selectedApplication);
+                const rejectionInfo =
+                  getRejectionInfo(
+                    selectedApplication
+                  );
 
                 return (
                   <div
@@ -2024,15 +2565,20 @@ export default function ViewStatus() {
 
                     <p
                       className={`text-xs font-bold mt-2 ${
-                        darkMode ? "text-red-300" : "text-red-700"
+                        darkMode
+                          ? "text-red-300"
+                          : "text-red-700"
                       }`}
                     >
-                      Rejected by {rejectionInfo.source}
+                      Rejected by{" "}
+                      {rejectionInfo.source}
                     </p>
 
                     <p
                       className={`text-sm mt-2 whitespace-pre-line ${
-                        darkMode ? "text-red-200" : "text-red-800"
+                        darkMode
+                          ? "text-red-200"
+                          : "text-red-800"
                       }`}
                     >
                       {rejectionInfo.reason}
@@ -2041,12 +2587,16 @@ export default function ViewStatus() {
                 );
               })()
             ) : (
-              <div className={`mt-5 rounded-xl border p-4 ${borderClass}`}>
+              <div
+                className={`mt-5 rounded-xl border p-4 ${borderClass}`}
+              >
                 <p className="text-[10px] uppercase font-bold text-slate-400">
                   Notes
                 </p>
 
-                <p className={`text-sm mt-2 whitespace-pre-line ${mutedClass}`}>
+                <p
+                  className={`text-sm mt-2 whitespace-pre-line ${mutedClass}`}
+                >
                   {selectedApplication.notes}
                 </p>
               </div>
@@ -2054,22 +2604,33 @@ export default function ViewStatus() {
         </section>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           EMPTY STATE
-      =================================================== */}
+      ================================================= */}
 
-      {!selectedApplication && !selectedAssignment && (
-        <section className={`border rounded-2xl p-10 text-center ${cardClass}`}>
-          <div className="text-4xl mb-4">📋</div>
+      {!selectedApplication &&
+        !selectedAssignment && (
+          <section
+            className={`border rounded-2xl p-10 text-center ${cardClass}`}
+          >
+            <div className="text-4xl mb-4">
+              📋
+            </div>
 
-          <h2 className="text-lg font-bold">No Internship Status Yet</h2>
+            <h2 className="text-lg font-bold">
+              No Internship Status Yet
+            </h2>
 
-          <p className={`text-sm mt-2 max-w-lg mx-auto ${mutedClass}`}>
-            Once you submit an internship application, you will be able to track
-            its progress here.
-          </p>
-        </section>
-      )}
+            <p
+              className={`text-sm mt-2 max-w-lg mx-auto ${mutedClass}`}
+            >
+              Once you submit an internship
+              application, you will be able to track
+              its progress here.
+            </p>
+          </section>
+        )}
     </div>
   );
 }
+

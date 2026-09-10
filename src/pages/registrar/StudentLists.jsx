@@ -153,10 +153,11 @@ const StudentLists = () => {
       // 3. LOAD ALL STUDENTS IN THIS REGISTRAR'S CAMPUS
       // =======================================================
 
-      const { data: studentData, error: studentError } = await supabaseRegistrar
-        .from("students")
-        .select(
-          `
+      const { data: studentData, error: studentError } =
+        await supabaseRegistrar
+          .from("students")
+          .select(
+            `
             id,
             student_id,
             program,
@@ -176,9 +177,9 @@ const StudentLists = () => {
               last_name
             )
           `
-        )
-        .eq("school_id", schoolId)
-        .order("created_at", { ascending: false });
+          )
+          .eq("school_id", schoolId)
+          .order("created_at", { ascending: false });
 
       if (studentError) {
         throw studentError;
@@ -309,7 +310,14 @@ const StudentLists = () => {
 
         let status = "Not Started";
 
-        if (assignmentStatus === "active" || assignmentStatus === "suspended") {
+        // =====================================================
+        // ASSIGNMENT STATUS HAS PRIORITY
+        // =====================================================
+
+        if (
+          assignmentStatus === "active" ||
+          assignmentStatus === "suspended"
+        ) {
           status = "Active";
         } else if (assignmentStatus === "completed") {
           status = "Completed";
@@ -317,25 +325,52 @@ const StudentLists = () => {
           status = "Terminated";
         } else if (assignmentStatus === "pending") {
           status = "Pending";
+        }
+
+        // =====================================================
+        // APPLICATION STATUS
+        // Only applies when there is NO ASSIGNMENT.
+        // =====================================================
+
+        else if (applicationStatus === "rejected") {
+          status = "Rejected";
         } else if (
           applicationStatus === "submitted" ||
+          applicationStatus === "under_review" ||
           applicationStatus === "info_requested" ||
           applicationStatus === "approved"
         ) {
           status = "Pending";
         }
 
+        // =====================================================
+        // PROGRESS
+        // =====================================================
+
         const progress = getProgress(assignment);
 
+        // =====================================================
+        // COMPANY
+        //
+        // IMPORTANT:
+        // Only an actual assignment establishes an
+        // assigned company.
+        //
+        // Do NOT use the application opportunity company here.
+        // =====================================================
+
         const company =
-          assignment?.companies?.company_name ||
-          application?.opportunities?.companies?.company_name ||
-          "Not assigned";
+          assignment?.companies?.company_name || "Not assigned";
+
+        // =====================================================
+        // POSITION
+        //
+        // Only show an internship position when there is
+        // an actual assignment.
+        // =====================================================
 
         const position =
-          assignment?.opportunities?.title ||
-          application?.opportunities?.title ||
-          "No internship opportunity";
+          assignment?.opportunities?.title || "No internship opportunity";
 
         const startDate = assignment?.start_date || null;
 
@@ -358,7 +393,8 @@ const StudentLists = () => {
             : "Not set",
           phone: student.phone || "Not provided",
           address: student.address || "Not provided",
-          emergencyContact: student.emergency_contact || "Not provided",
+          emergencyContact:
+            student.emergency_contact || "Not provided",
           gwa:
             student.gwa !== null && student.gwa !== undefined
               ? String(student.gwa)
@@ -372,7 +408,10 @@ const StudentLists = () => {
 
       setStudents(formattedStudents);
 
-      console.log("👥 Campus-scoped students loaded:", formattedStudents);
+      console.log(
+        "👥 Campus-scoped students loaded:",
+        formattedStudents
+      );
     } catch (error) {
       console.error("❌ Load student list error:", error);
       setStudents([]);
@@ -426,6 +465,14 @@ const StudentLists = () => {
         return "bg-blue-900/40 text-blue-300 border-blue-800";
       }
 
+      if (status === "Rejected") {
+        return "bg-red-900/40 text-red-300 border-red-800";
+      }
+
+      if (status === "Terminated") {
+        return "bg-red-900/40 text-red-300 border-red-800";
+      }
+
       return "bg-slate-800 text-slate-400 border-slate-700";
     }
 
@@ -439,6 +486,14 @@ const StudentLists = () => {
 
     if (status === "Completed") {
       return "bg-blue-50 text-blue-700 border-blue-200";
+    }
+
+    if (status === "Rejected") {
+      return "bg-red-50 text-red-700 border-red-200";
+    }
+
+    if (status === "Terminated") {
+      return "bg-red-50 text-red-700 border-red-200";
     }
 
     return "bg-slate-100 text-slate-500 border-slate-200";
@@ -526,7 +581,11 @@ const StudentLists = () => {
 
     const csvContent = [headers, ...rows]
       .map((row) =>
-        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
+        row
+          .map((value) =>
+            `"${String(value).replace(/"/g, '""')}"`
+          )
+          .join(",")
       )
       .join("\n");
 
@@ -558,9 +617,11 @@ const StudentLists = () => {
           className={`max-w-[1400px] mx-auto border rounded-xl p-10 text-center ${mainContainerClass}`}
         >
           <div className="text-2xl mb-3">⏳</div>
+
           <h2 className={`text-sm font-bold ${headingClass}`}>
             Loading Student List...
           </h2>
+
           <p className={`text-xs mt-1 ${mutedClass}`}>
             Loading students from your assigned campus.
           </p>
@@ -572,6 +633,7 @@ const StudentLists = () => {
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
       <div className="max-w-[1400px] mx-auto">
+
         {/* =====================================================
             PAGE HEADER
         ===================================================== */}
@@ -585,7 +647,9 @@ const StudentLists = () => {
             Registrar Portal
           </p>
 
-          <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
+          <h1
+            className={`text-xl sm:text-2xl font-black ${headingClass}`}
+          >
             Student List
           </h1>
 
@@ -605,8 +669,11 @@ const StudentLists = () => {
               SEARCH / FILTER / EXPORT
           =================================================== */}
 
-          <div className={`p-4 sm:p-5 border-b ${filterContainerClass}`}>
+          <div
+            className={`p-4 sm:p-5 border-b ${filterContainerClass}`}
+          >
             <div className="flex flex-col lg:flex-row gap-3">
+
               {/* SEARCH */}
 
               <div className="relative flex-1">
@@ -700,6 +767,17 @@ const StudentLists = () => {
                 >
                   Completed
                 </option>
+
+                <option
+                  value="Rejected"
+                  className={
+                    darkMode
+                      ? "bg-slate-900 text-slate-100"
+                      : "bg-white text-slate-900"
+                  }
+                >
+                  Rejected
+                </option>
               </select>
 
               {/* CLEAR FILTER */}
@@ -757,7 +835,9 @@ const StudentLists = () => {
           <div className="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className={`text-xs font-semibold ${mutedClass}`}>
               Showing {filteredStudents.length}{" "}
-              {filteredStudents.length === 1 ? "student" : "students"}
+              {filteredStudents.length === 1
+                ? "student"
+                : "students"}
             </p>
 
             {statusFilter !== "All" && (
@@ -774,6 +854,7 @@ const StudentLists = () => {
           {filteredStudents.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1050px] border-collapse">
+
                 {/* TABLE HEADER */}
 
                 <thead>
@@ -812,6 +893,7 @@ const StudentLists = () => {
                       key={student.id}
                       className={`transition ${tableRowClass}`}
                     >
+
                       {/* ID */}
 
                       <td
@@ -824,7 +906,9 @@ const StudentLists = () => {
 
                       <td className="px-4 py-5 border-b">
                         <div>
-                          <p className={`text-xs font-bold ${tableTextClass}`}>
+                          <p
+                            className={`text-xs font-bold ${tableTextClass}`}
+                          >
                             {student.name}
                           </p>
 
@@ -987,13 +1071,17 @@ const StudentLists = () => {
             >
               <div
                 className={`text-3xl mb-3 ${
-                  darkMode ? "text-slate-600" : "text-slate-300"
+                  darkMode
+                    ? "text-slate-600"
+                    : "text-slate-300"
                 }`}
               >
                 🔍
               </div>
 
-              <h2 className={`text-sm font-bold ${headingClass}`}>
+              <h2
+                className={`text-sm font-bold ${headingClass}`}
+              >
                 No students found
               </h2>
 
@@ -1061,6 +1149,7 @@ const StudentLists = () => {
             `}
             onClick={(e) => e.stopPropagation()}
           >
+
             {/* MODAL HEADER */}
 
             <div
@@ -1090,7 +1179,9 @@ const StudentLists = () => {
                   Student Details
                 </p>
 
-                <h2 className={`text-lg sm:text-xl font-black ${headingClass}`}>
+                <h2
+                  className={`text-lg sm:text-xl font-black ${headingClass}`}
+                >
                   {selectedStudent.name}
                 </h2>
 
@@ -1127,9 +1218,11 @@ const StudentLists = () => {
             {/* MODAL BODY */}
 
             <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(90vh-145px)]">
+
               {/* STATUS + PROGRESS */}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+
                 {/* STATUS */}
 
                 <div
@@ -1200,7 +1293,9 @@ const StudentLists = () => {
                       Internship Progress
                     </p>
 
-                    <span className={`text-xs font-bold ${headingClass}`}>
+                    <span
+                      className={`text-xs font-bold ${headingClass}`}
+                    >
                       {selectedStudent.progress}%
                     </span>
                   </div>
@@ -1275,7 +1370,9 @@ const StudentLists = () => {
                   </div>
 
                   <div className="min-w-0">
-                    <p className={`text-sm font-bold ${headingClass}`}>
+                    <p
+                      className={`text-sm font-bold ${headingClass}`}
+                    >
                       {selectedStudent.company}
                     </p>
 
@@ -1289,6 +1386,7 @@ const StudentLists = () => {
               {/* DETAILS GRID */}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+
                 {/* EMAIL */}
 
                 <div>
@@ -1305,7 +1403,9 @@ const StudentLists = () => {
                     Email
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.email}
                   </p>
                 </div>
@@ -1326,7 +1426,9 @@ const StudentLists = () => {
                     Program
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.program}
                   </p>
                 </div>
@@ -1347,7 +1449,9 @@ const StudentLists = () => {
                     Assigned Company
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.company}
                   </p>
                 </div>
@@ -1368,7 +1472,9 @@ const StudentLists = () => {
                     Internship Position
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.position}
                   </p>
                 </div>
@@ -1389,7 +1495,9 @@ const StudentLists = () => {
                     Internship Start
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.startDate}
                   </p>
                 </div>
@@ -1410,7 +1518,9 @@ const StudentLists = () => {
                     Student ID
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.id}
                   </p>
                 </div>
@@ -1431,7 +1541,9 @@ const StudentLists = () => {
                     Year Level
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.yearLevel}
                   </p>
                 </div>
@@ -1452,7 +1564,9 @@ const StudentLists = () => {
                     Department
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.department}
                   </p>
                 </div>
@@ -1473,7 +1587,9 @@ const StudentLists = () => {
                     GWA
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.gwa}
                   </p>
                 </div>
@@ -1494,7 +1610,9 @@ const StudentLists = () => {
                     Phone
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.phone}
                   </p>
                 </div>
@@ -1515,7 +1633,9 @@ const StudentLists = () => {
                     Address
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.address}
                   </p>
                 </div>
@@ -1536,7 +1656,9 @@ const StudentLists = () => {
                     Emergency Contact
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.emergencyContact}
                   </p>
                 </div>
@@ -1557,7 +1679,9 @@ const StudentLists = () => {
                     Internship End
                   </p>
 
-                  <p className={`text-sm font-semibold ${headingClass}`}>
+                  <p
+                    className={`text-sm font-semibold ${headingClass}`}
+                  >
                     {selectedStudent.endDate}
                   </p>
                 </div>
@@ -1606,3 +1730,4 @@ const StudentLists = () => {
 };
 
 export default StudentLists;
+

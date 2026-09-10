@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabaseCompany } from "../../supabaseClient";
 
@@ -7,6 +7,7 @@ const STATUS = {
     DRAFT: "draft",
     ACTIVE: "active",
     CLOSED: "closed",
+    ARCHIVED: "archived",
   },
 };
 
@@ -22,6 +23,8 @@ export default function ManageJobs() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [showTrash, setShowTrash] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
@@ -47,10 +50,6 @@ export default function ManageJobs() {
     setLoading(true);
 
     try {
-      // -------------------------------------------------------
-      // GET CURRENT AUTHENTICATED USER
-      // -------------------------------------------------------
-
       const {
         data: { user },
         error: authError,
@@ -65,7 +64,7 @@ export default function ManageJobs() {
       }
 
       // -------------------------------------------------------
-      // FIND COMPANY BELONGING TO CURRENT USER
+      // FIND COMPANY
       // -------------------------------------------------------
 
       const { data: companyData, error: companyError } = await supabaseCompany
@@ -85,7 +84,8 @@ export default function ManageJobs() {
       setCompany(companyData);
 
       // -------------------------------------------------------
-      // LOAD COMPANY OPPORTUNITIES
+      // LOAD ALL OPPORTUNITIES
+      // Includes archived because Trash Bin needs them.
       // -------------------------------------------------------
 
       const { data: opportunityData, error: opportunityError } =
@@ -102,7 +102,7 @@ export default function ManageJobs() {
       }
 
       // -------------------------------------------------------
-      // LOAD CAPACITY FOR EACH OPPORTUNITY
+      // LOAD CAPACITY
       // -------------------------------------------------------
 
       const opportunitiesWithCapacity = await Promise.all(
@@ -118,21 +118,20 @@ export default function ManageJobs() {
               capacityError
             );
 
-            // Fallback so the opportunity still displays
             return {
               ...opportunity,
               capacity: {
-                total_openings: opportunity.openings || 0,
+                total_openings: Number(opportunity.openings || 0),
                 occupied_slots: 0,
-                available_slots: opportunity.openings || 0,
+                available_slots: Number(opportunity.openings || 0),
               },
             };
           }
 
           const capacity = capacityData?.[0] || {
-            total_openings: opportunity.openings || 0,
+            total_openings: Number(opportunity.openings || 0),
             occupied_slots: 0,
-            available_slots: opportunity.openings || 0,
+            available_slots: Number(opportunity.openings || 0),
           };
 
           return {
@@ -151,6 +150,26 @@ export default function ManageJobs() {
       setLoading(false);
     }
   };
+
+  // =========================================================
+  // FILTERED OPPORTUNITIES
+  // =========================================================
+
+  const visibleOpportunities = useMemo(() => {
+    if (showTrash) {
+      return opportunities.filter(
+        (opportunity) => opportunity.status === STATUS.opportunity.ARCHIVED
+      );
+    }
+
+    return opportunities.filter(
+      (opportunity) => opportunity.status !== STATUS.opportunity.ARCHIVED
+    );
+  }, [opportunities, showTrash]);
+
+  const archivedCount = opportunities.filter(
+    (opportunity) => opportunity.status === STATUS.opportunity.ARCHIVED
+  ).length;
 
   // =========================================================
   // DATE HELPERS
@@ -233,9 +252,22 @@ export default function ManageJobs() {
         : "bg-slate-100 text-slate-600 border-slate-200";
     }
 
+    if (status === STATUS.opportunity.ARCHIVED) {
+      return darkMode
+        ? "bg-red-950 text-red-400 border-red-800"
+        : "bg-red-50 text-red-700 border-red-200";
+    }
+
     return darkMode
       ? "bg-amber-950 text-amber-400 border-amber-800"
       : "bg-amber-50 text-amber-700 border-amber-200";
+  };
+
+  const getStatusLabel = (status) => {
+    if (status === STATUS.opportunity.ACTIVE) return "Active";
+    if (status === STATUS.opportunity.CLOSED) return "Closed";
+    if (status === STATUS.opportunity.ARCHIVED) return "Archived";
+    return "Draft";
   };
 
   // =========================================================
@@ -339,6 +371,10 @@ export default function ManageJobs() {
   // =========================================================
 
   const startEdit = (opportunity) => {
+    if (opportunity.status === STATUS.opportunity.ARCHIVED) {
+      return;
+    }
+
     setEditingId(opportunity.id);
 
     setEditForm({
@@ -411,10 +447,6 @@ export default function ManageJobs() {
         throw error;
       }
 
-      // -------------------------------------------------------
-      // REFRESH CAPACITY AFTER OPENINGS CHANGE
-      // -------------------------------------------------------
-
       const { data: capacityData, error: capacityError } =
         await supabaseCompany.rpc("get_opportunity_capacity", {
           p_opportunity_id: id,
@@ -469,7 +501,7 @@ export default function ManageJobs() {
       };
 
       // -------------------------------------------------------
-      // MANUAL CLOSE
+      // CLOSE
       // -------------------------------------------------------
 
       if (status === STATUS.opportunity.CLOSED) {
@@ -477,7 +509,7 @@ export default function ManageJobs() {
       }
 
       // -------------------------------------------------------
-      // MANUAL REOPEN
+      // REOPEN
       // -------------------------------------------------------
 
       if (status === STATUS.opportunity.ACTIVE) {
@@ -495,10 +527,6 @@ export default function ManageJobs() {
       if (error) {
         throw error;
       }
-
-      // -------------------------------------------------------
-      // REFRESH CAPACITY
-      // -------------------------------------------------------
 
       const { data: capacityData, error: capacityError } =
         await supabaseCompany.rpc("get_opportunity_capacity", {
@@ -535,12 +563,15 @@ export default function ManageJobs() {
   };
 
   // =========================================================
-  // DELETE
+  // ARCHIVE
   // =========================================================
 
-  const handleDelete = async (opportunity) => {
+  const handleArchive = async (opportunity) => {
     const confirmed = window.confirm(
-      `Delete "${opportunity.title}"?\n\nThis action cannot be undone.`
+      `Archive "${opportunity.title}"?\n\n` +
+        `This opportunity will be removed from your active list, ` +
+        `but it will remain available in the Trash Bin.\n\n` +
+        `Existing internship records will not be deleted.`
     );
 
     if (!confirmed) return;
@@ -548,28 +579,94 @@ export default function ManageJobs() {
     setSubmitting(true);
 
     try {
-      const { error } = await supabaseCompany
+      const { data, error } = await supabaseCompany
         .from("opportunities")
-        .delete()
+        .update({
+          status: STATUS.opportunity.ARCHIVED,
+        })
         .eq("id", opportunity.id)
-        .eq("company_id", company.id);
+        .eq("company_id", company.id)
+        .select()
+        .single();
 
       if (error) {
         throw error;
       }
 
       setOpportunities((previous) =>
-        previous.filter((item) => item.id !== opportunity.id)
+        previous.map((item) =>
+          item.id === opportunity.id
+            ? {
+                ...item,
+                ...data,
+              }
+            : item
+        )
       );
 
       if (editingId === opportunity.id) {
         setEditingId(null);
         setEditForm({});
       }
-    } catch (error) {
-      console.error("Delete opportunity error:", error);
 
-      alert(error.message || "Unable to delete the opportunity.");
+      alert(
+        "Opportunity archived successfully. You can restore it from the Trash Bin."
+      );
+    } catch (error) {
+      console.error("Archive opportunity error:", error);
+
+      alert(error.message || "Unable to archive the opportunity.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // =========================================================
+  // RESTORE
+  // =========================================================
+
+  const handleRestore = async (opportunity) => {
+    const confirmed = window.confirm(
+      `Restore "${opportunity.title}"?\n\n` +
+        `The opportunity will be restored as a draft.`
+    );
+
+    if (!confirmed) return;
+
+    setSubmitting(true);
+
+    try {
+      const { data, error } = await supabaseCompany
+        .from("opportunities")
+        .update({
+          status: STATUS.opportunity.DRAFT,
+          closure_reason: null,
+        })
+        .eq("id", opportunity.id)
+        .eq("company_id", company.id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setOpportunities((previous) =>
+        previous.map((item) =>
+          item.id === opportunity.id
+            ? {
+                ...item,
+                ...data,
+              }
+            : item
+        )
+      );
+
+      alert("Opportunity restored as a draft. Publish it when you're ready.");
+    } catch (error) {
+      console.error("Restore opportunity error:", error);
+
+      alert(error.message || "Unable to restore the opportunity.");
     } finally {
       setSubmitting(false);
     }
@@ -734,7 +831,7 @@ export default function ManageJobs() {
               </p>
             </div>
 
-            {/* INTERNSHIP START */}
+            {/* START */}
 
             <div>
               <label className="block text-sm font-semibold mb-2">
@@ -754,7 +851,7 @@ export default function ManageJobs() {
               />
             </div>
 
-            {/* INTERNSHIP END */}
+            {/* END */}
 
             <div>
               <label className="block text-sm font-semibold mb-2">
@@ -816,40 +913,79 @@ export default function ManageJobs() {
       </section>
 
       {/* =====================================================
-          OPPORTUNITIES
+          OPPORTUNITIES HEADER
       ===================================================== */}
 
       <section>
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold">Your Opportunities</h2>
+            <h2 className="text-lg font-bold">
+              {showTrash ? "Trash Bin" : "Your Opportunities"}
+            </h2>
 
             <p className={`text-xs mt-1 ${muted}`}>
-              Draft, active, and closed internship opportunities.
+              {showTrash
+                ? "Archived opportunities are kept here instead of being permanently deleted."
+                : "Draft, active, and closed internship opportunities."}
             </p>
           </div>
 
-          <div className={`text-xs font-semibold ${muted}`}>
-            {opportunities.length}{" "}
-            {opportunities.length === 1 ? "opportunity" : "opportunities"}
+          <div className="flex items-center gap-2">
+            <div className={`text-xs font-semibold ${muted}`}>
+              {visibleOpportunities.length}{" "}
+              {visibleOpportunities.length === 1
+                ? "opportunity"
+                : "opportunities"}
+            </div>
+
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => {
+                setShowTrash((previous) => !previous);
+                setEditingId(null);
+                setEditForm({});
+              }}
+              className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
+                showTrash
+                  ? darkMode
+                    ? "border-slate-600 hover:bg-slate-800"
+                    : "border-slate-300 hover:bg-slate-50"
+                  : darkMode
+                  ? "border-red-900 text-red-400 hover:bg-red-950/40"
+                  : "border-red-200 text-red-600 hover:bg-red-50"
+              }`}
+            >
+              {showTrash
+                ? "← Back to Opportunities"
+                : `🗑 Trash Bin${
+                    archivedCount > 0 ? ` (${archivedCount})` : ""
+                  }`}
+            </button>
           </div>
         </div>
 
-        {/* EMPTY */}
+        {/* ===================================================
+            EMPTY
+        =================================================== */}
 
-        {opportunities.length === 0 ? (
+        {visibleOpportunities.length === 0 ? (
           <div className={`border rounded-2xl p-10 text-center ${card}`}>
-            <div className="text-3xl mb-3">📋</div>
+            <div className="text-3xl mb-3">{showTrash ? "🗑️" : "📋"}</div>
 
-            <h3 className="font-bold">No opportunities yet</h3>
+            <h3 className="font-bold">
+              {showTrash ? "Trash Bin is empty" : "No opportunities yet"}
+            </h3>
 
             <p className={`text-sm mt-1 ${muted}`}>
-              Create your first internship opportunity using the form above.
+              {showTrash
+                ? "Archived opportunities will appear here."
+                : "Create your first internship opportunity using the form above."}
             </p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {opportunities.map((opportunity) => {
+            {visibleOpportunities.map((opportunity) => {
               const isEditing = editingId === opportunity.id;
 
               const internshipPeriod = formatDateRange(
@@ -870,6 +1006,9 @@ export default function ManageJobs() {
                 Math.max(totalOpenings - occupiedSlots, 0);
 
               const isFull = availableSlots <= 0;
+
+              const isArchived =
+                opportunity.status === STATUS.opportunity.ARCHIVED;
 
               return (
                 <article
@@ -892,8 +1031,7 @@ export default function ManageJobs() {
                             opportunity.status
                           )}`}
                         >
-                          {opportunity.status.charAt(0).toUpperCase() +
-                            opportunity.status.slice(1)}
+                          {getStatusLabel(opportunity.status)}
                         </span>
 
                         {opportunity.status === STATUS.opportunity.ACTIVE &&
@@ -918,91 +1056,142 @@ export default function ManageJobs() {
                     {/* ACTIONS */}
 
                     <div className="flex flex-wrap gap-2">
-                      {!isEditing && (
-                        <button
-                          type="button"
-                          disabled={submitting}
-                          className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
-                            darkMode
-                              ? "border-slate-600 hover:bg-slate-800"
-                              : "border-slate-300 hover:bg-slate-50"
-                          }`}
-                          onClick={() => startEdit(opportunity)}
-                        >
-                          Edit
-                        </button>
+                      {/* -----------------------------------------
+                          NORMAL OPPORTUNITY ACTIONS
+                      ----------------------------------------- */}
+
+                      {!isArchived && (
+                        <>
+                          {!isEditing && (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
+                                darkMode
+                                  ? "border-slate-600 hover:bg-slate-800"
+                                  : "border-slate-300 hover:bg-slate-50"
+                              }`}
+                              onClick={() => startEdit(opportunity)}
+                            >
+                              Edit
+                            </button>
+                          )}
+
+                          {/* DRAFT → PUBLISH */}
+
+                          {opportunity.status === STATUS.opportunity.DRAFT && (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition"
+                              onClick={() =>
+                                updateStatus(
+                                  opportunity.id,
+                                  STATUS.opportunity.ACTIVE
+                                )
+                              }
+                            >
+                              Publish
+                            </button>
+                          )}
+
+                          {/* ACTIVE → CLOSE */}
+
+                          {opportunity.status === STATUS.opportunity.ACTIVE && (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
+                                darkMode
+                                  ? "border-slate-600 hover:bg-slate-800"
+                                  : "border-slate-300 hover:bg-slate-50"
+                              }`}
+                              onClick={() =>
+                                updateStatus(
+                                  opportunity.id,
+                                  STATUS.opportunity.CLOSED
+                                )
+                              }
+                            >
+                              Close Opportunity
+                            </button>
+                          )}
+
+                          {/* CLOSED → REOPEN */}
+
+                          {opportunity.status === STATUS.opportunity.CLOSED && (
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold transition"
+                              onClick={() =>
+                                updateStatus(
+                                  opportunity.id,
+                                  STATUS.opportunity.ACTIVE
+                                )
+                              }
+                            >
+                              Reopen
+                            </button>
+                          )}
+
+                          {/* ARCHIVE */}
+
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-semibold transition"
+                            onClick={() => handleArchive(opportunity)}
+                          >
+                            Archive
+                          </button>
+                        </>
                       )}
 
-                      {/* DRAFT → PUBLISH */}
+                      {/* -----------------------------------------
+                          TRASH ACTION
+                      ----------------------------------------- */}
 
-                      {opportunity.status === STATUS.opportunity.DRAFT && (
-                        <button
-                          type="button"
-                          disabled={submitting}
-                          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold transition"
-                          onClick={() =>
-                            updateStatus(
-                              opportunity.id,
-                              STATUS.opportunity.ACTIVE
-                            )
-                          }
-                        >
-                          Publish
-                        </button>
-                      )}
-
-                      {/* ACTIVE → CLOSE */}
-
-                      {opportunity.status === STATUS.opportunity.ACTIVE && (
-                        <button
-                          type="button"
-                          disabled={submitting}
-                          className={`px-4 py-2 rounded-lg border text-xs font-semibold transition ${
-                            darkMode
-                              ? "border-slate-600 hover:bg-slate-800"
-                              : "border-slate-300 hover:bg-slate-50"
-                          }`}
-                          onClick={() =>
-                            updateStatus(
-                              opportunity.id,
-                              STATUS.opportunity.CLOSED
-                            )
-                          }
-                        >
-                          Close Opportunity
-                        </button>
-                      )}
-
-                      {/* CLOSED → REOPEN */}
-
-                      {opportunity.status === STATUS.opportunity.CLOSED && (
+                      {isArchived && (
                         <button
                           type="button"
                           disabled={submitting}
                           className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold transition"
-                          onClick={() =>
-                            updateStatus(
-                              opportunity.id,
-                              STATUS.opportunity.ACTIVE
-                            )
-                          }
+                          onClick={() => handleRestore(opportunity)}
                         >
-                          Reopen
+                          Restore
                         </button>
                       )}
-
-                      {/* DELETE */}
-
-                      <button
-                        type="button"
-                        disabled={submitting}
-                        className="px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 text-xs font-semibold transition"
-                        onClick={() => handleDelete(opportunity)}
-                      >
-                        Delete
-                      </button>
                     </div>
                   </div>
+
+                  {/* =================================================
+                      ARCHIVED NOTICE
+                  ================================================= */}
+
+                  {isArchived && (
+                    <div
+                      className={`mt-5 rounded-xl border px-4 py-3 ${
+                        darkMode
+                          ? "bg-red-950/20 border-red-900"
+                          : "bg-red-50 border-red-200"
+                      }`}
+                    >
+                      <p
+                        className={`text-xs font-bold ${
+                          darkMode ? "text-red-400" : "text-red-700"
+                        }`}
+                      >
+                        This opportunity is archived.
+                      </p>
+
+                      <p className={`text-[11px] mt-1 ${muted}`}>
+                        It is hidden from normal company management and new
+                        student applications, but existing internship records
+                        can still reference it.
+                      </p>
+                    </div>
+                  )}
 
                   {/* =================================================
                       EDIT FORM
@@ -1032,8 +1221,7 @@ export default function ManageJobs() {
                             opportunity.status
                           )}`}
                         >
-                          {opportunity.status.charAt(0).toUpperCase() +
-                            opportunity.status.slice(1)}
+                          {getStatusLabel(opportunity.status)}
                         </span>
                       </div>
 
@@ -1099,7 +1287,7 @@ export default function ManageJobs() {
                           />
                         </div>
 
-                        {/* INTERNSHIP START */}
+                        {/* START */}
 
                         <div>
                           <label className="block text-xs font-bold mb-2">
@@ -1119,7 +1307,7 @@ export default function ManageJobs() {
                           />
                         </div>
 
-                        {/* INTERNSHIP END */}
+                        {/* END */}
 
                         <div>
                           <label className="block text-xs font-bold mb-2">
@@ -1214,7 +1402,7 @@ export default function ManageJobs() {
                           </p>
                         </div>
 
-                        {/* INTERNSHIP PERIOD */}
+                        {/* PERIOD */}
 
                         <div>
                           <p
@@ -1228,7 +1416,7 @@ export default function ManageJobs() {
                           </p>
                         </div>
 
-                        {/* TOTAL OPENINGS */}
+                        {/* OPENINGS */}
 
                         <div>
                           <p
@@ -1243,7 +1431,7 @@ export default function ManageJobs() {
                           </p>
                         </div>
 
-                        {/* AVAILABLE SLOTS */}
+                        {/* AVAILABLE */}
 
                         <div>
                           <p

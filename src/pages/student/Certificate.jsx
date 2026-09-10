@@ -49,10 +49,10 @@ const Certificate = () => {
       // ============================================================
       // GET STUDENT
       // ============================================================
-      const { data: studentData, error: studentError } =
-        await supabaseStudent
-          .from("students")
-          .select(`
+      const { data: studentData, error: studentError } = await supabaseStudent
+        .from("students")
+        .select(
+          `
             id,
             student_id,
             phone,
@@ -68,9 +68,10 @@ const Certificate = () => {
               middle_name,
               last_name
             )
-          `)
-          .eq("id", user.id)
-          .maybeSingle();
+          `
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (studentError) {
         throw studentError;
@@ -88,7 +89,8 @@ const Certificate = () => {
       const { data: certificateData, error: certificateError } =
         await supabaseStudent
           .from("certificates")
-          .select(`
+          .select(
+            `
             id,
             assignment_id,
             student_id,
@@ -98,7 +100,8 @@ const Certificate = () => {
             certificate_url,
             school_id,
             school_logo_url
-          `)
+          `
+          )
           .eq("id", certificateId)
           .eq("student_id", user.id)
           .maybeSingle();
@@ -121,7 +124,8 @@ const Certificate = () => {
       const { data: assignmentData, error: assignmentError } =
         await supabaseStudent
           .from("assignments")
-          .select(`
+          .select(
+            `
             id,
             application_id,
             student_id,
@@ -131,7 +135,8 @@ const Certificate = () => {
             start_date,
             end_date,
             deployed_at
-          `)
+          `
+          )
           .eq("id", certificateData.assignment_id)
           .eq("student_id", user.id)
           .maybeSingle();
@@ -147,10 +152,10 @@ const Certificate = () => {
       // ============================================================
       // GET COMPANY
       // ============================================================
-      const { data: companyData, error: companyError } =
-        await supabaseStudent
-          .from("companies")
-          .select(`
+      const { data: companyData, error: companyError } = await supabaseStudent
+        .from("companies")
+        .select(
+          `
             id,
             user_id,
             company_name,
@@ -160,9 +165,10 @@ const Certificate = () => {
             website,
             industry,
             designation
-          `)
-          .eq("id", assignmentData.company_id)
-          .maybeSingle();
+          `
+        )
+        .eq("id", assignmentData.company_id)
+        .maybeSingle();
 
       if (companyError) {
         throw companyError;
@@ -172,15 +178,21 @@ const Certificate = () => {
 
       // ============================================================
       // GET OPPORTUNITY
+      //
+      // We use the opportunity attached to the completed assignment.
+      // This preserves the internship title shown on the certificate
+      // even if the opportunity is no longer active.
       // ============================================================
       const { data: opportunityData, error: opportunityError } =
         await supabaseStudent
           .from("opportunities")
-          .select(`
+          .select(
+            `
             id,
             title,
             description
-          `)
+          `
+          )
           .eq("id", assignmentData.opportunity_id)
           .maybeSingle();
 
@@ -197,16 +209,17 @@ const Certificate = () => {
         certificateData.school_id || studentData.school_id || null;
 
       if (schoolId) {
-        const { data: schoolData, error: schoolError } =
-          await supabaseStudent
-            .from("schools")
-            .select(`
+        const { data: schoolData, error: schoolError } = await supabaseStudent
+          .from("schools")
+          .select(
+            `
               id,
               name,
               logo_url
-            `)
-            .eq("id", schoolId)
-            .maybeSingle();
+            `
+          )
+          .eq("id", schoolId)
+          .maybeSingle();
 
         if (schoolError) {
           throw schoolError;
@@ -221,12 +234,10 @@ const Certificate = () => {
       // Uses SECURITY DEFINER RPC because students may not have
       // direct SELECT access to the registrar/company users.
       // ============================================================
-      const {
-        data: signatoryData,
-        error: signatoryError,
-      } = await supabaseStudent.rpc("get_certificate_signatories", {
-        p_certificate_id: certificateId,
-      });
+      const { data: signatoryData, error: signatoryError } =
+        await supabaseStudent.rpc("get_certificate_signatories", {
+          p_certificate_id: certificateId,
+        });
 
       if (signatoryError) {
         throw signatoryError;
@@ -249,6 +260,7 @@ const Certificate = () => {
       });
     } catch (err) {
       console.error("Error loading certificate:", err);
+
       setError(
         err?.message || "Something went wrong while loading the certificate."
       );
@@ -283,24 +295,29 @@ const Certificate = () => {
 
   const registrarName = registrar || "Registrar Adviser";
 
-  const supervisorName =
-    companySupervisor || "Company Supervisor";
+  const supervisorName = companySupervisor || "Company Supervisor";
 
-  const schoolName =
-    school?.name || "School";
+  const schoolName = school?.name || "School";
 
-  const schoolLogo =
-    certificate?.school_logo_url ||
-    school?.logo_url ||
-    null;
+  const schoolLogo = certificate?.school_logo_url || school?.logo_url || null;
 
-  const companyName =
-    company?.company_name || "Company";
+  const companyName = company?.company_name || "Company";
 
-  const internshipPosition =
-    company?.designation ||
-    opportunity?.title ||
-    "Intern";
+  // ================================================================
+  // INTERNSHIP POSITION
+  //
+  // The certificate should display the internship opportunity title.
+  //
+  // Example:
+  // "As Web Developer"
+  // "As UI/UX Designer Intern"
+  // "As Software Development Intern"
+  //
+  // We intentionally prioritize opportunity.title instead of
+  // company.designation because the opportunity represents the
+  // actual internship position the student completed.
+  // ================================================================
+  const internshipPosition = opportunity?.title || "Intern";
 
   // ================================================================
   // PRINT / PDF
@@ -356,9 +373,7 @@ const Certificate = () => {
             Unable to Load Certificate
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {error}
-          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{error}</p>
 
           <button
             onClick={() => navigate("/student/status")}
@@ -378,15 +393,6 @@ const Certificate = () => {
     <>
       {/* ============================================================
           PRINT-ONLY OVERRIDES
-
-          This works alongside Tailwind.
-
-          The important part:
-          body * = hidden
-          #certificate = visible
-
-          This prevents the Student Portal navbar/sidebar/layout
-          from appearing in Print or Save as PDF.
       ============================================================ */}
       <style>{`
         @media print {
@@ -586,7 +592,6 @@ const Certificate = () => {
           PAGE
       ============================================================ */}
       <div className="min-h-screen bg-slate-100 px-4 py-8 md:px-8">
-
         {/* ==========================================================
             CONTROLS
         ========================================================== */}
@@ -608,7 +613,6 @@ const Certificate = () => {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-
             Back
           </button>
 
@@ -629,37 +633,27 @@ const Certificate = () => {
                 d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"
               />
             </svg>
-
             Print / Save as PDF
           </button>
         </div>
 
         {/* ==========================================================
             CERTIFICATE
-
-            IMPORTANT:
-            id="certificate" is what the print CSS targets.
         ========================================================== */}
         <div
           id="certificate"
           className="relative mx-auto aspect-[297/210] w-full max-w-6xl overflow-hidden bg-white shadow-2xl"
         >
           {/* OUTER BORDER */}
-          <div
-            className="certificate-outer-border pointer-events-none absolute inset-[5mm] border-[0.8mm] border-slate-800"
-          />
+          <div className="certificate-outer-border pointer-events-none absolute inset-[5mm] border-[0.8mm] border-slate-800" />
 
           {/* INNER BORDER */}
-          <div
-            className="certificate-inner-border pointer-events-none absolute inset-[7.5mm] border-[0.25mm] border-slate-400"
-          />
+          <div className="certificate-inner-border pointer-events-none absolute inset-[7.5mm] border-[0.25mm] border-slate-400" />
 
           {/* ========================================================
               CONTENT
           ======================================================== */}
-          <div
-            className="certificate-content absolute inset-[11mm_15mm] flex flex-col items-center text-center"
-          >
+          <div className="certificate-content absolute inset-[11mm_15mm] flex flex-col items-center text-center">
             {/* ======================================================
                 SCHOOL HEADER
             ====================================================== */}
@@ -711,29 +705,30 @@ const Certificate = () => {
               <div className="name-divider mt-[1.5mm] h-px w-[90mm] bg-slate-400" />
 
               <p className="completion-text mt-[3mm] max-w-[205mm] text-[3.4mm] leading-[1.3] text-slate-600">
-                has successfully completed the required internship program
-                and demonstrated commitment, professionalism, and dedication
-                during the internship period at
+                has successfully completed the required internship program and
+                demonstrated commitment, professionalism, and dedication during
+                the internship period at
               </p>
 
+              {/* COMPANY */}
               <div className="company-name mt-[1mm] font-serif text-[5.2mm] font-bold text-slate-900">
                 {companyName}
               </div>
 
+              {/* INTERNSHIP POSITION */}
               <div className="position-text mt-[1mm] text-[3.4mm] font-medium text-slate-600">
-                {internshipPosition}
+                As {internshipPosition}
               </div>
 
+              {/* DATE */}
               <div className="period-text mt-[1.8mm] text-[3.4mm] text-slate-600">
-                {formatDate(
-                  certificate?.issued_at
-                )}
+                {formatDate(certificate?.issued_at)}
               </div>
 
               <p className="recognition-text mt-[2.2mm] max-w-[190mm] text-[2.8mm] leading-[1.25] text-slate-500">
                 In recognition of the successful completion of the internship
-                requirements and the valuable experience gained throughout
-                the training period.
+                requirements and the valuable experience gained throughout the
+                training period.
               </p>
             </div>
 
@@ -802,8 +797,8 @@ const Certificate = () => {
         ========================================================== */}
         <div className="certificate-controls mx-auto mt-5 max-w-6xl text-center">
           <p className="text-xs text-slate-500">
-            Tip: Choose <span className="font-semibold">Save as PDF</span>{" "}
-            in the browser print dialog to save your certificate as a PDF.
+            Tip: Choose <span className="font-semibold">Save as PDF</span> in
+            the browser print dialog to save your certificate as a PDF.
           </p>
         </div>
       </div>
@@ -812,4 +807,3 @@ const Certificate = () => {
 };
 
 export default Certificate;
-
