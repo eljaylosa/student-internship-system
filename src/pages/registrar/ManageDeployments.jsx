@@ -44,7 +44,6 @@ export default function ManageDeployment() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  // Profile photo expanded preview
   const [expandedPhoto, setExpandedPhoto] = useState(null);
 
   const [deployingAssignmentId, setDeployingAssignmentId] = useState(null);
@@ -168,26 +167,12 @@ export default function ManageDeployment() {
   // =========================================================
   // STUDENT DOCUMENT URL
   // =========================================================
-  //
-  // COR + Resume are stored in:
-  // verification-documents
-  //
-  // Resume:
-  // resumes/{userId}/resume.{extension}
-  //
-  // COR:
-  // cors/{userId}/cor.pdf
-  //
-  // The database stores the URL/path in students.resume_url
-  // and students.cor_url.
-  // =========================================================
 
   const getVerificationDocumentUrl = async (documentUrl) => {
     if (!documentUrl) {
       return null;
     }
 
-    // Already a complete URL
     if (
       documentUrl.startsWith("http://") ||
       documentUrl.startsWith("https://")
@@ -202,7 +187,6 @@ export default function ManageDeployment() {
 
       if (error) {
         console.error("Create verification document signed URL error:", error);
-
         return null;
       }
 
@@ -221,6 +205,24 @@ export default function ManageDeployment() {
     return (
       application?.status === STATUS.application.APPROVED ||
       application?.status === STATUS.application.ACCEPTED
+    );
+  };
+
+  // =========================================================
+  // DOCUMENT REVIEW CHECK
+  // =========================================================
+  //
+  // An assignment that is already completed has already passed
+  // the required document/deployment workflow.
+  //
+  // This prevents a completed internship from incorrectly showing:
+  // "Pending Review — 0/5 required"
+  // =========================================================
+
+  const areDocumentsConsideredApproved = ({ assignment, application }) => {
+    return (
+      isApplicationReviewed(application) ||
+      assignment?.status === STATUS.assignment.COMPLETED
     );
   };
 
@@ -800,7 +802,10 @@ export default function ManageDeployment() {
 
           const requiredDocumentsCount = requiredTypes.length;
 
-          const applicationReviewed = isApplicationReviewed(application);
+          const documentsConsideredApproved = areDocumentsConsideredApproved({
+            assignment,
+            application,
+          });
 
           const actualApprovedRequiredDocumentsCount = requiredTypes.filter(
             (requiredType) => {
@@ -813,11 +818,19 @@ export default function ManageDeployment() {
             }
           ).length;
 
-          const approvedRequiredDocumentsCount = applicationReviewed
+          /*
+           * If the application has already been approved OR the
+           * internship assignment is already completed, the required
+           * documents are treated as approved in this deployment view.
+           *
+           * This prevents completed internships from displaying:
+           * "Pending Review — 0/5 required"
+           */
+          const approvedRequiredDocumentsCount = documentsConsideredApproved
             ? requiredDocumentsCount
             : actualApprovedRequiredDocumentsCount;
 
-          const documentStatus = applicationReviewed
+          const documentStatus = documentsConsideredApproved
             ? "Approved"
             : "Pending Review";
 
@@ -1038,9 +1051,7 @@ export default function ManageDeployment() {
         student.companyName || "the assigned company"
       }?\n\nApplication: ${student.applicationStatus}\nDocuments: Approved (${
         student.approvedRequiredDocumentsCount
-      }/${
-        student.requiredDocumentsCount
-      })\nSchool logo: Verified\n\nThe student will be sent to the company for review after deployment.`
+      }/${student.requiredDocumentsCount})\nSchool logo: Verified\n\nThe student will be sent to the company for review after deployment.`
     );
 
     if (!confirmed) {
@@ -1472,7 +1483,6 @@ export default function ManageDeployment() {
                           </p>
                         </div>
 
-                        {/* PROFILE PHOTO - UPPER RIGHT */}
                         <button
                           type="button"
                           onClick={() => {
@@ -1661,7 +1671,6 @@ export default function ManageDeployment() {
                 </p>
               </div>
 
-              {/* PROFILE PHOTO - UPPER RIGHT */}
               <button
                 type="button"
                 onClick={() => {
@@ -1764,9 +1773,7 @@ export default function ManageDeployment() {
                 </div>
               </div>
 
-              {/* =================================================
-                  STUDENT DOCUMENTS
-                  ================================================= */}
+              {/* STUDENT DOCUMENTS */}
 
               <div>
                 <h3 className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-3">
@@ -1774,8 +1781,6 @@ export default function ManageDeployment() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* COR */}
-
                   <StudentDocumentCard
                     label="Certificate of Registration"
                     shortLabel="COR"
@@ -1785,8 +1790,6 @@ export default function ManageDeployment() {
                     darkMode={darkMode}
                     secondaryText={secondaryText}
                   />
-
-                  {/* RESUME */}
 
                   <StudentDocumentCard
                     label="Resume"
@@ -2252,3 +2255,4 @@ function StudentDocumentCard({
     </div>
   );
 }
+
