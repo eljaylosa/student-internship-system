@@ -20,6 +20,7 @@ export default function ManageJobs() {
 
   const [company, setCompany] = useState(null);
   const [opportunities, setOpportunities] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -33,13 +34,14 @@ export default function ManageJobs() {
     internshipStart: "",
     internshipEnd: "",
     openings: 1,
+    requirements: [],
   });
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
   // =========================================================
-  // LOAD COMPANY + OPPORTUNITIES
+  // LOAD COMPANY + OPPORTUNITIES + DOCUMENT TYPES
   // =========================================================
 
   useEffect(() => {
@@ -82,6 +84,24 @@ export default function ManageJobs() {
       }
 
       setCompany(companyData);
+
+      // -------------------------------------------------------
+      // LOAD DOCUMENT TYPES
+      // -------------------------------------------------------
+
+      const { data: documentTypeData, error: documentTypeError } =
+        await supabaseCompany
+          .from("document_types")
+          .select("id, name, description, required")
+          .order("created_at", {
+            ascending: true,
+          });
+
+      if (documentTypeError) {
+        throw documentTypeError;
+      }
+
+      setDocumentTypes(documentTypeData || []);
 
       // -------------------------------------------------------
       // LOAD ALL OPPORTUNITIES
@@ -172,6 +192,66 @@ export default function ManageJobs() {
   ).length;
 
   // =========================================================
+  // DOCUMENT HELPERS
+  // =========================================================
+
+  const getDocumentTypeById = (id) => {
+    return documentTypes.find((documentType) => documentType.id === id);
+  };
+
+  const getRequirementNames = (requirements) => {
+    if (!Array.isArray(requirements)) {
+      return [];
+    }
+
+    return requirements
+      .map((requirement) => {
+        if (typeof requirement === "string") {
+          return getDocumentTypeById(requirement);
+        }
+
+        if (requirement?.id) {
+          return getDocumentTypeById(requirement.id);
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  };
+
+  const toggleRequirement = (documentTypeId, target) => {
+    if (target === "create") {
+      setForm((previous) => {
+        const exists = previous.requirements.includes(documentTypeId);
+
+        return {
+          ...previous,
+          requirements: exists
+            ? previous.requirements.filter((id) => id !== documentTypeId)
+            : [...previous.requirements, documentTypeId],
+        };
+      });
+
+      return;
+    }
+
+    setEditForm((previous) => {
+      const requirements = Array.isArray(previous.requirements)
+        ? previous.requirements
+        : [];
+
+      const exists = requirements.includes(documentTypeId);
+
+      return {
+        ...previous,
+        requirements: exists
+          ? requirements.filter((id) => id !== documentTypeId)
+          : [...requirements, documentTypeId],
+      };
+    });
+  };
+
+  // =========================================================
   // DATE HELPERS
   // =========================================================
 
@@ -234,6 +314,105 @@ export default function ManageJobs() {
   const muted = darkMode ? "text-slate-400" : "text-slate-500";
 
   const border = darkMode ? "border-slate-700" : "border-slate-200";
+
+  // =========================================================
+  // DOCUMENT SELECTOR
+  // =========================================================
+
+  const renderDocumentSelector = (selectedRequirements, target) => {
+    const selected = Array.isArray(selectedRequirements)
+      ? selectedRequirements
+      : [];
+
+    return (
+      <div className="md:col-span-2">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <label className="block text-sm font-semibold">
+              Required Internship Documents
+            </label>
+
+            <p className={`text-xs mt-1 ${muted}`}>
+              Select the documents students must submit when applying for this
+              opportunity.
+            </p>
+          </div>
+
+          <span
+            className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+              selected.length > 0
+                ? darkMode
+                  ? "bg-purple-950 text-purple-400 border-purple-800"
+                  : "bg-purple-50 text-purple-700 border-purple-200"
+                : darkMode
+                ? "bg-slate-800 text-slate-400 border-slate-700"
+                : "bg-slate-50 text-slate-500 border-slate-200"
+            }`}
+          >
+            {selected.length} selected
+          </span>
+        </div>
+
+        {documentTypes.length === 0 ? (
+          <div
+            className={`rounded-xl border px-4 py-4 ${
+              darkMode
+                ? "bg-slate-800/60 border-slate-700"
+                : "bg-slate-50 border-slate-200"
+            }`}
+          >
+            <p className={`text-xs ${muted}`}>
+              No document types are currently available.
+            </p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {documentTypes.map((documentType) => {
+              const checked = selected.includes(documentType.id);
+
+              return (
+                <label
+                  key={documentType.id}
+                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition ${
+                    checked
+                      ? darkMode
+                        ? "border-purple-700 bg-purple-950/30"
+                        : "border-purple-300 bg-purple-50"
+                      : darkMode
+                      ? "border-slate-700 bg-slate-800/40 hover:bg-slate-800"
+                      : "border-slate-200 bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleRequirement(documentType.id, target)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  />
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{documentType.name}</p>
+
+                    {documentType.description && (
+                      <p className={`text-xs mt-1 leading-relaxed ${muted}`}>
+                        {documentType.description}
+                      </p>
+                    )}
+
+                    {documentType.required && (
+                      <span className="inline-block text-[10px] font-bold uppercase tracking-wide text-red-500 mt-2">
+                        Required document
+                      </span>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // =========================================================
   // STATUS STYLE
@@ -306,6 +485,10 @@ export default function ManageJobs() {
       return alert("There must be at least 1 opening.");
     }
 
+    if (!form.requirements.length) {
+      return alert("Please select at least one required internship document.");
+    }
+
     setSubmitting(true);
 
     try {
@@ -326,7 +509,7 @@ export default function ManageJobs() {
 
           openings: Number(form.openings),
           position_type: "On-site",
-          requirements: [],
+          requirements: form.requirements,
           status: STATUS.opportunity.DRAFT,
         })
         .select()
@@ -354,6 +537,7 @@ export default function ManageJobs() {
         internshipStart: "",
         internshipEnd: "",
         openings: 1,
+        requirements: [],
       });
 
       alert("Internship opportunity created as a draft.");
@@ -375,6 +559,12 @@ export default function ManageJobs() {
       return;
     }
 
+    const requirements = Array.isArray(opportunity.requirements)
+      ? opportunity.requirements.filter(
+          (requirement) => typeof requirement === "string"
+        )
+      : [];
+
     setEditingId(opportunity.id);
 
     setEditForm({
@@ -386,6 +576,7 @@ export default function ManageJobs() {
       internshipEnd: opportunity.internship_end || "",
 
       openings: opportunity.openings || 1,
+      requirements,
     });
   };
 
@@ -419,6 +610,13 @@ export default function ManageJobs() {
       return alert("There must be at least 1 opening.");
     }
 
+    if (
+      !Array.isArray(editForm.requirements) ||
+      !editForm.requirements.length
+    ) {
+      return alert("Please select at least one required internship document.");
+    }
+
     setSubmitting(true);
 
     try {
@@ -437,6 +635,7 @@ export default function ManageJobs() {
           availability,
 
           openings: Number(editForm.openings),
+          requirements: editForm.requirements,
         })
         .eq("id", id)
         .eq("company_id", company.id)
@@ -500,17 +699,9 @@ export default function ManageJobs() {
         status,
       };
 
-      // -------------------------------------------------------
-      // CLOSE
-      // -------------------------------------------------------
-
       if (status === STATUS.opportunity.CLOSED) {
         updateData.closure_reason = "manual";
       }
-
-      // -------------------------------------------------------
-      // REOPEN
-      // -------------------------------------------------------
 
       if (status === STATUS.opportunity.ACTIVE) {
         updateData.closure_reason = null;
@@ -892,13 +1083,18 @@ export default function ManageJobs() {
                 }
               />
             </div>
+
+            {/* REQUIRED DOCUMENTS */}
+
+            {renderDocumentSelector(form.requirements, "create")}
           </div>
 
           <div
             className={`mt-6 pt-5 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${border}`}
           >
             <p className={`text-xs ${muted}`}>
-              You can edit the opportunity before or after publishing.
+              Students will see these documents when they apply for this
+              opportunity.
             </p>
 
             <button
@@ -1010,6 +1206,10 @@ export default function ManageJobs() {
               const isArchived =
                 opportunity.status === STATUS.opportunity.ARCHIVED;
 
+              const requiredDocuments = getRequirementNames(
+                opportunity.requirements
+              );
+
               return (
                 <article
                   key={opportunity.id}
@@ -1056,10 +1256,6 @@ export default function ManageJobs() {
                     {/* ACTIONS */}
 
                     <div className="flex flex-wrap gap-2">
-                      {/* -----------------------------------------
-                          NORMAL OPPORTUNITY ACTIONS
-                      ----------------------------------------- */}
-
                       {!isArchived && (
                         <>
                           {!isEditing && (
@@ -1077,8 +1273,6 @@ export default function ManageJobs() {
                             </button>
                           )}
 
-                          {/* DRAFT → PUBLISH */}
-
                           {opportunity.status === STATUS.opportunity.DRAFT && (
                             <button
                               type="button"
@@ -1094,8 +1288,6 @@ export default function ManageJobs() {
                               Publish
                             </button>
                           )}
-
-                          {/* ACTIVE → CLOSE */}
 
                           {opportunity.status === STATUS.opportunity.ACTIVE && (
                             <button
@@ -1117,8 +1309,6 @@ export default function ManageJobs() {
                             </button>
                           )}
 
-                          {/* CLOSED → REOPEN */}
-
                           {opportunity.status === STATUS.opportunity.CLOSED && (
                             <button
                               type="button"
@@ -1135,8 +1325,6 @@ export default function ManageJobs() {
                             </button>
                           )}
 
-                          {/* ARCHIVE */}
-
                           <button
                             type="button"
                             disabled={submitting}
@@ -1147,10 +1335,6 @@ export default function ManageJobs() {
                           </button>
                         </>
                       )}
-
-                      {/* -----------------------------------------
-                          TRASH ACTION
-                      ----------------------------------------- */}
 
                       {isArchived && (
                         <button
@@ -1212,7 +1396,8 @@ export default function ManageJobs() {
                           </h4>
 
                           <p className={`text-xs mt-1 ${muted}`}>
-                            Update the internship details and schedule.
+                            Update the internship details, schedule, and
+                            required documents.
                           </p>
                         </div>
 
@@ -1347,6 +1532,10 @@ export default function ManageJobs() {
                             }
                           />
                         </div>
+
+                        {/* REQUIRED DOCUMENTS */}
+
+                        {renderDocumentSelector(editForm.requirements, "edit")}
                       </div>
 
                       {/* EDIT ACTIONS */}
@@ -1511,6 +1700,45 @@ export default function ManageJobs() {
                             <p className={`text-[10px] ${muted}`}>occupied</p>
                           </div>
                         </div>
+                      </div>
+
+                      {/* REQUIRED DOCUMENTS */}
+
+                      <div className="mt-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <p
+                            className={`text-[11px] uppercase font-bold ${muted}`}
+                          >
+                            Required Documents
+                          </p>
+
+                          <span
+                            className={`text-[11px] font-semibold ${muted}`}
+                          >
+                            {requiredDocuments.length} selected
+                          </span>
+                        </div>
+
+                        {requiredDocuments.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {requiredDocuments.map((documentType) => (
+                              <span
+                                key={documentType.id}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                                  darkMode
+                                    ? "bg-slate-800 border-slate-700 text-slate-300"
+                                    : "bg-slate-50 border-slate-200 text-slate-700"
+                                }`}
+                              >
+                                {documentType.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className={`text-sm mt-1.5 ${muted}`}>
+                            No required documents selected.
+                          </p>
+                        )}
                       </div>
 
                       {/* DESCRIPTION */}

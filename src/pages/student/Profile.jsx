@@ -10,6 +10,7 @@ const Profile = () => {
 
   const photoInputRef = useRef(null);
   const resumeInputRef = useRef(null);
+  const corInputRef = useRef(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +46,8 @@ const Profile = () => {
     department: "",
   };
 
-  const [academicRecords, setAcademicRecords] = useState(emptyAcademicRecords);
+  const [academicRecords, setAcademicRecords] =
+    useState(emptyAcademicRecords);
 
   const [originalAcademicRecords, setOriginalAcademicRecords] =
     useState(emptyAcademicRecords);
@@ -60,8 +62,14 @@ const Profile = () => {
   const [resume, setResume] = useState(null);
   const [resumePath, setResumePath] = useState(null);
 
+  const [cor, setCor] = useState(null);
+  const [corPath, setCorPath] = useState(null);
+
   const [isDragging, setIsDragging] = useState(false);
+  const [isCorDragging, setIsCorDragging] = useState(false);
+
   const [isResumeOpening, setIsResumeOpening] = useState(false);
+  const [isCorOpening, setIsCorOpening] = useState(false);
 
   // =========================================
   // LOAD STUDENT PROFILE
@@ -106,18 +114,13 @@ const Profile = () => {
 
       // -----------------------------------------
       // GET STUDENT INFORMATION
-      //
-      // students.school_id
-      //        ↓
-      // schools.id
-      //        ↓
-      // schools.name
       // -----------------------------------------
 
-      const { data: studentData, error: studentError } = await supabaseStudent
-        .from("students")
-        .select(
-          `
+      const { data: studentData, error: studentError } =
+        await supabaseStudent
+          .from("students")
+          .select(
+            `
               id,
               student_id,
               school_id,
@@ -130,15 +133,17 @@ const Profile = () => {
               profile_photo_url,
               resume_url,
               resume_name,
+              cor_url,
+              cor_name,
               schools (
                 id,
                 name,
                 code
               )
             `
-        )
-        .eq("id", user.id)
-        .maybeSingle();
+          )
+          .eq("id", user.id)
+          .maybeSingle();
 
       if (studentError) {
         throw studentError;
@@ -207,6 +212,21 @@ const Profile = () => {
           existing: true,
         });
       }
+
+      // -----------------------------------------
+      // COR
+      // -----------------------------------------
+
+      if (studentData?.cor_url) {
+        setCorPath(studentData.cor_url);
+
+        setCor({
+          name: studentData.cor_name || "Current COR",
+          size: 0,
+          type: "application/pdf",
+          existing: true,
+        });
+      }
     } catch (error) {
       console.error("Error loading student profile:", error);
 
@@ -250,7 +270,8 @@ const Profile = () => {
     try {
       if (!path) return;
 
-      const bucket = type === "profile" ? PROFILE_PHOTO_BUCKET : RESUME_BUCKET;
+      const bucket =
+        type === "profile" ? PROFILE_PHOTO_BUCKET : RESUME_BUCKET;
 
       const storagePath = getStoragePath(path, bucket);
 
@@ -262,7 +283,6 @@ const Profile = () => {
 
       if (error) {
         console.error("Error creating signed URL:", error);
-
         return;
       }
 
@@ -286,7 +306,6 @@ const Profile = () => {
   };
 
   const handleAcademicChange = (field, value) => {
-    // School is intentionally not editable.
     if (field === "school" || field === "schoolId") {
       return;
     }
@@ -339,15 +358,6 @@ const Profile = () => {
 
       // -----------------------------------------
       // UPDATE STUDENT
-      //
-      // IMPORTANT:
-      // Do NOT use upsert here.
-      //
-      // The student record was already created
-      // during admin approval.
-      //
-      // Using UPDATE avoids requiring an INSERT
-      // RLS policy for the student.
       // -----------------------------------------
 
       const studentPayload = {
@@ -359,11 +369,6 @@ const Profile = () => {
 
         emergency_contact: profile.emergencyContact || null,
 
-        // Academic Records
-        //
-        // school_id is intentionally NOT changed.
-        // The student's registered school is controlled
-        // by the registration/approval process.
         program: academicRecords.program || null,
 
         year_level: academicRecords.yearLevel || null,
@@ -375,6 +380,10 @@ const Profile = () => {
         resume_url: resumePath || null,
 
         resume_name: resume?.name || null,
+
+        cor_url: corPath || null,
+
+        cor_name: cor?.name || null,
 
         updated_at: new Date().toISOString(),
       };
@@ -457,9 +466,11 @@ const Profile = () => {
     try {
       setIsSaving(true);
 
-      const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const extension =
+        file.name.split(".").pop()?.toLowerCase() || "jpg";
 
-      const storagePath = `profile-photos/${userId}/profile-photo.${extension}`;
+      const storagePath =
+        `profile-photos/${userId}/profile-photo.${extension}`;
 
       // -----------------------------------------
       // UPLOAD PROFILE PHOTO
@@ -478,15 +489,12 @@ const Profile = () => {
 
       // -----------------------------------------
       // SAVE STORAGE PATH
-      //
-      // UPDATE instead of UPSERT.
       // -----------------------------------------
 
       const { error: updateError } = await supabaseStudent
         .from("students")
         .update({
           profile_photo_url: storagePath,
-
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId);
@@ -555,7 +563,8 @@ const Profile = () => {
     try {
       setIsSaving(true);
 
-      const extension = file.name.split(".").pop()?.toLowerCase() || "pdf";
+      const extension =
+        file.name.split(".").pop()?.toLowerCase() || "pdf";
 
       const storagePath = `resumes/${userId}/resume.${extension}`;
 
@@ -572,7 +581,10 @@ const Profile = () => {
             .remove([oldPath]);
 
           if (removeError) {
-            console.warn("Unable to remove old resume:", removeError.message);
+            console.warn(
+              "Unable to remove old resume:",
+              removeError.message
+            );
           }
         }
       }
@@ -594,17 +606,13 @@ const Profile = () => {
 
       // -----------------------------------------
       // SAVE RESUME PATH + NAME
-      //
-      // UPDATE instead of UPSERT.
       // -----------------------------------------
 
       const { error: updateError } = await supabaseStudent
         .from("students")
         .update({
           resume_url: storagePath,
-
           resume_name: file.name,
-
           updated_at: new Date().toISOString(),
         })
         .eq("id", userId);
@@ -733,7 +741,6 @@ const Profile = () => {
       const link = document.createElement("a");
 
       link.href = blobUrl;
-
       link.download = resume?.name || "resume";
 
       document.body.appendChild(link);
@@ -753,7 +760,213 @@ const Profile = () => {
   };
 
   // =========================================
-  // DRAG & DROP
+  // COR UPLOAD
+  // =========================================
+
+  const handleCorChange = async (file) => {
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("Please upload a PDF file for your Certificate of Registration.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("COR must be less than 10MB.");
+      return;
+    }
+
+    if (!userId) {
+      alert("Unable to identify your account.");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      const storagePath = `cors/${userId}/cor.pdf`;
+
+      // -----------------------------------------
+      // UPLOAD COR
+      // -----------------------------------------
+
+      const { error: uploadError } = await supabaseStudent.storage
+        .from(RESUME_BUCKET)
+        .upload(storagePath, file, {
+          upsert: true,
+          contentType: "application/pdf",
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // -----------------------------------------
+      // SAVE COR PATH + NAME
+      // -----------------------------------------
+
+      const { error: updateError } = await supabaseStudent
+        .from("students")
+        .update({
+          cor_url: storagePath,
+          cor_name: file.name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setCorPath(storagePath);
+
+      setCor({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        existing: false,
+      });
+
+      alert("Certificate of Registration uploaded successfully.");
+    } catch (error) {
+      console.error("COR upload error:", error);
+
+      alert(
+        error.message ||
+          "Unable to upload your Certificate of Registration."
+      );
+    } finally {
+      setIsSaving(false);
+
+      if (corInputRef.current) {
+        corInputRef.current.value = "";
+      }
+    }
+  };
+
+  // =========================================
+  // COR INPUT
+  // =========================================
+
+  const handleCorInput = (e) => {
+    const file = e.target.files?.[0];
+
+    if (file) {
+      handleCorChange(file);
+    }
+  };
+
+  // =========================================
+  // OPEN COR
+  // =========================================
+
+  const openCor = async () => {
+    if (!corPath) {
+      alert("No Certificate of Registration has been uploaded yet.");
+      return;
+    }
+
+    try {
+      setIsCorOpening(true);
+
+      const storagePath = getStoragePath(corPath, RESUME_BUCKET);
+
+      if (!storagePath) {
+        throw new Error("Invalid COR storage path.");
+      }
+
+      const { data, error } = await supabaseStudent.storage
+        .from(RESUME_BUCKET)
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.signedUrl) {
+        throw new Error("Unable to generate COR link.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Open COR error:", error);
+
+      alert(
+        error.message ||
+          "Unable to open your Certificate of Registration."
+      );
+    } finally {
+      setIsCorOpening(false);
+    }
+  };
+
+  // =========================================
+  // DOWNLOAD COR
+  // =========================================
+
+  const downloadCor = async () => {
+    if (!corPath) {
+      alert("No Certificate of Registration has been uploaded yet.");
+      return;
+    }
+
+    try {
+      setIsCorOpening(true);
+
+      const storagePath = getStoragePath(corPath, RESUME_BUCKET);
+
+      if (!storagePath) {
+        throw new Error("Invalid COR storage path.");
+      }
+
+      const { data, error } = await supabaseStudent.storage
+        .from(RESUME_BUCKET)
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.signedUrl) {
+        throw new Error("Unable to generate download link.");
+      }
+
+      const response = await fetch(data.signedUrl);
+
+      if (!response.ok) {
+        throw new Error("Unable to download the COR.");
+      }
+
+      const blob = await response.blob();
+
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = blobUrl;
+      link.download = cor?.name || "certificate-of-registration.pdf";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download COR error:", error);
+
+      alert(
+        error.message ||
+          "Unable to download your Certificate of Registration."
+      );
+    } finally {
+      setIsCorOpening(false);
+    }
+  };
+
+  // =========================================
+  // RESUME DRAG & DROP
   // =========================================
 
   const handleDragOver = (e) => {
@@ -775,6 +988,32 @@ const Profile = () => {
 
     if (file) {
       handleResumeChange(file);
+    }
+  };
+
+  // =========================================
+  // COR DRAG & DROP
+  // =========================================
+
+  const handleCorDragOver = (e) => {
+    e.preventDefault();
+    setIsCorDragging(true);
+  };
+
+  const handleCorDragLeave = (e) => {
+    e.preventDefault();
+    setIsCorDragging(false);
+  };
+
+  const handleCorDrop = (e) => {
+    e.preventDefault();
+
+    setIsCorDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+
+    if (file) {
+      handleCorChange(file);
     }
   };
 
@@ -905,7 +1144,9 @@ const Profile = () => {
               Profile Photo
             </h2>
 
-            <p className={`text-xs mt-1 ${mutedClass}`}>Your profile picture</p>
+            <p className={`text-xs mt-1 ${mutedClass}`}>
+              Your profile picture
+            </p>
           </div>
 
           <div className="flex flex-col items-center">
@@ -932,7 +1173,9 @@ const Profile = () => {
                     👤
                   </div>
 
-                  <p className={`text-[10px] mt-2 ${mutedClass}`}>No Photo</p>
+                  <p className={`text-[10px] mt-2 ${mutedClass}`}>
+                    No Photo
+                  </p>
                 </div>
               )}
             </div>
@@ -1061,7 +1304,9 @@ const Profile = () => {
                 type="text"
                 value={profile.phone}
                 disabled={!isEditing}
-                onChange={(e) => handleProfileChange("phone", e.target.value)}
+                onChange={(e) =>
+                  handleProfileChange("phone", e.target.value)
+                }
                 className={inputClass(isEditing)}
               />
             </div>
@@ -1077,7 +1322,9 @@ const Profile = () => {
                 type="text"
                 value={profile.address}
                 disabled={!isEditing}
-                onChange={(e) => handleProfileChange("address", e.target.value)}
+                onChange={(e) =>
+                  handleProfileChange("address", e.target.value)
+                }
                 className={inputClass(isEditing)}
               />
             </div>
@@ -1094,7 +1341,10 @@ const Profile = () => {
                 value={profile.emergencyContact}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleProfileChange("emergencyContact", e.target.value)
+                  handleProfileChange(
+                    "emergencyContact",
+                    e.target.value
+                  )
                 }
                 className={inputClass(isEditing)}
               />
@@ -1239,155 +1489,352 @@ const Profile = () => {
         </div>
       </section>
 
-      {/* RESUME / CV */}
+      {/* RESUME + COR */}
 
       <section className={`border rounded-2xl p-6 ${cardClass}`}>
-        <div className="mb-5">
-          <h2 className={`font-bold text-lg ${headingClass}`}>Resume / CV</h2>
+        <div className="mb-6">
+          <h2 className={`font-bold text-lg ${headingClass}`}>
+            Documents
+          </h2>
 
           <p className={`text-xs mt-1 ${mutedClass}`}>
-            Upload your latest resume for internship applications.
+            Manage your resume and Certificate of Registration.
           </p>
         </div>
 
-        <input
-          ref={resumeInputRef}
-          type="file"
-          accept=".pdf,.doc,.docx"
-          onChange={handleResumeInput}
-          className="hidden"
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* =========================================
+              RESUME / CV
+          ========================================= */}
 
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => resumeInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 md:p-10 text-center cursor-pointer transition ${
-            isDragging
-              ? "border-blue-500 bg-blue-950/30"
-              : darkMode
-              ? "border-slate-700 bg-slate-800 hover:bg-slate-750 hover:border-slate-600"
-              : "border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300"
-          }`}
-        >
-          {resume ? (
-            <>
-              <div
-                className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
-                  darkMode
-                    ? "bg-emerald-950 text-emerald-400"
-                    : "bg-emerald-100 text-emerald-600"
-                }`}
-              >
-                ✓
-              </div>
-
-              <p className={`font-semibold text-sm break-all ${headingClass}`}>
-                {resume.name}
-              </p>
-
-              {resume.size > 0 && (
-                <p className={`text-xs mt-1 ${mutedClass}`}>
-                  {(resume.size / 1024 / 1024).toFixed(2)} MB
-                </p>
-              )}
-
-              {resume.existing && (
-                <p className={`text-xs mt-1 ${mutedClass}`}>Uploaded resume</p>
-              )}
-
-              <p className="text-xs text-blue-500 font-semibold mt-3">
-                Click to replace file
-              </p>
-            </>
-          ) : (
-            <>
-              <div
-                className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
-                  darkMode ? "bg-slate-700" : "bg-slate-200"
-                }`}
-              >
-                📄
-              </div>
-
-              <p className={`font-semibold text-sm ${headingClass}`}>
-                Drag & Drop to Upload
-              </p>
+          <div
+            className={`border rounded-2xl p-5 ${
+              darkMode
+                ? "border-slate-700 bg-slate-950/40"
+                : "border-slate-200 bg-slate-50/50"
+            }`}
+          >
+            <div className="mb-5">
+              <h3 className={`font-bold text-base ${headingClass}`}>
+                Resume / CV
+              </h3>
 
               <p className={`text-xs mt-1 ${mutedClass}`}>
-                or click anywhere in this area to browse
+                Upload your latest resume for internship applications.
               </p>
+            </div>
 
-              <p className={`text-[10px] mt-3 ${mutedClass}`}>
-                PDF, DOC, DOCX • Maximum 10MB
+            <input
+              ref={resumeInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={handleResumeInput}
+              className="hidden"
+            />
+
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => resumeInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition ${
+                isDragging
+                  ? "border-blue-500 bg-blue-950/30"
+                  : darkMode
+                  ? "border-slate-700 bg-slate-800 hover:bg-slate-750 hover:border-slate-600"
+                  : "border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300"
+              }`}
+            >
+              {resume ? (
+                <>
+                  <div
+                    className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
+                      darkMode
+                        ? "bg-emerald-950 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-600"
+                    }`}
+                  >
+                    ✓
+                  </div>
+
+                  <p
+                    className={`font-semibold text-sm break-all ${headingClass}`}
+                  >
+                    {resume.name}
+                  </p>
+
+                  {resume.size > 0 && (
+                    <p className={`text-xs mt-1 ${mutedClass}`}>
+                      {(resume.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  )}
+
+                  {resume.existing && (
+                    <p className={`text-xs mt-1 ${mutedClass}`}>
+                      Uploaded resume
+                    </p>
+                  )}
+
+                  <p className="text-xs text-blue-500 font-semibold mt-3">
+                    Click to replace file
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div
+                    className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
+                      darkMode ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  >
+                    📄
+                  </div>
+
+                  <p
+                    className={`font-semibold text-sm ${headingClass}`}
+                  >
+                    Drag & Drop to Upload
+                  </p>
+
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
+                    or click anywhere in this area to browse
+                  </p>
+
+                  <p className={`text-[10px] mt-3 ${mutedClass}`}>
+                    PDF, DOC, DOCX • Maximum 10MB
+                  </p>
+                </>
+              )}
+            </div>
+
+            {resume && resumePath && (
+              <div className="flex flex-col sm:flex-row justify-center gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={openResume}
+                  disabled={isResumeOpening || isSaving}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "bg-white text-slate-900 hover:bg-slate-200"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  }`}
+                >
+                  {isResumeOpening ? "Opening..." : "View"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadResume}
+                  disabled={isResumeOpening || isSaving}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {isResumeOpening ? "Processing..." : "Download"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => resumeInputRef.current?.click()}
+                  disabled={isSaving}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "border-blue-900 text-blue-400 hover:bg-blue-950"
+                      : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                  }`}
+                >
+                  Replace
+                </button>
+              </div>
+            )}
+
+            {!resume && (
+              <div className="flex justify-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => resumeInputRef.current?.click()}
+                  disabled={isSaving}
+                  className={`px-8 py-2.5 rounded-xl text-xs font-bold transition ${
+                    darkMode
+                      ? "bg-white text-slate-900 hover:bg-slate-200"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  } disabled:opacity-50`}
+                >
+                  Upload Resume
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* =========================================
+              CERTIFICATE OF REGISTRATION
+          ========================================= */}
+
+          <div
+            className={`border rounded-2xl p-5 ${
+              darkMode
+                ? "border-slate-700 bg-slate-950/40"
+                : "border-slate-200 bg-slate-50/50"
+            }`}
+          >
+            <div className="mb-5">
+              <h3 className={`font-bold text-base ${headingClass}`}>
+                Certificate of Registration
+              </h3>
+
+              <p className={`text-xs mt-1 ${mutedClass}`}>
+                Upload your current Certificate of Registration (COR).
               </p>
-            </>
-          )}
+            </div>
+
+            <input
+              ref={corInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={handleCorInput}
+              className="hidden"
+            />
+
+            <div
+              onDragOver={handleCorDragOver}
+              onDragLeave={handleCorDragLeave}
+              onDrop={handleCorDrop}
+              onClick={() => corInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition ${
+                isCorDragging
+                  ? "border-blue-500 bg-blue-950/30"
+                  : darkMode
+                  ? "border-slate-700 bg-slate-800 hover:bg-slate-750 hover:border-slate-600"
+                  : "border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300"
+              }`}
+            >
+              {cor ? (
+                <>
+                  <div
+                    className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
+                      darkMode
+                        ? "bg-emerald-950 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-600"
+                    }`}
+                  >
+                    ✓
+                  </div>
+
+                  <p
+                    className={`font-semibold text-sm break-all ${headingClass}`}
+                  >
+                    {cor.name}
+                  </p>
+
+                  {cor.size > 0 && (
+                    <p className={`text-xs mt-1 ${mutedClass}`}>
+                      {(cor.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  )}
+
+                  {cor.existing && (
+                    <p className={`text-xs mt-1 ${mutedClass}`}>
+                      Uploaded COR
+                    </p>
+                  )}
+
+                  <p className="text-xs text-blue-500 font-semibold mt-3">
+                    Click to replace file
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div
+                    className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-xl mb-3 ${
+                      darkMode ? "bg-slate-700" : "bg-slate-200"
+                    }`}
+                  >
+                    📜
+                  </div>
+
+                  <p
+                    className={`font-semibold text-sm ${headingClass}`}
+                  >
+                    Drag & Drop to Upload
+                  </p>
+
+                  <p className={`text-xs mt-1 ${mutedClass}`}>
+                    or click anywhere in this area to browse
+                  </p>
+
+                  <p className={`text-[10px] mt-3 ${mutedClass}`}>
+                    PDF only • Maximum 10MB
+                  </p>
+                </>
+              )}
+            </div>
+
+            {cor && corPath && (
+              <div className="flex flex-col sm:flex-row justify-center gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={openCor}
+                  disabled={isCorOpening || isSaving}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "bg-white text-slate-900 hover:bg-slate-200"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  }`}
+                >
+                  {isCorOpening ? "Opening..." : "View"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={downloadCor}
+                  disabled={isCorOpening || isSaving}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {isCorOpening ? "Processing..." : "Download"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => corInputRef.current?.click()}
+                  disabled={isSaving}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
+                    darkMode
+                      ? "border-blue-900 text-blue-400 hover:bg-blue-950"
+                      : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                  }`}
+                >
+                  Replace
+                </button>
+              </div>
+            )}
+
+            {!cor && (
+              <div className="flex justify-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => corInputRef.current?.click()}
+                  disabled={isSaving}
+                  className={`px-8 py-2.5 rounded-xl text-xs font-bold transition ${
+                    darkMode
+                      ? "bg-white text-slate-900 hover:bg-slate-200"
+                      : "bg-slate-900 text-white hover:bg-slate-800"
+                  } disabled:opacity-50`}
+                >
+                  Upload COR
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-
-        {resume && resumePath && (
-          <div className="flex flex-col sm:flex-row justify-center gap-2 mt-4">
-            <button
-              type="button"
-              onClick={openResume}
-              disabled={isResumeOpening || isSaving}
-              className={`px-6 py-3 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
-                darkMode
-                  ? "bg-white text-slate-900 hover:bg-slate-200"
-                  : "bg-slate-900 text-white hover:bg-slate-800"
-              }`}
-            >
-              {isResumeOpening ? "Opening..." : "View Resume"}
-            </button>
-
-            <button
-              type="button"
-              onClick={downloadResume}
-              disabled={isResumeOpening || isSaving}
-              className={`px-6 py-3 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
-                darkMode
-                  ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {isResumeOpening ? "Processing..." : "Download Resume"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => resumeInputRef.current?.click()}
-              disabled={isSaving}
-              className={`px-6 py-3 rounded-xl border text-xs font-bold transition disabled:opacity-50 ${
-                darkMode
-                  ? "border-blue-900 text-blue-400 hover:bg-blue-950"
-                  : "border-blue-200 text-blue-600 hover:bg-blue-50"
-              }`}
-            >
-              Replace Resume
-            </button>
-          </div>
-        )}
-
-        {!resume && (
-          <div className="flex justify-center mt-4">
-            <button
-              type="button"
-              onClick={() => resumeInputRef.current?.click()}
-              disabled={isSaving}
-              className={`px-10 py-3 rounded-xl text-xs font-bold transition ${
-                darkMode
-                  ? "bg-white text-slate-900 hover:bg-slate-200"
-                  : "bg-slate-900 text-white hover:bg-slate-800"
-              } disabled:opacity-50`}
-            >
-              Upload Resume
-            </button>
-          </div>
-        )}
       </section>
     </div>
   );
 };
 
 export default Profile;
+

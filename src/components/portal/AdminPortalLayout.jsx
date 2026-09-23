@@ -47,8 +47,7 @@ const adminNotifications = [
     type: "system",
     category: "System",
     title: "System Update",
-    message:
-      "The internship management system was successfully updated.",
+    message: "The internship management system was successfully updated.",
     time: "Yesterday",
     unread: false,
     icon: "⚙️",
@@ -71,16 +70,14 @@ const AdminPortalLayout = () => {
   const [sidebarWidth, setSidebarWidth] = useState(250);
   const [isResizing, setIsResizing] = useState(false);
 
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
-    useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // =========================================================
   // DROPDOWNS
   // =========================================================
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] =
-    useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
@@ -89,11 +86,9 @@ const AdminPortalLayout = () => {
   // NOTIFICATIONS
   // =========================================================
 
-  const [notifications, setNotifications] =
-    useState(adminNotifications);
+  const [notifications, setNotifications] = useState(adminNotifications);
 
-  const [selectedNotification, setSelectedNotification] =
-    useState(null);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   const unreadCount = notifications.filter(
     (notification) => notification.unread
@@ -104,20 +99,16 @@ const AdminPortalLayout = () => {
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("sims_admin_dark_mode") === "true"
-    );
+    return localStorage.getItem("sims_admin_dark_mode") === "true";
   });
 
   // =========================================================
   // LOGOUT CONFIRMATION
   // =========================================================
 
-  const [showLogoutConfirm, setShowLogoutConfirm] =
-    useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const [isLoggingOut, setIsLoggingOut] =
-    useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // =========================================================
   // SIDEBAR ITEMS
@@ -149,11 +140,11 @@ const AdminPortalLayout = () => {
       path: "/admin/schools",
       icon: "🏫",
     },
-    {
-      label: "Internship Records",
-      path: "/admin/internships",
-      icon: "▣",
-    },
+    // {
+    //   label: "Internship Records",
+    //   path: "/admin/internships",
+    //   icon: "▣",
+    // },
     {
       label: "Document Management",
       path: "/admin/documents",
@@ -220,9 +211,7 @@ const AdminPortalLayout = () => {
 
   const deleteNotification = (id) => {
     setNotifications((previous) =>
-      previous.filter(
-        (notification) => notification.id !== id
-      )
+      previous.filter((notification) => notification.id !== id)
     );
 
     if (selectedNotification?.id === id) {
@@ -246,9 +235,7 @@ const AdminPortalLayout = () => {
     setIsNotificationOpen(false);
     setIsProfileOpen(false);
 
-    navigate(
-      notification.path || "/admin/notifications"
-    );
+    navigate(notification.path || "/admin/notifications");
   };
 
   // =========================================================
@@ -262,10 +249,7 @@ const AdminPortalLayout = () => {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem(
-      "sims_admin_dark_mode",
-      darkMode.toString()
-    );
+    localStorage.setItem("sims_admin_dark_mode", darkMode.toString());
 
     return () => {
       document.documentElement.classList.remove("dark");
@@ -323,10 +307,7 @@ const AdminPortalLayout = () => {
     document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [isResizing]);
 
@@ -336,10 +317,7 @@ const AdminPortalLayout = () => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target)
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setIsProfileOpen(false);
       }
 
@@ -351,16 +329,10 @@ const AdminPortalLayout = () => {
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -382,14 +354,9 @@ const AdminPortalLayout = () => {
     // Capture the pointer so dragging remains active
     // even when the cursor moves away from the handle.
     try {
-      event.currentTarget.setPointerCapture(
-        event.pointerId
-      );
+      event.currentTarget.setPointerCapture(event.pointerId);
     } catch (error) {
-      console.warn(
-        "Pointer capture unavailable:",
-        error
-      );
+      console.warn("Pointer capture unavailable:", error);
     }
 
     document.body.style.userSelect = "none";
@@ -404,10 +371,7 @@ const AdminPortalLayout = () => {
     const MIN_WIDTH = 230;
     const MAX_WIDTH = 340;
 
-    const newWidth = Math.min(
-      Math.max(event.clientX, MIN_WIDTH),
-      MAX_WIDTH
-    );
+    const newWidth = Math.min(Math.max(event.clientX, MIN_WIDTH), MAX_WIDTH);
 
     setSidebarWidth(newWidth);
   };
@@ -416,20 +380,11 @@ const AdminPortalLayout = () => {
     if (!isResizing) return;
 
     try {
-      if (
-        event.currentTarget.hasPointerCapture(
-          event.pointerId
-        )
-      ) {
-        event.currentTarget.releasePointerCapture(
-          event.pointerId
-        );
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
       }
     } catch (error) {
-      console.warn(
-        "Pointer release unavailable:",
-        error
-      );
+      console.warn("Pointer release unavailable:", error);
     }
 
     setIsResizing(false);
@@ -532,9 +487,7 @@ const AdminPortalLayout = () => {
     return (
       <div
         className={`relative flex h-full min-h-0 flex-col overflow-hidden ${
-          darkMode
-            ? "bg-slate-900 text-white"
-            : "bg-white text-slate-900"
+          darkMode ? "bg-slate-900 text-white" : "bg-white text-slate-900"
         }`}
       >
         {/* ===================================================
@@ -543,17 +496,13 @@ const AdminPortalLayout = () => {
 
         <div
           className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
-            darkMode
-              ? "border-slate-700"
-              : "border-slate-200"
+            darkMode ? "border-slate-700" : "border-slate-200"
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
             <div
               className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl font-bold shadow-md ${
-                darkMode
-                  ? "bg-white text-slate-900"
-                  : "bg-slate-900 text-white"
+                darkMode ? "bg-white text-slate-900" : "bg-slate-900 text-white"
               }`}
             >
               🛡
@@ -562,9 +511,7 @@ const AdminPortalLayout = () => {
             <div className="min-w-0">
               <h1
                 className={`truncate text-sm font-bold tracking-tight ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 ADMINISTRATOR PORTAL
@@ -572,9 +519,7 @@ const AdminPortalLayout = () => {
 
               <p
                 className={`truncate text-[10px] ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
                 SIMS Administration
@@ -587,9 +532,7 @@ const AdminPortalLayout = () => {
           {mobile && (
             <button
               type="button"
-              onClick={() =>
-                setIsMobileSidebarOpen(false)
-              }
+              onClick={() => setIsMobileSidebarOpen(false)}
               className={`ml-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition ${
                 darkMode
                   ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -608,9 +551,7 @@ const AdminPortalLayout = () => {
 
         <div
           className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
-            darkMode
-              ? "scrollbar-thumb-slate-700"
-              : "scrollbar-thumb-slate-300"
+            darkMode ? "scrollbar-thumb-slate-700" : "scrollbar-thumb-slate-300"
           }`}
           style={{
             WebkitOverflowScrolling: "touch",
@@ -625,12 +566,8 @@ const AdminPortalLayout = () => {
                 <button
                   key={item.label}
                   type="button"
-                  onClick={() =>
-                    navigateTo(item.path)
-                  }
-                  aria-current={
-                    active ? "page" : undefined
-                  }
+                  onClick={() => navigateTo(item.path)}
+                  aria-current={active ? "page" : undefined}
                   className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[11px] font-semibold transition-all ${
                     active
                       ? darkMode
@@ -646,9 +583,7 @@ const AdminPortalLayout = () => {
                   {active && (
                     <span
                       className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${
-                        darkMode
-                          ? "bg-white"
-                          : "bg-slate-900"
+                        darkMode ? "bg-white" : "bg-slate-900"
                       }`}
                     />
                   )}
@@ -661,16 +596,13 @@ const AdminPortalLayout = () => {
 
                   {/* LABEL */}
 
-                  <span className="min-w-0 flex-1 truncate">
-                    {item.label}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
                   {/* BADGE */}
 
-                  {item.badge &&
-                    unreadCount > 0 && (
-                      <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
-                    )}
+                  {item.badge && unreadCount > 0 && (
+                    <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+                  )}
                 </button>
               );
             })}
@@ -715,16 +647,13 @@ const AdminPortalLayout = () => {
   return (
     <div
       className={`min-h-screen w-full transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
       style={{
         touchAction: "pan-y",
       }}
     >
       <div className="flex min-h-screen w-full">
-
         {/* ===================================================
             DESKTOP SIDEBAR
         =================================================== */}
@@ -737,11 +666,7 @@ const AdminPortalLayout = () => {
             darkMode
               ? "border-slate-700 bg-slate-900"
               : "border-slate-200 bg-white"
-          } ${
-            isResizing
-              ? "select-none"
-              : ""
-          }`}
+          } ${isResizing ? "select-none" : ""}`}
         >
           {renderSidebarContent(false)}
 
@@ -799,7 +724,6 @@ const AdminPortalLayout = () => {
         =================================================== */}
 
         <div className="flex min-w-0 flex-1 flex-col">
-
           {/* =================================================
               NAVBAR
           ================================================= */}
@@ -816,7 +740,6 @@ const AdminPortalLayout = () => {
             ================================================= */}
 
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-
               {/* MOBILE MENU */}
 
               <button
@@ -841,9 +764,7 @@ const AdminPortalLayout = () => {
               <div className="min-w-0">
                 <h2
                   className={`truncate text-lg font-bold sm:text-xl ${
-                    darkMode
-                      ? "text-white"
-                      : "text-slate-900"
+                    darkMode ? "text-white" : "text-slate-900"
                   }`}
                 >
                   {getPageTitle()}
@@ -851,9 +772,7 @@ const AdminPortalLayout = () => {
 
                 <p
                   className={`hidden truncate text-xs sm:block ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
                   Student Internship Management System
@@ -866,7 +785,6 @@ const AdminPortalLayout = () => {
             ================================================= */}
 
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
-
               {/* =================================================
                   DARK MODE
               ================================================= */}
@@ -875,14 +793,10 @@ const AdminPortalLayout = () => {
                 type="button"
                 onClick={toggleDarkMode}
                 aria-label={
-                  darkMode
-                    ? "Switch to light mode"
-                    : "Switch to dark mode"
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
                 }
                 title={
-                  darkMode
-                    ? "Switch to light mode"
-                    : "Switch to dark mode"
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
                 }
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg transition ${
                   darkMode
@@ -897,16 +811,11 @@ const AdminPortalLayout = () => {
                   NOTIFICATIONS
               ================================================= */}
 
-              <div
-                ref={notificationRef}
-                className="relative"
-              >
+              <div ref={notificationRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen(
-                      (previous) => !previous
-                    );
+                    setIsNotificationOpen((previous) => !previous);
                     setIsProfileOpen(false);
                   }}
                   className={`relative flex h-10 w-10 items-center justify-center rounded-xl text-lg transition ${
@@ -917,12 +826,9 @@ const AdminPortalLayout = () => {
                   aria-label="Administrator notifications"
                 >
                   🔔
-
                   {unreadCount > 0 && (
                     <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                      {unreadCount > 9
-                        ? "9+"
-                        : unreadCount}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
@@ -941,17 +847,13 @@ const AdminPortalLayout = () => {
 
                     <div
                       className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="min-w-0">
                         <h3
                           className={`font-bold ${
-                            darkMode
-                              ? "text-white"
-                              : "text-slate-900"
+                            darkMode ? "text-white" : "text-slate-900"
                           }`}
                         >
                           Administrator Notifications
@@ -959,9 +861,7 @@ const AdminPortalLayout = () => {
 
                         <p
                           className={`mt-0.5 text-xs ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
                           {unreadCount} unread
@@ -971,13 +871,9 @@ const AdminPortalLayout = () => {
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={
-                            markAllNotificationsRead
-                          }
+                          onClick={markAllNotificationsRead}
                           className={`flex-shrink-0 text-xs font-semibold hover:underline ${
-                            darkMode
-                              ? "text-blue-400"
-                              : "text-blue-600"
+                            darkMode ? "text-blue-400" : "text-blue-600"
                           }`}
                         >
                           Mark all read
@@ -990,146 +886,125 @@ const AdminPortalLayout = () => {
                     <div
                       className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
                       style={{
-                        WebkitOverflowScrolling:
-                          "touch",
+                        WebkitOverflowScrolling: "touch",
                         touchAction: "pan-y",
                       }}
                     >
                       {notifications.length === 0 ? (
                         <div className="px-5 py-8 text-center">
-                          <div className="mb-2 text-3xl">
-                            ✓
-                          </div>
+                          <div className="mb-2 text-3xl">✓</div>
 
                           <p
                             className={`text-sm ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             No notifications
                           </p>
                         </div>
                       ) : (
-                        notifications.map(
-                          (notification) => (
-                            <div
-                              key={notification.id}
-                              className={`group relative border-b px-4 py-3 transition ${
-                                darkMode
-                                  ? "border-slate-800 hover:bg-slate-800/70"
-                                  : "border-slate-100 hover:bg-slate-50"
-                              } ${
-                                notification.unread
-                                  ? darkMode
-                                    ? "bg-slate-800/60"
-                                    : "bg-slate-50"
-                                  : ""
-                              }`}
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`group relative border-b px-4 py-3 transition ${
+                              darkMode
+                                ? "border-slate-800 hover:bg-slate-800/70"
+                                : "border-slate-100 hover:bg-slate-50"
+                            } ${
+                              notification.unread
+                                ? darkMode
+                                  ? "bg-slate-800/60"
+                                  : "bg-slate-50"
+                                : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openNotification(notification)}
+                              className="w-full pr-8 text-left"
                             >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openNotification(
-                                    notification
-                                  )
-                                }
-                                className="w-full pr-8 text-left"
-                              >
-                                <div className="flex gap-3">
+                              <div className="flex gap-3">
+                                {/* ICON */}
 
-                                  {/* ICON */}
+                                <div
+                                  className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                                    notification.type === "account-request"
+                                      ? darkMode
+                                        ? "bg-blue-950 text-blue-300"
+                                        : "bg-blue-100 text-blue-700"
+                                      : notification.type ===
+                                        "company-registration"
+                                      ? darkMode
+                                        ? "bg-emerald-950 text-emerald-300"
+                                        : "bg-emerald-100 text-emerald-700"
+                                      : darkMode
+                                      ? "bg-slate-700"
+                                      : "bg-slate-100"
+                                  }`}
+                                >
+                                  {notification.icon}
+                                </div>
 
-                                  <div
-                                    className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
-                                      notification.type ===
-                                      "account-request"
-                                        ? darkMode
-                                          ? "bg-blue-950 text-blue-300"
-                                          : "bg-blue-100 text-blue-700"
-                                        : notification.type ===
-                                          "company-registration"
-                                        ? darkMode
-                                          ? "bg-emerald-950 text-emerald-300"
-                                          : "bg-emerald-100 text-emerald-700"
-                                        : darkMode
-                                        ? "bg-slate-700"
-                                        : "bg-slate-100"
+                                {/* CONTENT */}
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start gap-2">
+                                    <h4
+                                      className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                        darkMode
+                                          ? "text-white"
+                                          : "text-slate-800"
+                                      }`}
+                                    >
+                                      {notification.title}
+                                    </h4>
+
+                                    {notification.unread && (
+                                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                                    )}
+                                  </div>
+
+                                  <p
+                                    className={`mt-1 break-words text-xs leading-5 ${
+                                      darkMode
+                                        ? "text-slate-400"
+                                        : "text-slate-500"
                                     }`}
                                   >
-                                    {notification.icon}
-                                  </div>
+                                    {notification.message}
+                                  </p>
 
-                                  {/* CONTENT */}
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-start gap-2">
-                                      <h4
-                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
-                                          darkMode
-                                            ? "text-white"
-                                            : "text-slate-800"
-                                        }`}
-                                      >
-                                        {
-                                          notification.title
-                                        }
-                                      </h4>
-
-                                      {notification.unread && (
-                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
-                                      )}
-                                    </div>
-
-                                    <p
-                                      className={`mt-1 break-words text-xs leading-5 ${
-                                        darkMode
-                                          ? "text-slate-400"
-                                          : "text-slate-500"
-                                      }`}
-                                    >
-                                      {
-                                        notification.message
-                                      }
-                                    </p>
-
-                                    <p
-                                      className={`mt-1.5 text-[10px] ${
-                                        darkMode
-                                          ? "text-slate-500"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {
-                                        notification.time
-                                      }
-                                    </p>
-                                  </div>
+                                  <p
+                                    className={`mt-1.5 text-[10px] ${
+                                      darkMode
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {notification.time}
+                                  </p>
                                 </div>
-                              </button>
+                              </div>
+                            </button>
 
-                              {/* DELETE */}
+                            {/* DELETE */}
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteNotification(
-                                    notification.id
-                                  )
-                                }
-                                className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-xs opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 ${
-                                  darkMode
-                                    ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-                                    : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                }`}
-                                aria-label="Delete notification"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )
-                        )
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteNotification(notification.id)
+                              }
+                              className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-xs opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 ${
+                                darkMode
+                                  ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
+                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              }`}
+                              aria-label="Delete notification"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
                       )}
                     </div>
 
@@ -1137,18 +1012,12 @@ const AdminPortalLayout = () => {
 
                     <div
                       className={`border-t p-2 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/admin/notifications"
-                          )
-                        }
+                        onClick={() => navigateTo("/admin/notifications")}
                         className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
                           darkMode
                             ? "text-blue-400 hover:bg-slate-800"
@@ -1166,22 +1035,15 @@ const AdminPortalLayout = () => {
                   PROFILE
               ================================================= */}
 
-              <div
-                ref={profileRef}
-                className="relative"
-              >
+              <div ref={profileRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen(
-                      (previous) => !previous
-                    );
+                    setIsProfileOpen((previous) => !previous);
                     setIsNotificationOpen(false);
                   }}
                   className={`flex items-center gap-2 rounded-xl p-1.5 transition ${
-                    darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
                   {/* AVATAR */}
@@ -1201,9 +1063,7 @@ const AdminPortalLayout = () => {
                   <div className="hidden text-left sm:block">
                     <p
                       className={`max-w-[150px] truncate text-sm font-semibold ${
-                        darkMode
-                          ? "text-white"
-                          : "text-slate-800"
+                        darkMode ? "text-white" : "text-slate-800"
                       }`}
                     >
                       System Administrator
@@ -1211,9 +1071,7 @@ const AdminPortalLayout = () => {
 
                     <p
                       className={`max-w-[150px] truncate text-[10px] ${
-                        darkMode
-                          ? "text-slate-400"
-                          : "text-slate-500"
+                        darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
                       Administrator
@@ -1222,14 +1080,8 @@ const AdminPortalLayout = () => {
 
                   <span
                     className={`hidden text-xs transition-transform sm:block ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
-                    } ${
-                      isProfileOpen
-                        ? "rotate-180"
-                        : ""
-                    }`}
+                      darkMode ? "text-slate-400" : "text-slate-500"
+                    } ${isProfileOpen ? "rotate-180" : ""}`}
                   >
                     ▼
                   </span>
@@ -1249,9 +1101,7 @@ const AdminPortalLayout = () => {
 
                     <div
                       className={`border-b px-4 py-4 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1268,9 +1118,7 @@ const AdminPortalLayout = () => {
                         <div className="min-w-0">
                           <p
                             className={`truncate text-sm font-semibold ${
-                              darkMode
-                                ? "text-white"
-                                : "text-slate-800"
+                              darkMode ? "text-white" : "text-slate-800"
                             }`}
                           >
                             System Administrator
@@ -1278,9 +1126,7 @@ const AdminPortalLayout = () => {
 
                           <p
                             className={`truncate text-xs ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             Administrator Account
@@ -1290,16 +1136,11 @@ const AdminPortalLayout = () => {
                     </div>
 
                     <div className="p-2">
-
                       {/* MY PROFILE */}
 
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/admin/profile"
-                          )
-                        }
+                        onClick={() => navigateTo("/admin/profile")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1314,11 +1155,7 @@ const AdminPortalLayout = () => {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/admin/settings"
-                          )
-                        }
+                        onClick={() => navigateTo("/admin/settings")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1331,9 +1168,7 @@ const AdminPortalLayout = () => {
 
                       <div
                         className={`my-1 border-t ${
-                          darkMode
-                            ? "border-slate-800"
-                            : "border-slate-100"
+                          darkMode ? "border-slate-800" : "border-slate-100"
                         }`}
                       />
 
@@ -1348,8 +1183,7 @@ const AdminPortalLayout = () => {
                             : "text-red-600 hover:bg-red-50"
                         }`}
                       >
-                        ↪
-                        <span>Logout</span>
+                        ↪<span>Logout</span>
                       </button>
                     </div>
                   </div>
@@ -1364,9 +1198,7 @@ const AdminPortalLayout = () => {
 
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 transition-colors duration-300 ${
-              darkMode
-                ? "bg-slate-950"
-                : "bg-slate-50"
+              darkMode ? "bg-slate-950" : "bg-slate-50"
             }`}
             style={{
               touchAction: "pan-y",
@@ -1396,9 +1228,7 @@ const AdminPortalLayout = () => {
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
-          onClick={() =>
-            setIsMobileSidebarOpen(false)
-          }
+          onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
@@ -1408,14 +1238,8 @@ const AdminPortalLayout = () => {
 
       <aside
         className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
-          darkMode
-            ? "bg-slate-900"
-            : "bg-white"
-        } ${
-          isMobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        }`}
+          darkMode ? "bg-slate-900" : "bg-white"
+        } ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         {renderSidebarContent(true)}
       </aside>
@@ -1430,9 +1254,7 @@ const AdminPortalLayout = () => {
           onClick={closeNotificationModal}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
@@ -1443,16 +1265,12 @@ const AdminPortalLayout = () => {
 
             <div
               className={`flex items-center justify-between border-b px-5 py-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <h3
                 className={`font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Notification
@@ -1477,13 +1295,11 @@ const AdminPortalLayout = () => {
               <div className="mb-4 flex items-start gap-3">
                 <div
                   className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl ${
-                    selectedNotification.type ===
-                    "account-request"
+                    selectedNotification.type === "account-request"
                       ? darkMode
                         ? "bg-blue-950 text-blue-300"
                         : "bg-blue-100 text-blue-700"
-                      : selectedNotification.type ===
-                        "company-registration"
+                      : selectedNotification.type === "company-registration"
                       ? darkMode
                         ? "bg-emerald-950 text-emerald-300"
                         : "bg-emerald-100 text-emerald-700"
@@ -1498,9 +1314,7 @@ const AdminPortalLayout = () => {
                 <div className="min-w-0">
                   <h4
                     className={`font-bold ${
-                      darkMode
-                        ? "text-white"
-                        : "text-slate-900"
+                      darkMode ? "text-white" : "text-slate-900"
                     }`}
                   >
                     {selectedNotification.title}
@@ -1508,9 +1322,7 @@ const AdminPortalLayout = () => {
 
                   <p
                     className={`mt-1 text-xs ${
-                      darkMode
-                        ? "text-slate-500"
-                        : "text-slate-400"
+                      darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
                     {selectedNotification.time}
@@ -1520,9 +1332,7 @@ const AdminPortalLayout = () => {
 
               <p
                 className={`text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-300"
-                    : "text-slate-600"
+                  darkMode ? "text-slate-300" : "text-slate-600"
                 }`}
               >
                 {selectedNotification.message}
@@ -1533,9 +1343,7 @@ const AdminPortalLayout = () => {
 
             <div
               className={`border-t px-5 py-3 text-right ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <button
@@ -1560,9 +1368,7 @@ const AdminPortalLayout = () => {
           onClick={cancelLogout}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
@@ -1574,9 +1380,7 @@ const AdminPortalLayout = () => {
             <div className="flex justify-center pt-7">
               <div
                 className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
-                  darkMode
-                    ? "bg-red-500/10"
-                    : "bg-red-50"
+                  darkMode ? "bg-red-500/10" : "bg-red-50"
                 }`}
               >
                 ↪
@@ -1588,9 +1392,7 @@ const AdminPortalLayout = () => {
             <div className="px-6 pb-5 pt-4 text-center">
               <h3
                 className={`text-lg font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Are you sure?
@@ -1598,13 +1400,10 @@ const AdminPortalLayout = () => {
 
               <p
                 className={`mt-2 text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Are you sure you want to log out of
-                your administrator account?
+                Are you sure you want to log out of your administrator account?
               </p>
             </div>
 
@@ -1612,9 +1411,7 @@ const AdminPortalLayout = () => {
 
             <div
               className={`flex gap-3 border-t p-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <button
@@ -1636,9 +1433,7 @@ const AdminPortalLayout = () => {
                 disabled={isLoggingOut}
                 className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLoggingOut
-                  ? "Logging out..."
-                  : "Logout"}
+                {isLoggingOut ? "Logging out..." : "Logout"}
               </button>
             </div>
           </div>

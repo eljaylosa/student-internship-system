@@ -32,8 +32,7 @@ const Profile = () => {
   const [registrar, setRegistrar] = useState(null);
 
   const [assignedStudents, setAssignedStudents] = useState([]);
-  const [assignedStudentsLoading, setAssignedStudentsLoading] =
-    useState(true);
+  const [assignedStudentsLoading, setAssignedStudentsLoading] = useState(true);
 
   const [assignedStudentsPage, setAssignedStudentsPage] = useState(1);
 
@@ -163,14 +162,15 @@ const Profile = () => {
       // GET STUDENTS FROM REGISTRAR'S SCHOOL
       // =======================================================
 
-      const { data: studentData, error: studentError } =
-        await supabaseRegistrar
-          .from("students")
-          .select(
-            `
+      const { data: studentData, error: studentError } = await supabaseRegistrar
+        .from("students")
+        .select(
+          `
               id,
               student_id,
               school_id,
+              profile_photo_url,
+              created_at,
               users (
                 id,
                 first_name,
@@ -178,9 +178,9 @@ const Profile = () => {
                 last_name
               )
             `
-          )
-          .eq("school_id", schoolId)
-          .order("created_at", { ascending: false });
+        )
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false });
 
       if (studentError) {
         throw studentError;
@@ -190,15 +190,27 @@ const Profile = () => {
         setAssignedStudents([]);
         setAssignedStudentsPage(1);
 
-        console.log(
-          "👥 No students found for registrar school:",
-          schoolId
-        );
+        console.log("👥 No students found for registrar school:", schoolId);
 
         return;
       }
 
       const studentIds = studentData.map((student) => student.id);
+
+      // =======================================================
+      // CREATE SIGNED PROFILE PHOTO URLS
+      // =======================================================
+
+      const profilePhotoEntries = await Promise.all(
+        studentData.map(async (student) => ({
+          id: student.id,
+          url: await createProfilePhotoUrl(student.profile_photo_url),
+        }))
+      );
+
+      const profilePhotoMap = new Map(
+        profilePhotoEntries.map((entry) => [entry.id, entry.url])
+      );
 
       // =======================================================
       // GET INTERNSHIP ASSIGNMENTS
@@ -238,10 +250,7 @@ const Profile = () => {
 
       (assignmentData || []).forEach((assignment) => {
         if (!latestAssignmentByStudent.has(assignment.student_id)) {
-          latestAssignmentByStudent.set(
-            assignment.student_id,
-            assignment
-          );
+          latestAssignmentByStudent.set(assignment.student_id, assignment);
         }
       });
 
@@ -276,10 +285,7 @@ const Profile = () => {
 
       (applicationData || []).forEach((application) => {
         if (!latestApplicationByStudent.has(application.student_id)) {
-          latestApplicationByStudent.set(
-            application.student_id,
-            application
-          );
+          latestApplicationByStudent.set(application.student_id, application);
         }
       });
 
@@ -313,10 +319,7 @@ const Profile = () => {
 
         let status = "Not Started";
 
-        if (
-          assignmentStatus === "active" ||
-          assignmentStatus === "suspended"
-        ) {
+        if (assignmentStatus === "active" || assignmentStatus === "suspended") {
           // Suspended is intentionally displayed as Active
           // to match the main Student Lists.
           status = "Active";
@@ -328,9 +331,12 @@ const Profile = () => {
           status = "Pending";
         } else if (
           applicationStatus === "submitted" ||
+          applicationStatus === "under_review" ||
           applicationStatus === "info_requested" ||
-          applicationStatus === "approved"
+          applicationStatus === "approved" ||
+          applicationStatus === "accepted"
         ) {
+          // Application-stage students are still pending assignment.
           status = "Pending";
         }
 
@@ -341,8 +347,9 @@ const Profile = () => {
 
           studentId: student.student_id || "N/A",
 
-          company:
-            assignment?.companies?.company_name || "Not assigned",
+          profilePhotoUrl: profilePhotoMap.get(student.id) || null,
+
+          company: assignment?.companies?.company_name || "Not assigned",
 
           status,
 
@@ -412,14 +419,11 @@ const Profile = () => {
       // 2. GET USERS RECORD
       // =======================================================
 
-      const { data: userData, error: userError } =
-        await supabaseRegistrar
-          .from("users")
-          .select(
-            "id, email, role, first_name, middle_name, last_name, status"
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+      const { data: userData, error: userError } = await supabaseRegistrar
+        .from("users")
+        .select("id, email, role, first_name, middle_name, last_name, status")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (userError) {
         throw userError;
@@ -481,12 +485,11 @@ const Profile = () => {
       let schoolName = "";
 
       if (registrarData.school_id) {
-        const { data: schoolData, error: schoolError } =
-          await supabaseRegistrar
-            .from("schools")
-            .select("id, name")
-            .eq("id", registrarData.school_id)
-            .maybeSingle();
+        const { data: schoolData, error: schoolError } = await supabaseRegistrar
+          .from("schools")
+          .select("id, name")
+          .eq("id", registrarData.school_id)
+          .maybeSingle();
 
         if (schoolError) {
           throw schoolError;
@@ -645,19 +648,16 @@ const Profile = () => {
       // UPDATE USERS
       // =======================================================
 
-      const { data: updatedUsers, error: userError } =
-        await supabaseRegistrar
-          .from("users")
-          .update({
-            first_name: firstName,
-            middle_name: middleName,
-            last_name: lastName,
-            email: profileData.email.trim(),
-          })
-          .eq("id", user.id)
-          .select(
-            "id, email, role, first_name, middle_name, last_name, status"
-          );
+      const { data: updatedUsers, error: userError } = await supabaseRegistrar
+        .from("users")
+        .update({
+          first_name: firstName,
+          middle_name: middleName,
+          last_name: lastName,
+          email: profileData.email.trim(),
+        })
+        .eq("id", user.id)
+        .select("id, email, role, first_name, middle_name, last_name, status");
 
       if (userError) {
         throw userError;
@@ -683,8 +683,7 @@ const Profile = () => {
           .update({
             department: profileData.department.trim(),
             position: profileData.position.trim(),
-            specialization:
-              profileData.specialization.trim() || null,
+            specialization: profileData.specialization.trim() || null,
             phone: profileData.phone.trim() || null,
             address: profileData.address.trim() || null,
           })
@@ -724,12 +723,11 @@ const Profile = () => {
       let schoolName = profileData.school;
 
       if (updatedRegistrar.school_id) {
-        const { data: schoolData, error: schoolError } =
-          await supabaseRegistrar
-            .from("schools")
-            .select("id, name")
-            .eq("id", updatedRegistrar.school_id)
-            .maybeSingle();
+        const { data: schoolData, error: schoolError } = await supabaseRegistrar
+          .from("schools")
+          .select("id, name")
+          .eq("id", updatedRegistrar.school_id)
+          .maybeSingle();
 
         if (schoolError) {
           throw schoolError;
@@ -971,10 +969,7 @@ const Profile = () => {
               .maybeSingle();
 
           if (reloadError) {
-            console.error(
-              "❌ Failed to reload registrar photo:",
-              reloadError
-            );
+            console.error("❌ Failed to reload registrar photo:", reloadError);
           } else if (currentRegistrar?.profile_photo_url) {
             const restoredPhoto = await createProfilePhotoUrl(
               currentRegistrar.profile_photo_url
@@ -986,10 +981,7 @@ const Profile = () => {
           }
         }
       } catch (reloadError) {
-        console.error(
-          "❌ Failed to restore profile photo:",
-          reloadError
-        );
+        console.error("❌ Failed to restore profile photo:", reloadError);
 
         setProfilePhoto(null);
       }
@@ -1017,9 +1009,7 @@ const Profile = () => {
           : "bg-blue-50 text-blue-700";
 
       case "Terminated":
-        return darkMode
-          ? "bg-red-950 text-red-400"
-          : "bg-red-50 text-red-700";
+        return darkMode ? "bg-red-950 text-red-400" : "bg-red-50 text-red-700";
 
       case "Pending":
         return darkMode
@@ -1042,9 +1032,7 @@ const Profile = () => {
 
   const totalAssignedStudentPages = Math.max(
     1,
-    Math.ceil(
-      totalAssignedStudents / ASSIGNED_STUDENTS_PER_PAGE
-    )
+    Math.ceil(totalAssignedStudents / ASSIGNED_STUDENTS_PER_PAGE)
   );
 
   const assignedStudentsStartIndex =
@@ -1059,27 +1047,17 @@ const Profile = () => {
   );
 
   const showingStart =
-    totalAssignedStudents === 0
-      ? 0
-      : assignedStudentsStartIndex + 1;
+    totalAssignedStudents === 0 ? 0 : assignedStudentsStartIndex + 1;
 
-  const showingEnd = Math.min(
-    assignedStudentsEndIndex,
-    totalAssignedStudents
-  );
+  const showingEnd = Math.min(assignedStudentsEndIndex, totalAssignedStudents);
 
   const goToPreviousAssignedStudentsPage = () => {
-    setAssignedStudentsPage((previousPage) =>
-      Math.max(1, previousPage - 1)
-    );
+    setAssignedStudentsPage((previousPage) => Math.max(1, previousPage - 1));
   };
 
   const goToNextAssignedStudentsPage = () => {
     setAssignedStudentsPage((previousPage) =>
-      Math.min(
-        totalAssignedStudentPages,
-        previousPage + 1
-      )
+      Math.min(totalAssignedStudentPages, previousPage + 1)
     );
   };
 
@@ -1087,13 +1065,9 @@ const Profile = () => {
   // THEME CLASSES
   // ===========================================================
 
-  const pageHeadingClass = darkMode
-    ? "text-slate-100"
-    : "text-slate-900";
+  const pageHeadingClass = darkMode ? "text-slate-100" : "text-slate-900";
 
-  const mutedClass = darkMode
-    ? "text-slate-400"
-    : "text-slate-500";
+  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
 
   const cardClass = darkMode
     ? "bg-slate-900 border-slate-700"
@@ -1103,9 +1077,7 @@ const Profile = () => {
     ? "bg-slate-800 border-slate-700"
     : "bg-slate-50 border-slate-200";
 
-  const labelClass = darkMode
-    ? "text-slate-400"
-    : "text-slate-600";
+  const labelClass = darkMode ? "text-slate-400" : "text-slate-600";
 
   // ===========================================================
   // INPUT CLASS
@@ -1154,7 +1126,6 @@ const Profile = () => {
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
       <div className="max-w-[1400px] mx-auto">
-
         {/* =====================================================
             PAGE HEADER
         ===================================================== */}
@@ -1168,9 +1139,7 @@ const Profile = () => {
             Registrar Portal
           </p>
 
-          <h1
-            className={`text-xl sm:text-2xl font-black ${pageHeadingClass}`}
-          >
+          <h1 className={`text-xl sm:text-2xl font-black ${pageHeadingClass}`}>
             My Profile
           </h1>
 
@@ -1184,7 +1153,6 @@ const Profile = () => {
         ===================================================== */}
 
         <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-5">
-
           {/* ===================================================
               PROFILE PHOTO CARD
           =================================================== */}
@@ -1193,7 +1161,6 @@ const Profile = () => {
             className={`border rounded-xl shadow-sm overflow-hidden ${cardClass}`}
           >
             <div className="p-5">
-
               <div
                 className={`w-full aspect-square max-w-[220px] mx-auto rounded-xl border overflow-hidden flex items-center justify-center ${
                   darkMode
@@ -1227,9 +1194,7 @@ const Profile = () => {
               </div>
 
               <div className="text-center mt-5">
-                <h2
-                  className={`text-base font-bold ${pageHeadingClass}`}
-                >
+                <h2 className={`text-base font-bold ${pageHeadingClass}`}>
                   {profileData.name}
                 </h2>
 
@@ -1269,9 +1234,7 @@ const Profile = () => {
                   : "Edit Photo"}
               </button>
 
-              <p
-                className={`text-[10px] text-center mt-2 ${mutedClass}`}
-              >
+              <p className={`text-[10px] text-center mt-2 ${mutedClass}`}>
                 JPG, PNG, GIF, or other image files up to 5MB.
               </p>
             </div>
@@ -1284,12 +1247,9 @@ const Profile = () => {
           <section
             className={`border rounded-xl shadow-sm overflow-hidden ${cardClass}`}
           >
-
             <div
               className={`px-5 py-4 sm:px-6 sm:py-5 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
-                darkMode
-                  ? "border-slate-700"
-                  : "border-slate-200"
+                darkMode ? "border-slate-700" : "border-slate-200"
               }`}
             >
               <div>
@@ -1345,7 +1305,6 @@ const Profile = () => {
 
             <div className="p-5 sm:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
                 {/* FULL NAME */}
 
                 <div>
@@ -1445,9 +1404,7 @@ const Profile = () => {
 
                   <input
                     type="text"
-                    value={
-                      profileData.school || "School not assigned"
-                    }
+                    value={profileData.school || "School not assigned"}
                     disabled
                     readOnly
                     className={`w-full h-11 px-3 rounded-lg border text-xs sm:text-sm outline-none ${
@@ -1458,8 +1415,8 @@ const Profile = () => {
                   />
 
                   <p className={`text-[10px] mt-1 ${mutedClass}`}>
-                    School is assigned during account registration and cannot
-                    be changed here.
+                    School is assigned during account registration and cannot be
+                    changed here.
                   </p>
                 </div>
 
@@ -1477,10 +1434,7 @@ const Profile = () => {
                     value={profileData.department}
                     disabled={!isEditing}
                     onChange={(e) =>
-                      handleProfileChange(
-                        "department",
-                        e.target.value
-                      )
+                      handleProfileChange("department", e.target.value)
                     }
                     className={`w-full h-11 px-3 rounded-lg border text-xs sm:text-sm outline-none transition ${getInputClass(
                       isEditing
@@ -1502,10 +1456,7 @@ const Profile = () => {
                     value={profileData.position}
                     disabled={!isEditing}
                     onChange={(e) =>
-                      handleProfileChange(
-                        "position",
-                        e.target.value
-                      )
+                      handleProfileChange("position", e.target.value)
                     }
                     className={`w-full h-11 px-3 rounded-lg border text-xs sm:text-sm outline-none transition ${getInputClass(
                       isEditing
@@ -1527,10 +1478,7 @@ const Profile = () => {
                     value={profileData.specialization}
                     disabled={!isEditing}
                     onChange={(e) =>
-                      handleProfileChange(
-                        "specialization",
-                        e.target.value
-                      )
+                      handleProfileChange("specialization", e.target.value)
                     }
                     className={`w-full h-11 px-3 rounded-lg border text-xs sm:text-sm outline-none transition ${getInputClass(
                       isEditing
@@ -1553,10 +1501,7 @@ const Profile = () => {
                     value={profileData.address}
                     disabled={!isEditing}
                     onChange={(e) =>
-                      handleProfileChange(
-                        "address",
-                        e.target.value
-                      )
+                      handleProfileChange("address", e.target.value)
                     }
                     className={`w-full h-11 px-3 rounded-lg border text-xs sm:text-sm outline-none transition ${getInputClass(
                       isEditing
@@ -1568,22 +1513,16 @@ const Profile = () => {
 
               {/* INFO */}
 
-              <div
-                className={`mt-6 p-4 rounded-lg border ${panelClass}`}
-              >
+              <div className={`mt-6 p-4 rounded-lg border ${panelClass}`}>
                 <p
                   className={`text-xs font-bold mb-1 ${
-                    darkMode
-                      ? "text-slate-200"
-                      : "text-slate-700"
+                    darkMode ? "text-slate-200" : "text-slate-700"
                   }`}
                 >
                   Profile Information
                 </p>
 
-                <p
-                  className={`text-xs leading-relaxed ${mutedClass}`}
-                >
+                <p className={`text-xs leading-relaxed ${mutedClass}`}>
                   Your profile information is loaded directly from your SIMS
                   account. Employee ID and School are managed by the institution
                   and cannot be changed here.
@@ -1600,14 +1539,11 @@ const Profile = () => {
         <section
           className={`mt-5 border rounded-xl shadow-sm overflow-hidden ${cardClass}`}
         >
-
           {/* HEADER */}
 
           <div
             className={`px-5 py-4 sm:px-6 sm:py-5 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${
-              darkMode
-                ? "border-slate-700"
-                : "border-slate-200"
+              darkMode ? "border-slate-700" : "border-slate-200"
             }`}
           >
             <div>
@@ -1633,9 +1569,7 @@ const Profile = () => {
               {assignedStudentsLoading
                 ? "Loading..."
                 : `${assignedStudents.length} ${
-                    assignedStudents.length === 1
-                      ? "Student"
-                      : "Students"
+                    assignedStudents.length === 1 ? "Student" : "Students"
                   }`}
             </span>
           </div>
@@ -1644,7 +1578,6 @@ const Profile = () => {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
-
               <thead>
                 <tr
                   className={`border-b ${
@@ -1680,7 +1613,6 @@ const Profile = () => {
               </thead>
 
               <tbody>
-
                 {assignedStudentsLoading ? (
                   <tr>
                     <td
@@ -1717,54 +1649,55 @@ const Profile = () => {
                           : "border-slate-200 hover:bg-slate-50"
                       }`}
                     >
-
                       {/* STUDENT */}
 
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
+                          {/* PROFILE PHOTO */}
 
                           <div
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-bold ${
+                            className={`w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${
                               darkMode
                                 ? "bg-slate-800 text-slate-300"
                                 : "bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {student.name
-                              .split(" ")
-                              .filter(Boolean)
-                              .map((word) => word[0])
-                              .join("")
-                              .slice(0, 2)
-                              .toUpperCase()}
+                            {student.profilePhotoUrl ? (
+                              <img
+                                src={student.profilePhotoUrl}
+                                alt={`${student.name} profile`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              student.name
+                                .split(" ")
+                                .filter(Boolean)
+                                .map((word) => word[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()
+                            )}
                           </div>
 
                           <div>
                             <p
                               className={`text-xs font-bold ${
-                                darkMode
-                                  ? "text-slate-100"
-                                  : "text-slate-900"
+                                darkMode ? "text-slate-100" : "text-slate-900"
                               }`}
                             >
                               {student.name}
                             </p>
 
-                            <p
-                              className={`text-[10px] mt-0.5 ${mutedClass}`}
-                            >
+                            <p className={`text-[10px] mt-0.5 ${mutedClass}`}>
                               Assigned Student
                             </p>
                           </div>
-
                         </div>
                       </td>
 
                       {/* STUDENT ID */}
 
-                      <td
-                        className={`px-5 py-4 text-xs ${mutedClass}`}
-                      >
+                      <td className={`px-5 py-4 text-xs ${mutedClass}`}>
                         {student.studentId}
                       </td>
 
@@ -1772,7 +1705,6 @@ const Profile = () => {
 
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-
                           <div
                             className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
                               darkMode
@@ -1786,21 +1718,16 @@ const Profile = () => {
                           <div>
                             <p
                               className={`text-xs font-semibold ${
-                                darkMode
-                                  ? "text-slate-200"
-                                  : "text-slate-800"
+                                darkMode ? "text-slate-200" : "text-slate-800"
                               }`}
                             >
                               {student.company}
                             </p>
 
-                            <p
-                              className={`text-[10px] mt-0.5 ${mutedClass}`}
-                            >
+                            <p className={`text-[10px] mt-0.5 ${mutedClass}`}>
                               Internship Company
                             </p>
                           </div>
-
                         </div>
                       </td>
 
@@ -1815,11 +1742,9 @@ const Profile = () => {
                           {student.status}
                         </span>
                       </td>
-
                     </tr>
                   ))
                 )}
-
               </tbody>
             </table>
           </div>
@@ -1832,23 +1757,16 @@ const Profile = () => {
             assignedStudents.length > ASSIGNED_STUDENTS_PER_PAGE && (
               <div
                 className={`px-5 py-3 border-t flex items-center justify-between gap-4 ${
-                  darkMode
-                    ? "border-slate-700"
-                    : "border-slate-200"
+                  darkMode ? "border-slate-700" : "border-slate-200"
                 }`}
               >
-
                 {/* SHOWING TEXT */}
 
-                <p
-                  className={`text-[10px] sm:text-xs ${mutedClass}`}
-                >
+                <p className={`text-[10px] sm:text-xs ${mutedClass}`}>
                   Showing{" "}
                   <span
                     className={`font-bold ${
-                      darkMode
-                        ? "text-slate-200"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-200" : "text-slate-700"
                     }`}
                   >
                     {showingStart}-{showingEnd}
@@ -1856,9 +1774,7 @@ const Profile = () => {
                   of{" "}
                   <span
                     className={`font-bold ${
-                      darkMode
-                        ? "text-slate-200"
-                        : "text-slate-700"
+                      darkMode ? "text-slate-200" : "text-slate-700"
                     }`}
                   >
                     {totalAssignedStudents}
@@ -1869,7 +1785,6 @@ const Profile = () => {
                 {/* PAGINATION CONTROLS */}
 
                 <div className="flex items-center gap-2">
-
                   <button
                     type="button"
                     onClick={goToPreviousAssignedStudentsPage}
@@ -1887,16 +1802,14 @@ const Profile = () => {
                   <span
                     className={`min-w-[45px] text-center text-[10px] font-bold ${mutedClass}`}
                   >
-                    {assignedStudentsPage} /{" "}
-                    {totalAssignedStudentPages}
+                    {assignedStudentsPage} / {totalAssignedStudentPages}
                   </span>
 
                   <button
                     type="button"
                     onClick={goToNextAssignedStudentsPage}
                     disabled={
-                      assignedStudentsPage ===
-                      totalAssignedStudentPages
+                      assignedStudentsPage === totalAssignedStudentPages
                     }
                     aria-label="Next students"
                     className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm font-bold transition disabled:opacity-30 disabled:cursor-not-allowed ${
@@ -1907,7 +1820,6 @@ const Profile = () => {
                   >
                     →
                   </button>
-
                 </div>
               </div>
             )}
@@ -1923,7 +1835,6 @@ const Profile = () => {
           >
             Swipe horizontally to view all student information.
           </div>
-
         </section>
       </div>
     </div>
@@ -1931,4 +1842,3 @@ const Profile = () => {
 };
 
 export default Profile;
-

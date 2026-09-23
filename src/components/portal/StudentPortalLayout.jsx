@@ -68,12 +68,9 @@ export default function StudentPortalLayout() {
   /* =========================================================
      NOTIFICATIONS
      ========================================================= */
-  const [notifications, setNotifications] = useState(
-    initialNotifications
-  );
+  const [notifications, setNotifications] = useState(initialNotifications);
 
-  const [selectedNotification, setSelectedNotification] =
-    useState(null);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   const unreadCount = notifications.filter(
     (notification) => !notification.read
@@ -83,9 +80,7 @@ export default function StudentPortalLayout() {
      DARK MODE
      ========================================================= */
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("studentPortalDarkMode") === "true"
-    );
+    return localStorage.getItem("studentPortalDarkMode") === "true";
   });
 
   /* =========================================================
@@ -114,17 +109,17 @@ export default function StudentPortalLayout() {
       icon: "👤",
     },
     {
-      label: "Apply Now",
+      label: "View Opportunities",
       path: "/student/application",
       icon: "📝",
     },
+    // {
+    //   label: "Upload Documents",
+    //   path: "/student/documents",
+    //   icon: "📁",
+    // },
     {
-      label: "Upload Documents",
-      path: "/student/documents",
-      icon: "📁",
-    },
-    {
-      label: "View Status",
+      label: "View Full Status",
       path: "/student/status",
       icon: "📊",
     },
@@ -178,9 +173,7 @@ export default function StudentPortalLayout() {
         const markerIndex = cleanPath.indexOf(marker);
 
         if (markerIndex !== -1) {
-          let storagePart = cleanPath.substring(
-            markerIndex + marker.length
-          );
+          let storagePart = cleanPath.substring(markerIndex + marker.length);
 
           storagePart = storagePart
             .replace(/^public\//, "")
@@ -190,9 +183,7 @@ export default function StudentPortalLayout() {
           const bucketMarker = `${STORAGE_BUCKET}/`;
 
           if (storagePart.startsWith(bucketMarker)) {
-            cleanPath = storagePart.substring(
-              bucketMarker.length
-            );
+            cleanPath = storagePart.substring(bucketMarker.length);
           } else {
             cleanPath = storagePart;
           }
@@ -206,10 +197,7 @@ export default function StudentPortalLayout() {
         .createSignedUrl(cleanPath, 3600);
 
       if (error) {
-        console.error(
-          "Error creating profile photo URL:",
-          error
-        );
+        console.error("Error creating profile photo URL:", error);
         return null;
       }
 
@@ -237,19 +225,18 @@ export default function StudentPortalLayout() {
       /* =====================================================
          USERS
          ===================================================== */
-      const { data: userData, error: userError } =
-        await supabaseStudent
-          .from("users")
-          .select(
-            `
+      const { data: userData, error: userError } = await supabaseStudent
+        .from("users")
+        .select(
+          `
               id,
               first_name,
               middle_name,
               last_name
             `
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (userError) {
         console.error("User profile error:", userError);
@@ -270,23 +257,19 @@ export default function StudentPortalLayout() {
       /* =====================================================
          STUDENTS
          ===================================================== */
-      const { data: studentData, error: studentError } =
-        await supabaseStudent
-          .from("students")
-          .select(
-            `
+      const { data: studentData, error: studentError } = await supabaseStudent
+        .from("students")
+        .select(
+          `
               program,
               profile_photo_url
             `
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (studentError) {
-        console.error(
-          "Student profile error:",
-          studentError
-        );
+        console.error("Student profile error:", studentError);
       }
 
       if (studentData) {
@@ -303,10 +286,7 @@ export default function StudentPortalLayout() {
         }
       }
     } catch (error) {
-      console.error(
-        "Failed to load student profile:",
-        error
-      );
+      console.error("Failed to load student profile:", error);
     }
   };
 
@@ -320,10 +300,7 @@ export default function StudentPortalLayout() {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem(
-      "studentPortalDarkMode",
-      darkMode.toString()
-    );
+    localStorage.setItem("studentPortalDarkMode", darkMode.toString());
   }, [darkMode]);
 
   const toggleDarkMode = () => {
@@ -370,10 +347,7 @@ export default function StudentPortalLayout() {
     document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -382,10 +356,7 @@ export default function StudentPortalLayout() {
      ========================================================= */
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target)
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setIsProfileOpen(false);
       }
 
@@ -397,16 +368,10 @@ export default function StudentPortalLayout() {
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -417,10 +382,7 @@ export default function StudentPortalLayout() {
     if (!isResizing) return;
 
     const handleMouseMove = (event) => {
-      const newWidth = Math.min(
-        Math.max(event.clientX, 240),
-        360
-      );
+      const newWidth = Math.min(Math.max(event.clientX, 240), 360);
 
       setSidebarWidth(newWidth);
     };
@@ -429,26 +391,14 @@ export default function StudentPortalLayout() {
       setIsResizing(false);
     };
 
-    document.addEventListener(
-      "mousemove",
-      handleMouseMove
-    );
+    document.addEventListener("mousemove", handleMouseMove);
 
-    document.addEventListener(
-      "mouseup",
-      handleMouseUp
-    );
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener(
-        "mousemove",
-        handleMouseMove
-      );
+      document.removeEventListener("mousemove", handleMouseMove);
 
-      document.removeEventListener(
-        "mouseup",
-        handleMouseUp
-      );
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isResizing]);
 
@@ -480,9 +430,7 @@ export default function StudentPortalLayout() {
   };
 
   const isChildActive = (children = []) => {
-    return children.some(
-      (child) => location.pathname === child.path
-    );
+    return children.some((child) => location.pathname === child.path);
   };
 
   /* =========================================================
@@ -514,8 +462,7 @@ export default function StudentPortalLayout() {
     try {
       setIsLoggingOut(true);
 
-      const { error } =
-        await supabaseStudent.auth.signOut();
+      const { error } = await supabaseStudent.auth.signOut();
 
       if (error) {
         console.error("Logout error:", error);
@@ -547,21 +494,13 @@ export default function StudentPortalLayout() {
   const getInitials = (name) => {
     if (!name) return "ST";
 
-    const parts = name
-      .trim()
-      .split(" ")
-      .filter(Boolean);
+    const parts = name.trim().split(" ").filter(Boolean);
 
     if (parts.length === 1) {
-      return parts[0]
-        .substring(0, 2)
-        .toUpperCase();
+      return parts[0].substring(0, 2).toUpperCase();
     }
 
-    return (
-      parts[0][0] +
-      parts[parts.length - 1][0]
-    ).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   /* =========================================================
@@ -591,10 +530,7 @@ export default function StudentPortalLayout() {
 
   const deleteNotification = (id) => {
     setNotifications((previous) =>
-      previous.filter(
-        (notification) =>
-          notification.id !== id
-      )
+      previous.filter((notification) => notification.id !== id)
     );
 
     if (selectedNotification?.id === id) {
@@ -618,19 +554,15 @@ export default function StudentPortalLayout() {
   const renderSidebarContent = (mobile = false) => {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-
         {/* ===================================================
             BRAND
             =================================================== */}
         <div
           className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
-            darkMode
-              ? "border-slate-800"
-              : "border-slate-100"
+            darkMode ? "border-slate-800" : "border-slate-100"
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
-
             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-xl font-bold text-white shadow-md">
               S
             </div>
@@ -638,9 +570,7 @@ export default function StudentPortalLayout() {
             <div className="min-w-0">
               <h1
                 className={`truncate text-lg font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 SIMS
@@ -648,9 +578,7 @@ export default function StudentPortalLayout() {
 
               <p
                 className={`truncate text-xs ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
                 Student Portal
@@ -662,9 +590,7 @@ export default function StudentPortalLayout() {
           {mobile && (
             <button
               type="button"
-              onClick={() =>
-                setIsMobileSidebarOpen(false)
-              }
+              onClick={() => setIsMobileSidebarOpen(false)}
               className={`ml-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition ${
                 darkMode
                   ? "text-slate-300 hover:bg-slate-800"
@@ -682,9 +608,7 @@ export default function StudentPortalLayout() {
             =================================================== */}
         <div
           className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
-            darkMode
-              ? "scrollbar-thumb-slate-700"
-              : "scrollbar-thumb-slate-300"
+            darkMode ? "scrollbar-thumb-slate-700" : "scrollbar-thumb-slate-300"
           }`}
           style={{
             WebkitOverflowScrolling: "touch",
@@ -694,12 +618,10 @@ export default function StudentPortalLayout() {
           <div className="space-y-1">
             {sidebarItems.map((item) => {
               const hasChildren =
-                Array.isArray(item.children) &&
-                item.children.length > 0;
+                Array.isArray(item.children) && item.children.length > 0;
 
               const active =
-                isPathActive(item.path) ||
-                isChildActive(item.children);
+                isPathActive(item.path) || isChildActive(item.children);
 
               return (
                 <div key={item.label}>
@@ -712,11 +634,7 @@ export default function StudentPortalLayout() {
                         navigateTo(item.path);
                       }
                     }}
-                    aria-current={
-                      isPathActive(item.path)
-                        ? "page"
-                        : undefined
-                    }
+                    aria-current={isPathActive(item.path) ? "page" : undefined}
                     className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all ${
                       active
                         ? darkMode
@@ -730,9 +648,7 @@ export default function StudentPortalLayout() {
                     {active && (
                       <span
                         className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${
-                          darkMode
-                            ? "bg-blue-400"
-                            : "bg-blue-600"
+                          darkMode ? "bg-blue-400" : "bg-blue-600"
                         }`}
                       />
                     )}
@@ -747,9 +663,7 @@ export default function StudentPortalLayout() {
 
                     {hasChildren && (
                       <span className="text-xs">
-                        {expandedMenus[item.label]
-                          ? "▲"
-                          : "▼"}
+                        {expandedMenus[item.label] ? "▲" : "▼"}
                       </span>
                     )}
                   </button>
@@ -757,43 +671,32 @@ export default function StudentPortalLayout() {
                   {/* =================================================
                       SUBMENU
                       ================================================= */}
-                  {hasChildren &&
-                    expandedMenus[item.label] && (
-                      <div
-                        className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
-                          darkMode
-                            ? "border-slate-700"
-                            : "border-slate-200"
-                        }`}
-                      >
-                        {item.children.map(
-                          (child) => (
-                            <button
-                              key={child.path}
-                              type="button"
-                              onClick={() =>
-                                navigateTo(
-                                  child.path
-                                )
-                              }
-                              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition ${
-                                isPathActive(
-                                  child.path
-                                )
-                                  ? darkMode
-                                    ? "bg-blue-500/10 text-blue-400"
-                                    : "bg-blue-50 text-blue-700"
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                              }`}
-                            >
-                              {child.label}
-                            </button>
-                          )
-                        )}
-                      </div>
-                    )}
+                  {hasChildren && expandedMenus[item.label] && (
+                    <div
+                      className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
+                        darkMode ? "border-slate-700" : "border-slate-200"
+                      }`}
+                    >
+                      {item.children.map((child) => (
+                        <button
+                          key={child.path}
+                          type="button"
+                          onClick={() => navigateTo(child.path)}
+                          className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition ${
+                            isPathActive(child.path)
+                              ? darkMode
+                                ? "bg-blue-500/10 text-blue-400"
+                                : "bg-blue-50 text-blue-700"
+                              : darkMode
+                              ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          {child.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -836,16 +739,13 @@ export default function StudentPortalLayout() {
   return (
     <div
       className={`min-h-screen w-full ${
-        darkMode
-          ? "bg-slate-950 text-white"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"
       }`}
       style={{
         touchAction: "pan-y",
       }}
     >
       <div className="flex min-h-screen w-full">
-
         {/* ===================================================
             DESKTOP SIDEBAR
             =================================================== */}
@@ -863,9 +763,7 @@ export default function StudentPortalLayout() {
 
           {/* Resize Handle */}
           <div
-            onMouseDown={() =>
-              setIsResizing(true)
-            }
+            onMouseDown={() => setIsResizing(true)}
             className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition ${
               isResizing
                 ? darkMode
@@ -891,7 +789,6 @@ export default function StudentPortalLayout() {
             MAIN AREA
             =================================================== */}
         <div className="flex min-w-0 flex-1 flex-col">
-
           {/* =================================================
               HEADER
               ================================================= */}
@@ -904,13 +801,10 @@ export default function StudentPortalLayout() {
           >
             {/* LEFT SIDE */}
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-
               {/* Mobile Menu */}
               <button
                 type="button"
-                onClick={() =>
-                  setIsMobileSidebarOpen(true)
-                }
+                onClick={() => setIsMobileSidebarOpen(true)}
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl lg:hidden ${
                   darkMode
                     ? "text-slate-300 hover:bg-slate-800"
@@ -924,9 +818,7 @@ export default function StudentPortalLayout() {
               <div className="min-w-0">
                 <h2
                   className={`truncate text-lg font-bold sm:text-xl ${
-                    darkMode
-                      ? "text-white"
-                      : "text-slate-900"
+                    darkMode ? "text-white" : "text-slate-900"
                   }`}
                 >
                   {getPageTitle()}
@@ -934,9 +826,7 @@ export default function StudentPortalLayout() {
 
                 <p
                   className={`hidden truncate text-xs sm:block ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
                   Student Internship Management System
@@ -946,7 +836,6 @@ export default function StudentPortalLayout() {
 
             {/* RIGHT SIDE */}
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
-
               {/* =================================================
                   DARK MODE
                   NOW IN NAVBAR
@@ -955,14 +844,10 @@ export default function StudentPortalLayout() {
                 type="button"
                 onClick={toggleDarkMode}
                 aria-label={
-                  darkMode
-                    ? "Switch to light mode"
-                    : "Switch to dark mode"
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
                 }
                 title={
-                  darkMode
-                    ? "Switch to light mode"
-                    : "Switch to dark mode"
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
                 }
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-lg transition ${
                   darkMode
@@ -976,16 +861,11 @@ export default function StudentPortalLayout() {
               {/* =================================================
                   NOTIFICATIONS
                   ================================================= */}
-              <div
-                ref={notificationRef}
-                className="relative"
-              >
+              <div ref={notificationRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen(
-                      (previous) => !previous
-                    );
+                    setIsNotificationOpen((previous) => !previous);
                     setIsProfileOpen(false);
                   }}
                   className={`relative flex h-10 w-10 items-center justify-center rounded-xl text-lg transition ${
@@ -996,12 +876,9 @@ export default function StudentPortalLayout() {
                   aria-label="Notifications"
                 >
                   🔔
-
                   {unreadCount > 0 && (
                     <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                      {unreadCount > 9
-                        ? "9+"
-                        : unreadCount}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
@@ -1026,17 +903,13 @@ export default function StudentPortalLayout() {
                     {/* HEADER */}
                     <div
                       className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="min-w-0">
                         <h3
                           className={`font-bold ${
-                            darkMode
-                              ? "text-white"
-                              : "text-slate-900"
+                            darkMode ? "text-white" : "text-slate-900"
                           }`}
                         >
                           Notifications
@@ -1044,9 +917,7 @@ export default function StudentPortalLayout() {
 
                         <p
                           className={`text-xs ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
                           {unreadCount} unread
@@ -1056,13 +927,9 @@ export default function StudentPortalLayout() {
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={
-                            markAllNotificationsRead
-                          }
+                          onClick={markAllNotificationsRead}
                           className={`flex-shrink-0 text-xs font-semibold ${
-                            darkMode
-                              ? "text-blue-400"
-                              : "text-blue-600"
+                            darkMode ? "text-blue-400" : "text-blue-600"
                           } hover:underline`}
                         >
                           Mark all read
@@ -1079,121 +946,101 @@ export default function StudentPortalLayout() {
                         sm:max-h-[380px]
                       "
                       style={{
-                        WebkitOverflowScrolling:
-                          "touch",
+                        WebkitOverflowScrolling: "touch",
                         touchAction: "pan-y",
                       }}
                     >
                       {notifications.length === 0 ? (
                         <div className="px-5 py-8 text-center">
-                          <div className="mb-2 text-3xl">
-                            🔔
-                          </div>
+                          <div className="mb-2 text-3xl">🔔</div>
 
                           <p
                             className={`text-sm ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             No notifications
                           </p>
                         </div>
                       ) : (
-                        notifications.map(
-                          (notification) => (
-                            <div
-                              key={notification.id}
-                              className={`group relative border-b px-4 py-3 transition ${
-                                darkMode
-                                  ? "border-slate-800 hover:bg-slate-800/70"
-                                  : "border-slate-100 hover:bg-slate-50"
-                              } ${
-                                !notification.read
-                                  ? darkMode
-                                    ? "bg-blue-500/5"
-                                    : "bg-blue-50/50"
-                                  : ""
-                              }`}
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`group relative border-b px-4 py-3 transition ${
+                              darkMode
+                                ? "border-slate-800 hover:bg-slate-800/70"
+                                : "border-slate-100 hover:bg-slate-50"
+                            } ${
+                              !notification.read
+                                ? darkMode
+                                  ? "bg-blue-500/5"
+                                  : "bg-blue-50/50"
+                                : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openNotification(notification)}
+                              className="w-full pr-8 text-left"
                             >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openNotification(
-                                    notification
-                                  )
-                                }
-                                className="w-full pr-8 text-left"
-                              >
-                                <div className="flex gap-3">
-                                  <div className="mt-0.5 flex-shrink-0">
-                                    <span className="text-lg">
-                                      {notification.type ===
-                                      "application"
-                                        ? "📝"
-                                        : notification.type ===
-                                          "document"
-                                        ? "📄"
-                                        : "🔔"}
-                                    </span>
-                                  </div>
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-start gap-2">
-                                      <h4
-                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
-                                          darkMode
-                                            ? "text-white"
-                                            : "text-slate-800"
-                                        }`}
-                                      >
-                                        {
-                                          notification.title
-                                        }
-                                      </h4>
-
-                                      {!notification.read && (
-                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
-                                      )}
-                                    </div>
-
-                                    <p
-                                      className={`mt-1 break-words text-xs leading-5 ${
-                                        darkMode
-                                          ? "text-slate-400"
-                                          : "text-slate-500"
-                                      }`}
-                                    >
-                                      {
-                                        notification.message
-                                      }
-                                    </p>
-
-                                    <p
-                                      className={`mt-1.5 text-[10px] ${
-                                        darkMode
-                                          ? "text-slate-500"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {
-                                        notification.time
-                                      }
-                                    </p>
-                                  </div>
+                              <div className="flex gap-3">
+                                <div className="mt-0.5 flex-shrink-0">
+                                  <span className="text-lg">
+                                    {notification.type === "application"
+                                      ? "📝"
+                                      : notification.type === "document"
+                                      ? "📄"
+                                      : "🔔"}
+                                  </span>
                                 </div>
-                              </button>
 
-                              {/* DELETE */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteNotification(
-                                    notification.id
-                                  )
-                                }
-                                className={`
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start gap-2">
+                                    <h4
+                                      className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                        darkMode
+                                          ? "text-white"
+                                          : "text-slate-800"
+                                      }`}
+                                    >
+                                      {notification.title}
+                                    </h4>
+
+                                    {!notification.read && (
+                                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                                    )}
+                                  </div>
+
+                                  <p
+                                    className={`mt-1 break-words text-xs leading-5 ${
+                                      darkMode
+                                        ? "text-slate-400"
+                                        : "text-slate-500"
+                                    }`}
+                                  >
+                                    {notification.message}
+                                  </p>
+
+                                  <p
+                                    className={`mt-1.5 text-[10px] ${
+                                      darkMode
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {notification.time}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+
+                            {/* DELETE */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteNotification(notification.id)
+                              }
+                              className={`
                                   absolute right-3 top-3
                                   flex h-7 w-7
                                   items-center justify-center
@@ -1207,31 +1054,24 @@ export default function StudentPortalLayout() {
                                       : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                   }
                                 `}
-                                aria-label="Delete notification"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )
-                        )
+                              aria-label="Delete notification"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
                       )}
                     </div>
 
                     {/* VIEW ALL */}
                     <div
                       className={`border-t p-2 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/student/notifications"
-                          )
-                        }
+                        onClick={() => navigateTo("/student/notifications")}
                         className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
                           darkMode
                             ? "text-blue-400 hover:bg-slate-800"
@@ -1248,22 +1088,15 @@ export default function StudentPortalLayout() {
               {/* =================================================
                   PROFILE
                   ================================================= */}
-              <div
-                ref={profileRef}
-                className="relative"
-              >
+              <div ref={profileRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen(
-                      (previous) => !previous
-                    );
+                    setIsProfileOpen((previous) => !previous);
                     setIsNotificationOpen(false);
                   }}
                   className={`flex items-center gap-2 rounded-xl p-1.5 transition ${
-                    darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
                   {profilePhoto ? (
@@ -1281,9 +1114,7 @@ export default function StudentPortalLayout() {
                   <div className="hidden text-left sm:block">
                     <p
                       className={`max-w-[140px] truncate text-sm font-semibold ${
-                        darkMode
-                          ? "text-white"
-                          : "text-slate-800"
+                        darkMode ? "text-white" : "text-slate-800"
                       }`}
                     >
                       {fullName}
@@ -1291,9 +1122,7 @@ export default function StudentPortalLayout() {
 
                     <p
                       className={`max-w-[140px] truncate text-[10px] ${
-                        darkMode
-                          ? "text-slate-400"
-                          : "text-slate-500"
+                        darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
                       {program}
@@ -1302,9 +1131,7 @@ export default function StudentPortalLayout() {
 
                   <span
                     className={`hidden text-xs sm:block ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
+                      darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
                     ▼
@@ -1326,9 +1153,7 @@ export default function StudentPortalLayout() {
                     {/* PROFILE HEADER */}
                     <div
                       className={`border-b px-4 py-4 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1347,9 +1172,7 @@ export default function StudentPortalLayout() {
                         <div className="min-w-0">
                           <p
                             className={`truncate text-sm font-semibold ${
-                              darkMode
-                                ? "text-white"
-                                : "text-slate-800"
+                              darkMode ? "text-white" : "text-slate-800"
                             }`}
                           >
                             {fullName}
@@ -1357,9 +1180,7 @@ export default function StudentPortalLayout() {
 
                           <p
                             className={`truncate text-xs ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             {program}
@@ -1372,11 +1193,7 @@ export default function StudentPortalLayout() {
                       {/* MY PROFILE */}
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/student/profile"
-                          )
-                        }
+                        onClick={() => navigateTo("/student/profile")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1390,11 +1207,7 @@ export default function StudentPortalLayout() {
                       {/* SETTINGS */}
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/student/settings"
-                          )
-                        }
+                        onClick={() => navigateTo("/student/settings")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1407,9 +1220,7 @@ export default function StudentPortalLayout() {
 
                       <div
                         className={`my-1 border-t ${
-                          darkMode
-                            ? "border-slate-800"
-                            : "border-slate-100"
+                          darkMode ? "border-slate-800" : "border-slate-100"
                         }`}
                       />
 
@@ -1423,8 +1234,7 @@ export default function StudentPortalLayout() {
                             : "text-red-600 hover:bg-red-50"
                         }`}
                       >
-                        ↪
-                        <span>Logout</span>
+                        ↪<span>Logout</span>
                       </button>
                     </div>
                   </div>
@@ -1438,9 +1248,7 @@ export default function StudentPortalLayout() {
               =================================================== */}
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 ${
-              darkMode
-                ? "bg-slate-950"
-                : "bg-slate-50"
+              darkMode ? "bg-slate-950" : "bg-slate-50"
             }`}
             style={{
               touchAction: "pan-y",
@@ -1469,9 +1277,7 @@ export default function StudentPortalLayout() {
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
-          onClick={() =>
-            setIsMobileSidebarOpen(false)
-          }
+          onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
@@ -1480,14 +1286,8 @@ export default function StudentPortalLayout() {
           ===================================================== */}
       <aside
         className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
-          isMobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        } ${
-          darkMode
-            ? "bg-slate-900"
-            : "bg-white"
-        }`}
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } ${darkMode ? "bg-slate-900" : "bg-white"}`}
       >
         {renderSidebarContent(true)}
       </aside>
@@ -1501,9 +1301,7 @@ export default function StudentPortalLayout() {
           onClick={closeNotificationModal}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
@@ -1512,16 +1310,12 @@ export default function StudentPortalLayout() {
           >
             <div
               className={`flex items-center justify-between border-b px-5 py-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <h3
                 className={`font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Notification
@@ -1543,11 +1337,9 @@ export default function StudentPortalLayout() {
             <div className="px-5 py-6">
               <div className="mb-4 flex items-start gap-3">
                 <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl dark:bg-blue-500/10">
-                  {selectedNotification.type ===
-                  "application"
+                  {selectedNotification.type === "application"
                     ? "📝"
-                    : selectedNotification.type ===
-                      "document"
+                    : selectedNotification.type === "document"
                     ? "📄"
                     : "🔔"}
                 </div>
@@ -1555,9 +1347,7 @@ export default function StudentPortalLayout() {
                 <div>
                   <h4
                     className={`font-bold ${
-                      darkMode
-                        ? "text-white"
-                        : "text-slate-900"
+                      darkMode ? "text-white" : "text-slate-900"
                     }`}
                   >
                     {selectedNotification.title}
@@ -1565,9 +1355,7 @@ export default function StudentPortalLayout() {
 
                   <p
                     className={`mt-1 text-xs ${
-                      darkMode
-                        ? "text-slate-500"
-                        : "text-slate-400"
+                      darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
                     {selectedNotification.time}
@@ -1577,9 +1365,7 @@ export default function StudentPortalLayout() {
 
               <p
                 className={`text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-300"
-                    : "text-slate-600"
+                  darkMode ? "text-slate-300" : "text-slate-600"
                 }`}
               >
                 {selectedNotification.message}
@@ -1588,9 +1374,7 @@ export default function StudentPortalLayout() {
 
             <div
               className={`border-t px-5 py-3 text-right ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <button
@@ -1614,9 +1398,7 @@ export default function StudentPortalLayout() {
           onClick={cancelLogout}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
@@ -1627,9 +1409,7 @@ export default function StudentPortalLayout() {
             <div className="flex justify-center pt-7">
               <div
                 className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
-                  darkMode
-                    ? "bg-red-500/10"
-                    : "bg-red-50"
+                  darkMode ? "bg-red-500/10" : "bg-red-50"
                 }`}
               >
                 ↪
@@ -1640,9 +1420,7 @@ export default function StudentPortalLayout() {
             <div className="px-6 pb-5 pt-4 text-center">
               <h3
                 className={`text-lg font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Are you sure?
@@ -1650,22 +1428,17 @@ export default function StudentPortalLayout() {
 
               <p
                 className={`mt-2 text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Are you sure you want to log out of
-                your student account?
+                Are you sure you want to log out of your student account?
               </p>
             </div>
 
             {/* BUTTONS */}
             <div
               className={`flex gap-3 border-t p-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <button
@@ -1687,9 +1460,7 @@ export default function StudentPortalLayout() {
                 disabled={isLoggingOut}
                 className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLoggingOut
-                  ? "Logging out..."
-                  : "Logout"}
+                {isLoggingOut ? "Logging out..." : "Logout"}
               </button>
             </div>
           </div>

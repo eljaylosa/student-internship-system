@@ -45,6 +45,8 @@ const ASSIGNMENT_STATUS = {
 
 const COMPLETED_STATUS = ASSIGNMENT_STATUS.COMPLETED;
 
+const PROFILE_PHOTO_BUCKET = "profile-photos";
+
 export default function Interns() {
   const { darkMode } = useOutletContext();
   const navigate = useNavigate();
@@ -65,6 +67,57 @@ export default function Interns() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sortBy, setSortBy] = useState("name-asc");
+
+  // =========================================================
+  // PROFILE PHOTO LIGHTBOX
+  // =========================================================
+
+  const [selectedProfilePhoto, setSelectedProfilePhoto] = useState(null);
+
+  // =========================================================
+  // GET PROFILE PHOTO URL
+  // =========================================================
+  //
+  // profile_photo_url may contain either:
+  // - A complete public/signed URL
+  // - A storage path inside the profile-photos bucket
+  //
+  // Convert storage paths into signed URLs so the company
+  // portal can display private profile photos.
+  //
+  // =========================================================
+
+  const getProfilePhotoUrl = async (profilePhotoUrl) => {
+    if (!profilePhotoUrl) {
+      return null;
+    }
+
+    // Already a complete URL
+    if (
+      profilePhotoUrl.startsWith("http://") ||
+      profilePhotoUrl.startsWith("https://")
+    ) {
+      return profilePhotoUrl;
+    }
+
+    try {
+      const { data, error } = await supabaseCompany.storage
+        .from(PROFILE_PHOTO_BUCKET)
+        .createSignedUrl(profilePhotoUrl, 60 * 60);
+
+      if (error) {
+        console.error("Create profile photo signed URL error:", error);
+
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (error) {
+      console.error("Profile photo URL error:", error);
+
+      return null;
+    }
+  };
 
   // =========================================================
   // LOAD ASSIGNED INTERNS
@@ -203,6 +256,7 @@ export default function Interns() {
             department,
             gwa,
             school_id,
+            profile_photo_url,
             users (
               id,
               email,
@@ -218,34 +272,47 @@ export default function Interns() {
         throw studentsError;
       }
 
-      const mappedStudents = (studentRows || []).map((student) => {
-        const userInfo = Array.isArray(student.users)
-          ? student.users[0]
-          : student.users;
+      // -------------------------------------------------------
+      // MAP STUDENTS + RESOLVE PROFILE PHOTOS
+      // -------------------------------------------------------
 
-        const fullName = [
-          userInfo?.first_name,
-          userInfo?.middle_name,
-          userInfo?.last_name,
-        ]
-          .filter(Boolean)
-          .join(" ");
+      const mappedStudents = await Promise.all(
+        (studentRows || []).map(async (student) => {
+          const userInfo = Array.isArray(student.users)
+            ? student.users[0]
+            : student.users;
 
-        return {
-          id: student.id,
-          studentId: student.student_id,
-          phone: student.phone,
-          address: student.address,
-          emergencyContact: student.emergency_contact,
-          program: student.program,
-          yearLevel: student.year_level,
-          department: student.department,
-          gwa: student.gwa,
-          schoolId: student.school_id,
-          email: userInfo?.email || "",
-          fullName: fullName || "Unknown Student",
-        };
-      });
+          const fullName = [
+            userInfo?.first_name,
+            userInfo?.middle_name,
+            userInfo?.last_name,
+          ]
+            .filter(Boolean)
+            .join(" ");
+
+          const profilePhotoUrl = await getProfilePhotoUrl(
+            student.profile_photo_url
+          );
+
+          return {
+            id: student.id,
+            studentId: student.student_id,
+            phone: student.phone,
+            address: student.address,
+            emergencyContact: student.emergency_contact,
+            program: student.program,
+            yearLevel: student.year_level,
+            department: student.department,
+            gwa: student.gwa,
+            schoolId: student.school_id,
+            email: userInfo?.email || "",
+            fullName: fullName || "Unknown Student",
+
+            // Resolved public/signed profile photo URL
+            profilePhotoUrl,
+          };
+        })
+      );
 
       setStudents(mappedStudents);
 
@@ -336,6 +403,26 @@ export default function Interns() {
   useEffect(() => {
     loadInterns();
   }, []);
+
+  // =========================================================
+  // CLOSE LIGHTBOX WITH ESC
+  // =========================================================
+
+  useEffect(() => {
+    if (!selectedProfilePhoto) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSelectedProfilePhoto(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedProfilePhoto]);
 
   // =========================================================
   // FIND STUDENT
@@ -527,10 +614,6 @@ export default function Interns() {
   // MARK INTERNSHIP AS COMPLETED
   // =========================================================
 
-  // =========================================================
-  // MARK INTERNSHIP AS COMPLETED
-  // =========================================================
-
   const handleCompleteInternship = async (assignmentId, studentName) => {
     const confirmed = window.confirm(
       `Are you sure you want to mark ${studentName}'s internship as completed?`
@@ -595,12 +678,6 @@ export default function Interns() {
 
       // -------------------------------------------------------
       // SEND COMPLETION EMAIL
-      // -------------------------------------------------------
-      //
-      // IMPORTANT:
-      // The database update has already succeeded.
-      //
-      // If the email fails, we DO NOT undo the completion.
       // -------------------------------------------------------
 
       const { data: companyData, error: companyError } = await supabaseCompany
@@ -723,557 +800,678 @@ export default function Interns() {
   // =========================================================
 
   return (
-    <div
-      className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
-        darkMode ? "text-slate-100" : "text-slate-900"
-      }`}
-    >
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
+    <>
+      <div
+        className={`p-5 md:p-6 lg:p-8 max-w-[1200px] mx-auto ${
+          darkMode ? "text-slate-100" : "text-slate-900"
+        }`}
+      >
+        {/* =====================================================
+            PAGE HEADER
+        ===================================================== */}
 
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
-          Company Portal
-        </p>
-
-        <h1 className="text-2xl font-black">Assigned Interns</h1>
-
-        <p className={`text-sm mt-1 ${muted}`}>
-          View officially deployed interns and manage their internship
-          assignments.
-        </p>
-      </div>
-
-      {/* =====================================================
-          ERROR
-      ===================================================== */}
-
-      {error && (
-        <div
-          className={`mb-5 p-4 rounded-xl border ${
-            darkMode
-              ? "bg-red-950/30 border-red-900 text-red-300"
-              : "bg-red-50 border-red-200 text-red-700"
-          }`}
-        >
-          <p className="text-xs font-bold mb-1">
-            Unable to load or update interns
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-widest font-bold text-slate-400">
+            Company Portal
           </p>
 
-          <p className="text-xs">{error}</p>
+          <h1 className="text-2xl font-black">Assigned Interns</h1>
 
-          <button
-            type="button"
-            onClick={loadInterns}
-            className="mt-3 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+          <p className={`text-sm mt-1 ${muted}`}>
+            View officially deployed interns and manage their internship
+            assignments.
+          </p>
+        </div>
+
+        {/* =====================================================
+            ERROR
+        ===================================================== */}
+
+        {error && (
+          <div
+            className={`mb-5 p-4 rounded-xl border ${
+              darkMode
+                ? "bg-red-950/30 border-red-900 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
           >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* =====================================================
-          SUMMARY CARDS
-      ===================================================== */}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        {/* TOTAL */}
-
-        <div className={`border rounded-2xl p-5 ${card}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-xs font-semibold ${muted}`}>Total Interns</p>
-
-              <p className={`text-3xl font-black mt-1 ${heading}`}>
-                {totalCount}
-              </p>
-
-              <p className={`text-xs mt-1 ${muted}`}>Officially deployed</p>
-            </div>
-
-            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
-              👥
-            </div>
-          </div>
-        </div>
-
-        {/* ACTIVE */}
-
-        <div className={`border rounded-2xl p-5 ${card}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-xs font-semibold ${muted}`}>Active Interns</p>
-
-              <p className={`text-3xl font-black mt-1 ${heading}`}>
-                {activeCount}
-              </p>
-
-              <p className={`text-xs mt-1 ${muted}`}>Currently accepted</p>
-            </div>
-
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
-              ✓
-            </div>
-          </div>
-        </div>
-
-        {/* COMPLETED */}
-
-        <div className={`border rounded-2xl p-5 ${card}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-xs font-semibold ${muted}`}>Completed</p>
-
-              <p className={`text-3xl font-black mt-1 ${heading}`}>
-                {completedCount}
-              </p>
-
-              <p className={`text-xs mt-1 ${muted}`}>Finished internships</p>
-            </div>
-
-            <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xl">
-              🏁
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =====================================================
-          SEARCH / FILTER / SORT
-      ===================================================== */}
-
-      <section className={`border rounded-2xl p-5 mb-5 ${card}`}>
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* SEARCH */}
-
-          <div className="flex-1">
-            <label className={`block text-xs font-bold mb-2 ${heading}`}>
-              Search Interns
-            </label>
-
-            <div className="relative">
-              <span
-                className={`absolute left-3 top-1/2 -translate-y-1/2 ${muted}`}
-              >
-                🔎
-              </span>
-
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by name, ID, school, position, year level, program, or email..."
-                className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
-              />
-            </div>
-          </div>
-
-          {/* STATUS */}
-
-          <div className="w-full lg:w-44">
-            <label className={`block text-xs font-bold mb-2 ${heading}`}>
-              Status
-            </label>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
-            >
-              <option value="All">All Status</option>
-
-              <option value="Active">Active</option>
-
-              <option value="Completed">Completed</option>
-            </select>
-          </div>
-
-          {/* SORT */}
-
-          <div className="w-full lg:w-52">
-            <label className={`block text-xs font-bold mb-2 ${heading}`}>
-              Sort By
-            </label>
-
-            <select
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value)}
-              className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
-            >
-              <option value="name-asc">Name: A → Z</option>
-
-              <option value="name-desc">Name: Z → A</option>
-
-              <option value="newest">Recently Deployed</option>
-
-              <option value="oldest">Oldest Deployment</option>
-
-              <option value="start-latest">Latest Start Date</option>
-
-              <option value="start-earliest">Earliest Start Date</option>
-            </select>
-          </div>
-        </div>
-
-        {/* RESULT COUNT */}
-
-        <div
-          className={`mt-4 pt-3 border-t text-xs ${
-            darkMode ? "border-slate-700" : "border-slate-200"
-          } ${muted}`}
-        >
-          Showing{" "}
-          <span className={`font-bold ${heading}`}>
-            {filteredAssignments.length}
-          </span>{" "}
-          of{" "}
-          <span className={`font-bold ${heading}`}>{assignments.length}</span>{" "}
-          assigned interns
-        </div>
-      </section>
-
-      {/* =====================================================
-          EMPTY STATE
-      ===================================================== */}
-
-      {assignments.length === 0 ? (
-        <section className={`border rounded-2xl p-6 ${card}`}>
-          <div className="text-center py-8">
-            <div className="text-4xl mb-3">👥</div>
-
-            <p className={`font-semibold ${heading}`}>
-              No accepted interns yet.
+            <p className="text-xs font-bold mb-1">
+              Unable to load or update interns
             </p>
 
-            <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
-              Students will appear here after the registrar officially deploys
-              them and your company accepts their internship placement.
-            </p>
-          </div>
-        </section>
-      ) : filteredAssignments.length === 0 ? (
-        <section className={`border rounded-2xl p-6 ${card}`}>
-          <div className="text-center py-8">
-            <div className="text-3xl mb-3">🔎</div>
-
-            <p className={`font-semibold ${heading}`}>No interns found.</p>
-
-            <p className={`text-sm mt-1 ${muted}`}>
-              Try changing your search or status filter.
-            </p>
+            <p className="text-xs">{error}</p>
 
             <button
               type="button"
-              onClick={() => {
-                setSearchTerm("");
-                setStatusFilter("All");
-              }}
-              className="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+              onClick={loadInterns}
+              className="mt-3 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
             >
-              Clear Filters
+              Try Again
             </button>
           </div>
-        </section>
-      ) : (
-        /* =====================================================
-           ASSIGNED INTERNS
-        ===================================================== */
+        )}
 
-        <section className={`border rounded-2xl overflow-hidden ${card}`}>
-          <div
-            className={`px-5 py-4 border-b ${
-              darkMode ? "border-slate-700" : "border-slate-200"
-            }`}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        {/* =====================================================
+            SUMMARY CARDS
+        ===================================================== */}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* TOTAL */}
+
+          <div className={`border rounded-2xl p-5 ${card}`}>
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className={`font-bold ${heading}`}>Assigned Interns</h2>
+                <p className={`text-xs font-semibold ${muted}`}>
+                  Total Interns
+                </p>
+
+                <p className={`text-3xl font-black mt-1 ${heading}`}>
+                  {totalCount}
+                </p>
 
                 <p className={`text-xs mt-1 ${muted}`}>
-                  Officially deployed students assigned to your company.
+                  Officially deployed
                 </p>
               </div>
 
-              <span
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-                  darkMode
-                    ? "bg-slate-800 text-slate-300"
-                    : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {filteredAssignments.length} result
-                {filteredAssignments.length !== 1 ? "s" : ""}
-              </span>
+              <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
+                👥
+              </div>
             </div>
           </div>
 
-          {/* =================================================
-              INTERN LIST
-          ================================================= */}
+          {/* ACTIVE */}
+
+          <div className={`border rounded-2xl p-5 ${card}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-xs font-semibold ${muted}`}>
+                  Active Interns
+                </p>
+
+                <p className={`text-3xl font-black mt-1 ${heading}`}>
+                  {activeCount}
+                </p>
+
+                <p className={`text-xs mt-1 ${muted}`}>
+                  Currently accepted
+                </p>
+              </div>
+
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                ✓
+              </div>
+            </div>
+          </div>
+
+          {/* COMPLETED */}
+
+          <div className={`border rounded-2xl p-5 ${card}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-xs font-semibold ${muted}`}>Completed</p>
+
+                <p className={`text-3xl font-black mt-1 ${heading}`}>
+                  {completedCount}
+                </p>
+
+                <p className={`text-xs mt-1 ${muted}`}>
+                  Finished internships
+                </p>
+              </div>
+
+              <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xl">
+                🏁
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* =====================================================
+            SEARCH / FILTER / SORT
+        ===================================================== */}
+
+        <section className={`border rounded-2xl p-5 mb-5 ${card}`}>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* SEARCH */}
+
+            <div className="flex-1">
+              <label className={`block text-xs font-bold mb-2 ${heading}`}>
+                Search Interns
+              </label>
+
+              <div className="relative">
+                <span
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 ${muted}`}
+                >
+                  🔎
+                </span>
+
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search by name, ID, school, position, year level, program, or email..."
+                  className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
+                />
+              </div>
+            </div>
+
+            {/* STATUS */}
+
+            <div className="w-full lg:w-44">
+              <label className={`block text-xs font-bold mb-2 ${heading}`}>
+                Status
+              </label>
+
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
+              >
+                <option value="All">All Status</option>
+
+                <option value="Active">Active</option>
+
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+
+            {/* SORT */}
+
+            <div className="w-full lg:w-52">
+              <label className={`block text-xs font-bold mb-2 ${heading}`}>
+                Sort By
+              </label>
+
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${input}`}
+              >
+                <option value="name-asc">Name: A → Z</option>
+
+                <option value="name-desc">Name: Z → A</option>
+
+                <option value="newest">Recently Deployed</option>
+
+                <option value="oldest">Oldest Deployment</option>
+
+                <option value="start-latest">Latest Start Date</option>
+
+                <option value="start-earliest">Earliest Start Date</option>
+              </select>
+            </div>
+          </div>
+
+          {/* RESULT COUNT */}
 
           <div
-            className={`divide-y ${
-              darkMode ? "divide-slate-700" : "divide-slate-200"
-            }`}
+            className={`mt-4 pt-3 border-t text-xs ${
+              darkMode ? "border-slate-700" : "border-slate-200"
+            } ${muted}`}
           >
-            {filteredAssignments.map((assignment) => {
-              const student = getStudent(assignment.student_id);
+            Showing{" "}
+            <span className={`font-bold ${heading}`}>
+              {filteredAssignments.length}
+            </span>{" "}
+            of{" "}
+            <span className={`font-bold ${heading}`}>
+              {assignments.length}
+            </span>{" "}
+            assigned interns
+          </div>
+        </section>
 
-              const opportunity = getOpportunity(assignment.opportunity_id);
+        {/* =====================================================
+            EMPTY STATE
+        ===================================================== */}
 
-              const school = getSchool(student?.schoolId);
+        {assignments.length === 0 ? (
+          <section className={`border rounded-2xl p-6 ${card}`}>
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">👥</div>
 
-              const isCompleted =
-                assignment.status === ASSIGNMENT_STATUS.COMPLETED;
+              <p className={`font-semibold ${heading}`}>
+                No accepted interns yet.
+              </p>
 
-              const isProcessing = processingId === assignment.id;
+              <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
+                Students will appear here after the registrar officially
+                deploys them and your company accepts their internship
+                placement.
+              </p>
+            </div>
+          </section>
+        ) : filteredAssignments.length === 0 ? (
+          <section className={`border rounded-2xl p-6 ${card}`}>
+            <div className="text-center py-8">
+              <div className="text-3xl mb-3">🔎</div>
 
-              return (
-                <div
-                  key={assignment.id}
-                  className={`p-5 transition ${
-                    darkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"
+              <p className={`font-semibold ${heading}`}>No interns found.</p>
+
+              <p className={`text-sm mt-1 ${muted}`}>
+                Try changing your search or status filter.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("All");
+                }}
+                className="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </section>
+        ) : (
+          /* =====================================================
+             ASSIGNED INTERNS
+          ===================================================== */
+
+          <section className={`border rounded-2xl overflow-hidden ${card}`}>
+            <div
+              className={`px-5 py-4 border-b ${
+                darkMode ? "border-slate-700" : "border-slate-200"
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <h2 className={`font-bold ${heading}`}>Assigned Interns</h2>
+
+                  <p className={`text-xs mt-1 ${muted}`}>
+                    Officially deployed students assigned to your company.
+                  </p>
+                </div>
+
+                <span
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                    darkMode
+                      ? "bg-slate-800 text-slate-300"
+                      : "bg-slate-100 text-slate-600"
                   }`}
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-center gap-6">
-                    {/* =========================================
-                        INTERN
-                    ========================================= */}
+                  {filteredAssignments.length} result
+                  {filteredAssignments.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
 
-                    <div className="flex items-start gap-4 min-w-0 xl:w-[260px]">
-                      {/* AVATAR */}
+            {/* =================================================
+                INTERN LIST
+            ================================================= */}
 
-                      <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${
-                          isCompleted
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-emerald-50 text-emerald-700"
-                        }`}
-                      >
-                        {student?.fullName
-                          ?.split(" ")
-                          .map((name) => name[0])
-                          .slice(0, 2)
-                          .join("") || "ST"}
-                      </div>
+            <div
+              className={`divide-y ${
+                darkMode ? "divide-slate-700" : "divide-slate-200"
+              }`}
+            >
+              {filteredAssignments.map((assignment) => {
+                const student = getStudent(assignment.student_id);
 
-                      {/* DETAILS */}
+                const opportunity = getOpportunity(assignment.opportunity_id);
 
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className={`font-bold ${heading}`}>
-                            {student?.fullName || "Unknown Student"}
-                          </p>
+                const school = getSchool(student?.schoolId);
 
-                          {isCompleted ? (
-                            <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
-                              COMPLETED
-                            </span>
+                const isCompleted =
+                  assignment.status === ASSIGNMENT_STATUS.COMPLETED;
+
+                const isProcessing = processingId === assignment.id;
+
+                return (
+                  <div
+                    key={assignment.id}
+                    className={`p-5 transition ${
+                      darkMode
+                        ? "hover:bg-slate-800/60"
+                        : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex flex-col xl:flex-row xl:items-center gap-6">
+                      {/* =========================================
+                          INTERN
+                      ========================================= */}
+
+                      <div className="flex items-start gap-4 min-w-0 xl:w-[260px]">
+                        {/* AVATAR */}
+
+                        <div
+                          className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center font-bold flex-shrink-0 ${
+                            isCompleted
+                              ? "bg-blue-50 text-blue-700"
+                              : "bg-emerald-50 text-emerald-700"
+                          } ${
+                            student?.profilePhotoUrl
+                              ? "cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-offset-2 transition"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            if (student?.profilePhotoUrl) {
+                              setSelectedProfilePhoto({
+                                url: student.profilePhotoUrl,
+                                name: student.fullName || "Student",
+                              });
+                            }
+                          }}
+                          role={student?.profilePhotoUrl ? "button" : undefined}
+                          tabIndex={student?.profilePhotoUrl ? 0 : undefined}
+                          onKeyDown={(event) => {
+                            if (
+                              student?.profilePhotoUrl &&
+                              (event.key === "Enter" || event.key === " ")
+                            ) {
+                              event.preventDefault();
+
+                              setSelectedProfilePhoto({
+                                url: student.profilePhotoUrl,
+                                name: student.fullName || "Student",
+                              });
+                            }
+                          }}
+                          aria-label={
+                            student?.profilePhotoUrl
+                              ? `View ${student.fullName || "student"} profile photo`
+                              : undefined
+                          }
+                        >
+                          {student?.profilePhotoUrl ? (
+                            <img
+                              src={student.profilePhotoUrl}
+                              alt={student.fullName || "Student"}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
-                            <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                              ACTIVE
-                            </span>
+                            student?.fullName
+                              ?.split(" ")
+                              .filter(Boolean)
+                              .map((name) => name[0])
+                              .slice(0, 2)
+                              .join("") || "ST"
                           )}
                         </div>
 
-                        <p className={`text-xs mt-1 ${muted}`}>
-                          {student?.studentId || "No Student ID"}
+                        {/* DETAILS */}
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className={`font-bold ${heading}`}>
+                              {student?.fullName || "Unknown Student"}
+                            </p>
+
+                            {isCompleted ? (
+                              <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
+                                COMPLETED
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                ACTIVE
+                              </span>
+                            )}
+                          </div>
+
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {student?.studentId || "No Student ID"}
+                          </p>
+
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {student?.program || "No Program"}
+                          </p>
+
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {student?.email || "No email available"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* =========================================
+                          SCHOOL
+                      ========================================= */}
+
+                      <div className="xl:w-[190px]">
+                        <p
+                          className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                        >
+                          School
                         </p>
 
-                        <p className={`text-xs mt-1 ${muted}`}>
-                          {student?.program || "No Program"}
+                        <p
+                          className={`text-sm font-semibold mt-1 ${heading}`}
+                        >
+                          {school?.name || "School not specified"}
                         </p>
 
-                        <p className={`text-xs mt-1 ${muted}`}>
-                          {student?.email || "No email available"}
+                        {school?.code && (
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {school.code}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* =========================================
+                          POSITION
+                      ========================================= */}
+
+                      <div className="xl:w-[190px]">
+                        <p
+                          className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                        >
+                          Position
                         </p>
+
+                        <p
+                          className={`text-sm font-semibold mt-1 ${heading}`}
+                        >
+                          {opportunity?.title || "Position not specified"}
+                        </p>
+
+                        {opportunity?.position_type && (
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {opportunity.position_type}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* =========================================
+                          YEAR LEVEL
+                      ========================================= */}
+
+                      <div className="xl:w-[110px]">
+                        <p
+                          className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                        >
+                          Year Level
+                        </p>
+
+                        <p
+                          className={`text-sm font-semibold mt-1 ${heading}`}
+                        >
+                          {student?.yearLevel || "Not specified"}
+                        </p>
+
+                        {student?.department && (
+                          <p className={`text-xs mt-1 ${muted}`}>
+                            {student.department}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* =========================================
+                          INTERNSHIP PERIOD
+                      ========================================= */}
+
+                      <div className="xl:flex-1 xl:min-w-[190px]">
+                        <p
+                          className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                        >
+                          Internship Period
+                        </p>
+
+                        <p
+                          className={`text-sm font-semibold mt-1 ${heading}`}
+                        >
+                          {assignment.start_date
+                            ? new Date(
+                                assignment.start_date
+                              ).toLocaleDateString()
+                            : "N/A"}
+                        </p>
+
+                        <p className={`text-xs ${muted}`}>
+                          to{" "}
+                          {assignment.end_date
+                            ? new Date(
+                                assignment.end_date
+                              ).toLocaleDateString()
+                            : "N/A"}
+                        </p>
+                      </div>
+
+                      {/* =========================================
+                          ACTION
+                      ========================================= */}
+
+                      <div className="flex-shrink-0">
+                        {isCompleted ? (
+                          <button
+                            type="button"
+                            onClick={() => handleEvaluateIntern(assignment.id)}
+                            className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                              darkMode
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                            }`}
+                          >
+                            Evaluate Intern
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isProcessing}
+                            onClick={() =>
+                              handleCompleteInternship(
+                                assignment.id,
+                                student?.fullName || "this intern"
+                              )
+                            }
+                            className={`px-4 py-2 rounded-lg text-white text-xs font-semibold transition ${
+                              isProcessing
+                                ? "bg-blue-400 cursor-not-allowed"
+                                : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                          >
+                            {isProcessing
+                              ? "Updating..."
+                              : "Mark as Completed"}
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {/* =========================================
-                        SCHOOL
+                        ASSIGNMENT META
                     ========================================= */}
 
-                    <div className="xl:w-[190px]">
-                      <p
-                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                    <div className="flex flex-wrap gap-2 mt-4 ml-0 xl:ml-[64px]">
+                      <span
+                        className={`text-[10px] px-2 py-1 rounded-md ${
+                          darkMode
+                            ? "bg-slate-800 text-slate-300"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
                       >
-                        School
-                      </p>
+                        Assignment: {assignment.id}
+                      </span>
 
-                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
-                        {school?.name || "School not specified"}
-                      </p>
-
-                      {school?.code && (
-                        <p className={`text-xs mt-1 ${muted}`}>{school.code}</p>
-                      )}
-                    </div>
-
-                    {/* =========================================
-                        POSITION
-                    ========================================= */}
-
-                    <div className="xl:w-[190px]">
-                      <p
-                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                      <span
+                        className={`text-[10px] px-2 py-1 rounded-md ${
+                          darkMode
+                            ? "bg-slate-800 text-slate-300"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
                       >
-                        Position
-                      </p>
-
-                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
-                        {opportunity?.title || "Position not specified"}
-                      </p>
-
-                      {opportunity?.position_type && (
-                        <p className={`text-xs mt-1 ${muted}`}>
-                          {opportunity.position_type}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* =========================================
-                        YEAR LEVEL
-                    ========================================= */}
-
-                    <div className="xl:w-[110px]">
-                      <p
-                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
-                      >
-                        Year Level
-                      </p>
-
-                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
-                        {student?.yearLevel || "Not specified"}
-                      </p>
-
-                      {student?.department && (
-                        <p className={`text-xs mt-1 ${muted}`}>
-                          {student.department}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* =========================================
-                        INTERNSHIP PERIOD
-                    ========================================= */}
-
-                    <div className="xl:flex-1 xl:min-w-[190px]">
-                      <p
-                        className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
-                      >
-                        Internship Period
-                      </p>
-
-                      <p className={`text-sm font-semibold mt-1 ${heading}`}>
-                        {assignment.start_date
-                          ? new Date(assignment.start_date).toLocaleDateString()
+                        Deployed:{" "}
+                        {assignment.deployed_at
+                          ? new Date(
+                              assignment.deployed_at
+                            ).toLocaleDateString()
                           : "N/A"}
-                      </p>
-
-                      <p className={`text-xs ${muted}`}>
-                        to{" "}
-                        {assignment.end_date
-                          ? new Date(assignment.end_date).toLocaleDateString()
-                          : "N/A"}
-                      </p>
-                    </div>
-
-                    {/* =========================================
-                        ACTION
-                    ========================================= */}
-
-                    <div className="flex-shrink-0">
-                      {isCompleted ? (
-                        <button
-                          type="button"
-                          onClick={() => handleEvaluateIntern(assignment.id)}
-                          className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                            darkMode
-                              ? "bg-blue-600 text-white hover:bg-blue-700"
-                              : "bg-blue-600 text-white hover:bg-blue-700"
-                          }`}
-                        >
-                          Evaluate Intern
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isProcessing}
-                          onClick={() =>
-                            handleCompleteInternship(
-                              assignment.id,
-                              student?.fullName || "this intern"
-                            )
-                          }
-                          className={`px-4 py-2 rounded-lg text-white text-xs font-semibold transition ${
-                            isProcessing
-                              ? "bg-blue-400 cursor-not-allowed"
-                              : "bg-blue-600 hover:bg-blue-700"
-                          }`}
-                        >
-                          {isProcessing ? "Updating..." : "Mark as Completed"}
-                        </button>
-                      )}
+                      </span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-                  {/* =========================================
-                      ASSIGNMENT META
-                  ========================================= */}
+        {/* =====================================================
+            LIMITATION NOTICE
+        ===================================================== */}
 
-                  <div className="flex flex-wrap gap-2 mt-4 ml-0 xl:ml-[64px]">
-                    <span
-                      className={`text-[10px] px-2 py-1 rounded-md ${
-                        darkMode
-                          ? "bg-slate-800 text-slate-300"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      Assignment: {assignment.id}
-                    </span>
+        <div
+          className={`mt-5 p-4 rounded-xl border text-xs ${
+            darkMode
+              ? "bg-amber-950/30 border-amber-900 text-amber-300"
+              : "bg-amber-50 border-amber-200 text-amber-700"
+          }`}
+        >
+          <p className="font-bold mb-1">ℹ️ Current System Limitation</p>
 
-                    <span
-                      className={`text-[10px] px-2 py-1 rounded-md ${
-                        darkMode
-                          ? "bg-slate-800 text-slate-300"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      Deployed:{" "}
-                      {assignment.deployed_at
-                        ? new Date(assignment.deployed_at).toLocaleDateString()
-                        : "N/A"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* =====================================================
-          LIMITATION NOTICE
-      ===================================================== */}
-
-      <div
-        className={`mt-5 p-4 rounded-xl border text-xs ${
-          darkMode
-            ? "bg-amber-950/30 border-amber-900 text-amber-300"
-            : "bg-amber-50 border-amber-200 text-amber-700"
-        }`}
-      >
-        <p className="font-bold mb-1">ℹ️ Current System Limitation</p>
-
-        <p>
-          Attendance and daily internship progress are not tracked by the
-          company portal in the current version of the system. This page is
-          limited to viewing officially deployed interns and managing internship
-          completion status.
-        </p>
+          <p>
+            Attendance and daily internship progress are not tracked by the
+            company portal in the current version of the system. This page is
+            limited to viewing officially deployed interns and managing
+            internship completion status.
+          </p>
+        </div>
       </div>
-    </div>
+
+      {/* =========================================================
+          PROFILE PHOTO LIGHTBOX
+      ========================================================= */}
+
+      {selectedProfilePhoto && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedProfilePhoto(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${selectedProfilePhoto.name} profile photo preview`}
+        >
+          {/* CLOSE BUTTON */}
+
+          <button
+            type="button"
+            onClick={() => setSelectedProfilePhoto(null)}
+            className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl flex items-center justify-center transition"
+            aria-label="Close profile photo preview"
+          >
+            ×
+          </button>
+
+          {/* IMAGE */}
+
+          <div
+            className="relative max-w-[90vw] max-h-[90vh]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={selectedProfilePhoto.url}
+              alt={selectedProfilePhoto.name}
+              className="max-w-[90vw] max-h-[85vh] w-auto h-auto object-contain rounded-2xl shadow-2xl"
+            />
+
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-10 whitespace-nowrap">
+              <p className="text-white text-sm font-semibold">
+                {selectedProfilePhoto.name}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+

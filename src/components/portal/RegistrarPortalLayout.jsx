@@ -85,10 +85,7 @@ const RegistrarPortalLayout = () => {
         } = await supabaseRegistrar.auth.getUser();
 
         if (authError) {
-          console.error(
-            "Error getting authenticated user:",
-            authError
-          );
+          console.error("Error getting authenticated user:", authError);
           return;
         }
 
@@ -101,11 +98,10 @@ const RegistrarPortalLayout = () => {
         // COMMON USER INFORMATION
         // -----------------------------------------------------
 
-        const { data: userData, error: userError } =
-          await supabaseRegistrar
-            .from("users")
-            .select(
-              `
+        const { data: userData, error: userError } = await supabaseRegistrar
+          .from("users")
+          .select(
+            `
                 id,
                 email,
                 first_name,
@@ -114,15 +110,12 @@ const RegistrarPortalLayout = () => {
                 role,
                 status
               `
-            )
-            .eq("id", user.id)
-            .single();
+          )
+          .eq("id", user.id)
+          .single();
 
         if (userError) {
-          console.error(
-            "Error loading users record:",
-            userError
-          );
+          console.error("Error loading users record:", userError);
         }
 
         // -----------------------------------------------------
@@ -148,10 +141,7 @@ const RegistrarPortalLayout = () => {
             .single();
 
         if (registrarError) {
-          console.error(
-            "Error loading registrar record:",
-            registrarError
-          );
+          console.error("Error loading registrar record:", registrarError);
         }
 
         if (!isMounted) return;
@@ -167,18 +157,13 @@ const RegistrarPortalLayout = () => {
           employee_id: registrarData?.employee_id || "",
           department: registrarData?.department || "",
           position: registrarData?.position || "",
-          specialization:
-            registrarData?.specialization || "",
+          specialization: registrarData?.specialization || "",
           phone: registrarData?.phone || "",
           address: registrarData?.address || "",
-          profile_photo_url:
-            registrarData?.profile_photo_url || "",
+          profile_photo_url: registrarData?.profile_photo_url || "",
         });
       } catch (error) {
-        console.error(
-          "Unexpected error loading registrar profile:",
-          error
-        );
+        console.error("Unexpected error loading registrar profile:", error);
       } finally {
         if (isMounted) {
           setProfileLoading(false);
@@ -198,39 +183,28 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const getRegistrarFullName = () => {
-    const firstName =
-      registrarProfile.first_name?.trim() || "";
+    const firstName = registrarProfile.first_name?.trim() || "";
 
-    const middleName =
-      registrarProfile.middle_name?.trim() || "";
+    const middleName = registrarProfile.middle_name?.trim() || "";
 
-    const lastName =
-      registrarProfile.last_name?.trim() || "";
+    const lastName = registrarProfile.last_name?.trim() || "";
 
-    return [firstName, middleName, lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
+    return [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
   };
 
-  const registrarFullName =
-    getRegistrarFullName() || "Registrar Admin";
+  const registrarFullName = getRegistrarFullName() || "Registrar Admin";
 
   // =========================================================
   // REGISTRAR INITIALS
   // =========================================================
 
   const getRegistrarInitials = () => {
-    const firstName =
-      registrarProfile.first_name?.trim() || "";
+    const firstName = registrarProfile.first_name?.trim() || "";
 
-    const lastName =
-      registrarProfile.last_name?.trim() || "";
+    const lastName = registrarProfile.last_name?.trim() || "";
 
     if (firstName && lastName) {
-      return `${firstName.charAt(0)}${lastName.charAt(
-        0
-      )}`.toUpperCase();
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
     }
 
     if (firstName) {
@@ -250,15 +224,13 @@ const RegistrarPortalLayout = () => {
   // PROFILE PHOTO URL
   // =========================================================
 
-  const [profilePhotoUrl, setProfilePhotoUrl] =
-    useState("");
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
     const loadProfilePhoto = async () => {
-      const photoPath =
-        registrarProfile.profile_photo_url;
+      const photoPath = registrarProfile.profile_photo_url;
 
       if (!photoPath) {
         setProfilePhotoUrl("");
@@ -285,16 +257,12 @@ const RegistrarPortalLayout = () => {
         // STORAGE PATH
         // -----------------------------------------------------
 
-        const { data, error } =
-          await supabaseRegistrar.storage
-            .from("profile-photos")
-            .createSignedUrl(photoPath, 60 * 60);
+        const { data, error } = await supabaseRegistrar.storage
+          .from("profile-photos")
+          .createSignedUrl(photoPath, 60 * 60);
 
         if (error) {
-          console.error(
-            "Error generating profile photo URL:",
-            error
-          );
+          console.error("Error generating profile photo URL:", error);
 
           if (isMounted) {
             setProfilePhotoUrl("");
@@ -304,15 +272,10 @@ const RegistrarPortalLayout = () => {
         }
 
         if (isMounted) {
-          setProfilePhotoUrl(
-            data?.signedUrl || ""
-          );
+          setProfilePhotoUrl(data?.signedUrl || "");
         }
       } catch (error) {
-        console.error(
-          "Unexpected profile photo error:",
-          error
-        );
+        console.error("Unexpected profile photo error:", error);
 
         if (isMounted) {
           setProfilePhotoUrl("");
@@ -339,21 +302,17 @@ const RegistrarPortalLayout = () => {
   // SIDEBAR
   // =========================================================
 
-  const [sidebarWidth, setSidebarWidth] =
-    useState(280);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
 
-  const [isResizing, setIsResizing] =
-    useState(false);
+  const [isResizing, setIsResizing] = useState(false);
 
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
-    useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // =========================================================
   // PROFILE DROPDOWN
   // =========================================================
 
-  const [isProfileOpen, setIsProfileOpen] =
-    useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const profileMenuRef = useRef(null);
 
@@ -361,8 +320,7 @@ const RegistrarPortalLayout = () => {
   // NOTIFICATION DROPDOWN
   // =========================================================
 
-  const [isNotificationOpen, setIsNotificationOpen] =
-    useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const notificationRef = useRef(null);
 
@@ -370,21 +328,17 @@ const RegistrarPortalLayout = () => {
   // NOTIFICATION STATE
   // =========================================================
 
-  const [notifications, setNotifications] =
-    useState(initialNotifications);
+  const [notifications, setNotifications] = useState(initialNotifications);
 
-  const [selectedNotification, setSelectedNotification] =
-    useState(null);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   // =========================================================
   // LOGOUT CONFIRMATION
   // =========================================================
 
-  const [showLogoutConfirm, setShowLogoutConfirm] =
-    useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const [isLoggingOut, setIsLoggingOut] =
-    useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // =========================================================
   // NOTIFICATION CONTROLS
@@ -394,17 +348,13 @@ const RegistrarPortalLayout = () => {
     (notification) => !notification.readAt
   ).length;
 
-  const markNotificationRead = (
-    notificationId
-  ) => {
+  const markNotificationRead = (notificationId) => {
     setNotifications((previous) =>
       previous.map((notification) =>
         notification.id === notificationId
           ? {
               ...notification,
-              readAt:
-                notification.readAt ||
-                new Date().toISOString(),
+              readAt: notification.readAt || new Date().toISOString(),
             }
           : notification
       )
@@ -417,44 +367,30 @@ const RegistrarPortalLayout = () => {
     setNotifications((previous) =>
       previous.map((notification) => ({
         ...notification,
-        readAt:
-          notification.readAt || now,
+        readAt: notification.readAt || now,
       }))
     );
   };
 
-  const deleteNotification = (
-    notificationId
-  ) => {
+  const deleteNotification = (notificationId) => {
     setNotifications((previous) =>
-      previous.filter(
-        (notification) =>
-          notification.id !== notificationId
-      )
+      previous.filter((notification) => notification.id !== notificationId)
     );
 
     setSelectedNotification((current) =>
-      current?.id === notificationId
-        ? null
-        : current
+      current?.id === notificationId ? null : current
     );
   };
 
-  const openNotification = (
-    notification
-  ) => {
+  const openNotification = (notification) => {
     const updatedNotification = {
       ...notification,
-      readAt:
-        notification.readAt ||
-        new Date().toISOString(),
+      readAt: notification.readAt || new Date().toISOString(),
     };
 
     markNotificationRead(notification.id);
 
-    setSelectedNotification(
-      updatedNotification
-    );
+    setSelectedNotification(updatedNotification);
 
     setIsNotificationOpen(false);
   };
@@ -468,28 +404,17 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem(
-        "registrarPortalDarkMode"
-      ) === "true"
-    );
+    return localStorage.getItem("registrarPortalDarkMode") === "true";
   });
 
   useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add(
-        "dark"
-      );
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove(
-        "dark"
-      );
+      document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem(
-      "registrarPortalDarkMode",
-      darkMode.toString()
-    );
+    localStorage.setItem("registrarPortalDarkMode", darkMode.toString());
   }, [darkMode]);
 
   const toggleDarkMode = () => {
@@ -521,16 +446,10 @@ const RegistrarPortalLayout = () => {
       }
     };
 
-    document.addEventListener(
-      "keydown",
-      handleEscape
-    );
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -558,33 +477,23 @@ const RegistrarPortalLayout = () => {
     const handleClickOutside = (event) => {
       if (
         profileMenuRef.current &&
-        !profileMenuRef.current.contains(
-          event.target
-        )
+        !profileMenuRef.current.contains(event.target)
       ) {
         setIsProfileOpen(false);
       }
 
       if (
         notificationRef.current &&
-        !notificationRef.current.contains(
-          event.target
-        )
+        !notificationRef.current.contains(event.target)
       ) {
         setIsNotificationOpen(false);
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -613,11 +522,11 @@ const RegistrarPortalLayout = () => {
       icon: "📋",
       path: "/registrar/applications",
     },
-    {
-      name: "Review Documents",
-      icon: "📁",
-      path: "/registrar/documents",
-    },
+    // {
+    //   name: "Review Documents",
+    //   icon: "📁",
+    //   path: "/registrar/documents",
+    // },
     {
       name: "Manage Deployment",
       icon: "🚀",
@@ -650,8 +559,7 @@ const RegistrarPortalLayout = () => {
   // EXPANDABLE MENUS
   // =========================================================
 
-  const [expandedMenus, setExpandedMenus] =
-    useState({});
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   // =========================================================
   // SIDEBAR RESIZE
@@ -662,9 +570,7 @@ const RegistrarPortalLayout = () => {
 
     setIsResizing(true);
 
-    e.currentTarget.setPointerCapture?.(
-      e.pointerId
-    );
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
   const handleSidebarResize = (e) => {
@@ -673,10 +579,7 @@ const RegistrarPortalLayout = () => {
     const minWidth = 240;
     const maxWidth = 360;
 
-    const newWidth = Math.min(
-      Math.max(e.clientX, minWidth),
-      maxWidth
-    );
+    const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
 
     setSidebarWidth(newWidth);
   };
@@ -685,9 +588,7 @@ const RegistrarPortalLayout = () => {
     setIsResizing(false);
 
     try {
-      e.currentTarget.releasePointerCapture?.(
-        e.pointerId
-      );
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
     } catch {
       // Pointer capture may already be released.
     }
@@ -717,10 +618,7 @@ const RegistrarPortalLayout = () => {
   };
 
   const isChildActive = (children) => {
-    return children?.some(
-      (child) =>
-        location.pathname === child.path
-    );
+    return children?.some((child) => location.pathname === child.path);
   };
 
   // =========================================================
@@ -728,34 +626,23 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const getPageTitle = () => {
-    const currentItem = sidebarItems.find(
-      (item) => {
-        if (
-          item.path === location.pathname
-        ) {
-          return true;
-        }
-
-        return item.children?.some(
-          (child) =>
-            child.path === location.pathname
-        );
+    const currentItem = sidebarItems.find((item) => {
+      if (item.path === location.pathname) {
+        return true;
       }
-    );
+
+      return item.children?.some((child) => child.path === location.pathname);
+    });
 
     if (!currentItem) {
       return "Registrar Portal";
     }
 
-    const child =
-      currentItem.children?.find(
-        (child) =>
-          child.path === location.pathname
-      );
+    const child = currentItem.children?.find(
+      (child) => child.path === location.pathname
+    );
 
-    return child
-      ? child.name
-      : currentItem.name;
+    return child ? child.name : currentItem.name;
   };
 
   // =========================================================
@@ -795,10 +682,7 @@ const RegistrarPortalLayout = () => {
         replace: true,
       });
     } catch (error) {
-      console.error(
-        "Logout error:",
-        error
-      );
+      console.error("Logout error:", error);
 
       setIsLoggingOut(false);
     }
@@ -816,9 +700,7 @@ const RegistrarPortalLayout = () => {
 
       <div
         className={`h-20 flex-shrink-0 px-6 flex items-center border-b ${
-          darkMode
-            ? "border-slate-700"
-            : "border-slate-100"
+          darkMode ? "border-slate-700" : "border-slate-100"
         }`}
       >
         <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md flex-shrink-0">
@@ -826,15 +708,11 @@ const RegistrarPortalLayout = () => {
         </div>
 
         <div className="ml-3 min-w-0">
-          <h1 className="font-bold text-lg tracking-tight">
-            SIMS
-          </h1>
+          <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
 
           <p
             className={`text-xs truncate ${
-              darkMode
-                ? "text-slate-400"
-                : "text-slate-400"
+              darkMode ? "text-slate-400" : "text-slate-400"
             }`}
           >
             Registrar Portal
@@ -846,14 +724,10 @@ const RegistrarPortalLayout = () => {
         {mobile && (
           <button
             type="button"
-            onClick={() =>
-              setIsMobileSidebarOpen(false)
-            }
+            onClick={() => setIsMobileSidebarOpen(false)}
             aria-label="Close sidebar"
             className={`ml-auto flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-lg ${
-              darkMode
-                ? "hover:bg-slate-800"
-                : "hover:bg-slate-100"
+              darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
             }`}
           >
             ×
@@ -868,191 +742,138 @@ const RegistrarPortalLayout = () => {
       <div
         className="flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28"
         style={{
-          WebkitOverflowScrolling:
-            "touch",
+          WebkitOverflowScrolling: "touch",
           touchAction: "pan-y",
         }}
       >
         <nav className="space-y-1">
-          {sidebarItems.map(
-            (item) => {
-              const hasChildren =
-                item.children?.length >
-                0;
+          {sidebarItems.map((item) => {
+            const hasChildren = item.children?.length > 0;
 
-              const isExpanded =
-                expandedMenus[
-                  item.name
-                ];
+            const isExpanded = expandedMenus[item.name];
 
-              const active =
-                isPathActive(
-                  item.path
-                ) ||
-                isChildActive(
-                  item.children
-                );
+            const active =
+              isPathActive(item.path) || isChildActive(item.children);
 
-              return (
-                <div
-                  key={item.name}
+            return (
+              <div key={item.name}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (hasChildren) {
+                      toggleSubmenu(item.name);
+                    } else if (item.path) {
+                      navigateTo(item.path);
+                    }
+                  }}
+                  className={`relative w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                    active
+                      ? darkMode
+                        ? "bg-emerald-500/10 text-emerald-400 shadow-sm"
+                        : "bg-emerald-50 text-emerald-700 shadow-sm"
+                      : darkMode
+                      ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (
-                        hasChildren
-                      ) {
-                        toggleSubmenu(
-                          item.name
-                        );
-                      } else if (
-                        item.path
-                      ) {
-                        navigateTo(
-                          item.path
-                        );
-                      }
-                    }}
-                    className={`relative w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                      active
-                        ? darkMode
-                          ? "bg-emerald-500/10 text-emerald-400 shadow-sm"
-                          : "bg-emerald-50 text-emerald-700 shadow-sm"
-                        : darkMode
-                        ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    }`}
-                  >
-                    {/* ACTIVE INDICATOR */}
+                  {/* ACTIVE INDICATOR */}
 
-                    {active && (
+                  {active && (
+                    <span
+                      className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full ${
+                        darkMode ? "bg-emerald-400" : "bg-emerald-600"
+                      }`}
+                    />
+                  )}
+
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className={`w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-base ${
+                        active
+                          ? darkMode
+                            ? "bg-emerald-500/10"
+                            : "bg-white"
+                          : darkMode
+                          ? "bg-slate-800"
+                          : "bg-slate-100"
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+
+                    <span className="truncate">{item.name}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {item.badge && (
                       <span
-                        className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full ${
-                          darkMode
-                            ? "bg-emerald-400"
-                            : "bg-emerald-600"
+                        className={`w-2 h-2 rounded-full ${
+                          active ? "bg-current" : "bg-emerald-500"
                         }`}
                       />
                     )}
 
-                    <div className="flex items-center gap-3 min-w-0">
+                    {hasChildren && (
                       <span
-                        className={`w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-base ${
-                          active
-                            ? darkMode
-                              ? "bg-emerald-500/10"
-                              : "bg-white"
-                            : darkMode
-                            ? "bg-slate-800"
-                            : "bg-slate-100"
+                        className={`text-xs transition-transform duration-200 ${
+                          isExpanded ? "rotate-180" : ""
                         }`}
                       >
-                        {item.icon}
+                        ▼
                       </span>
+                    )}
+                  </div>
+                </button>
 
-                      <span className="truncate">
-                        {item.name}
-                      </span>
-                    </div>
+                {hasChildren && isExpanded && (
+                  <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
+                    <div
+                      className={`absolute left-1 top-0 bottom-0 w-px ${
+                        darkMode ? "bg-slate-700" : "bg-slate-200"
+                      }`}
+                    />
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {item.badge && (
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            active
-                              ? "bg-current"
-                              : "bg-emerald-500"
-                          }`}
-                        />
-                      )}
+                    {item.children.map((child) => {
+                      const childActive = isPathActive(child.path);
 
-                      {hasChildren && (
-                        <span
-                          className={`text-xs transition-transform duration-200 ${
-                            isExpanded
-                              ? "rotate-180"
-                              : ""
+                      return (
+                        <button
+                          key={child.name}
+                          type="button"
+                          onClick={() => navigateTo(child.path)}
+                          className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left ${
+                            childActive
+                              ? darkMode
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-emerald-50 text-emerald-700"
+                              : darkMode
+                              ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                              : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                           }`}
                         >
-                          ▼
-                        </span>
-                      )}
-                    </div>
-                  </button>
+                          <span
+                            className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-md ${
+                              childActive
+                                ? darkMode
+                                  ? "bg-emerald-500/10"
+                                  : "bg-white"
+                                : darkMode
+                                ? "bg-slate-800"
+                                : "bg-slate-50"
+                            }`}
+                          >
+                            {child.icon}
+                          </span>
 
-                  {hasChildren &&
-                    isExpanded && (
-                      <div className="relative ml-7 pl-4 mt-1 mb-1 space-y-1">
-                        <div
-                          className={`absolute left-1 top-0 bottom-0 w-px ${
-                            darkMode
-                              ? "bg-slate-700"
-                              : "bg-slate-200"
-                          }`}
-                        />
-
-                        {item.children.map(
-                          (
-                            child
-                          ) => {
-                            const childActive =
-                              isPathActive(
-                                child.path
-                              );
-
-                            return (
-                              <button
-                                key={
-                                  child.name
-                                }
-                                type="button"
-                                onClick={() =>
-                                  navigateTo(
-                                    child.path
-                                  )
-                                }
-                                className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-left ${
-                                  childActive
-                                    ? darkMode
-                                      ? "bg-emerald-500/10 text-emerald-400"
-                                      : "bg-emerald-50 text-emerald-700"
-                                    : darkMode
-                                    ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                                }`}
-                              >
-                                <span
-                                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded-md ${
-                                    childActive
-                                      ? darkMode
-                                        ? "bg-emerald-500/10"
-                                        : "bg-white"
-                                      : darkMode
-                                      ? "bg-slate-800"
-                                      : "bg-slate-50"
-                                  }`}
-                                >
-                                  {
-                                    child.icon
-                                  }
-                                </span>
-
-                                <span className="truncate">
-                                  {
-                                    child.name
-                                  }
-                                </span>
-                              </button>
-                            );
-                          }
-                        )}
-                      </div>
-                    )}
-                </div>
-              );
-            }
-          )}
+                          <span className="truncate">{child.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
       </div>
 
@@ -1070,9 +891,7 @@ const RegistrarPortalLayout = () => {
       >
         <button
           type="button"
-          onClick={
-            handleLogoutClick
-          }
+          onClick={handleLogoutClick}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${
             darkMode
               ? "text-slate-400 hover:bg-red-950 hover:text-red-400"
@@ -1093,9 +912,7 @@ const RegistrarPortalLayout = () => {
   return (
     <div
       className={`min-h-screen flex transition-colors duration-300 ${
-        darkMode
-          ? "bg-slate-950 text-slate-100"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
       {/* =====================================================
@@ -1111,11 +928,7 @@ const RegistrarPortalLayout = () => {
           darkMode
             ? "bg-slate-900 border-slate-700"
             : "bg-white border-slate-200"
-        } ${
-          isResizing
-            ? "select-none"
-            : ""
-        }`}
+        } ${isResizing ? "select-none" : ""}`}
       >
         {renderSidebarContent(false)}
 
@@ -1127,18 +940,10 @@ const RegistrarPortalLayout = () => {
           role="separator"
           aria-label="Resize sidebar"
           aria-orientation="vertical"
-          onPointerDown={
-            handleSidebarResizeStart
-          }
-          onPointerMove={
-            handleSidebarResize
-          }
-          onPointerUp={
-            handleSidebarResizeEnd
-          }
-          onPointerCancel={
-            handleSidebarResizeEnd
-          }
+          onPointerDown={handleSidebarResizeStart}
+          onPointerMove={handleSidebarResize}
+          onPointerUp={handleSidebarResizeEnd}
+          onPointerCancel={handleSidebarResizeEnd}
           className={`absolute top-0 right-0 z-30 h-full w-1.5 cursor-col-resize touch-none ${
             isResizing
               ? "bg-emerald-500"
@@ -1192,16 +997,10 @@ const RegistrarPortalLayout = () => {
 
             <button
               type="button"
-              onClick={() =>
-                setIsMobileSidebarOpen(
-                  true
-                )
-              }
+              onClick={() => setIsMobileSidebarOpen(true)}
               aria-label="Open sidebar"
               className={`lg:hidden flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                darkMode
-                  ? "hover:bg-slate-800"
-                  : "hover:bg-slate-100"
+                darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
               }`}
             >
               ☰
@@ -1210,9 +1009,7 @@ const RegistrarPortalLayout = () => {
             <div className="min-w-0">
               <p
                 className={`text-sm ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-400"
+                  darkMode ? "text-slate-400" : "text-slate-400"
                 }`}
               >
                 Registrar Portal
@@ -1237,19 +1034,11 @@ const RegistrarPortalLayout = () => {
               type="button"
               onClick={toggleDarkMode}
               aria-label={
-                darkMode
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
+                darkMode ? "Switch to light mode" : "Switch to dark mode"
               }
-              title={
-                darkMode
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-              }
+              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
               className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center text-lg transition ${
-                darkMode
-                  ? "hover:bg-slate-800"
-                  : "hover:bg-slate-100"
+                darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
               }`}
             >
               {darkMode ? "☀️" : "🌙"}
@@ -1259,42 +1048,28 @@ const RegistrarPortalLayout = () => {
                 NOTIFICATIONS
             ================================================= */}
 
-            <div
-              className="relative"
-              ref={notificationRef}
-            >
+            <div className="relative" ref={notificationRef}>
               <button
                 type="button"
                 onClick={() => {
-                  setIsNotificationOpen(
-                    (previous) =>
-                      !previous
-                  );
+                  setIsNotificationOpen((previous) => !previous);
 
                   setIsProfileOpen(false);
                 }}
                 aria-label="Notifications"
                 className={`relative w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center transition ${
-                  darkMode
-                    ? "hover:bg-slate-800"
-                    : "hover:bg-slate-100"
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
-                <span className="text-lg">
-                  🔔
-                </span>
+                <span className="text-lg">🔔</span>
 
                 {unreadCount > 0 && (
                   <span
                     className={`absolute top-1 right-1 min-w-4 h-4 px-1 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full border-2 ${
-                      darkMode
-                        ? "border-slate-900"
-                        : "border-white"
+                      darkMode ? "border-slate-900" : "border-white"
                     }`}
                   >
-                    {unreadCount > 9
-                      ? "9+"
-                      : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
               </button>
@@ -1323,37 +1098,27 @@ const RegistrarPortalLayout = () => {
 
                   <div
                     className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${
-                      darkMode
-                        ? "border-slate-700"
-                        : "border-slate-200"
+                      darkMode ? "border-slate-700" : "border-slate-200"
                     }`}
                   >
                     <div className="min-w-0">
-                      <h3 className="text-sm font-bold">
-                        Notifications
-                      </h3>
+                      <h3 className="text-sm font-bold">Notifications</h3>
 
                       <p
                         className={`text-xs mt-0.5 ${
-                          darkMode
-                            ? "text-slate-400"
-                            : "text-slate-500"
+                          darkMode ? "text-slate-400" : "text-slate-500"
                         }`}
                       >
-                        {unreadCount >
-                        0
+                        {unreadCount > 0
                           ? `${unreadCount} unread`
                           : "All caught up"}
                       </p>
                     </div>
 
-                    {unreadCount >
-                      0 && (
+                    {unreadCount > 0 && (
                       <button
                         type="button"
-                        onClick={
-                          markAllNotificationsRead
-                        }
+                        onClick={markAllNotificationsRead}
                         className="flex-shrink-0 text-[10px] font-bold text-emerald-500 hover:underline"
                       >
                         Mark all read
@@ -1371,111 +1136,87 @@ const RegistrarPortalLayout = () => {
                       sm:max-h-[380px]
                     "
                     style={{
-                      WebkitOverflowScrolling:
-                        "touch",
-                      touchAction:
-                        "pan-y",
+                      WebkitOverflowScrolling: "touch",
+                      touchAction: "pan-y",
                     }}
                   >
-                    {notifications.length ===
-                    0 ? (
+                    {notifications.length === 0 ? (
                       <div className="p-6 text-center">
-                        <div className="text-2xl mb-2">
-                          🔔
-                        </div>
+                        <div className="text-2xl mb-2">🔔</div>
 
                         <p
                           className={`text-xs ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
                           No notifications
                         </p>
                       </div>
                     ) : (
-                      notifications.map(
-                        (
-                          notification
-                        ) => (
-                          <div
-                            key={
-                              notification.id
-                            }
-                            className={`group relative border-b transition ${
-                              darkMode
-                                ? "border-slate-700 hover:bg-slate-700"
-                                : "border-slate-100 hover:bg-slate-50"
-                            }`}
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`group relative border-b transition ${
+                            darkMode
+                              ? "border-slate-700 hover:bg-slate-700"
+                              : "border-slate-100 hover:bg-slate-50"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => openNotification(notification)}
+                            className="w-full text-left px-4 py-3 pr-12"
                           >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openNotification(
-                                  notification
-                                )
-                              }
-                              className="w-full text-left px-4 py-3 pr-12"
-                            >
-                              <div className="flex gap-3">
-                                <div className="pt-1.5 flex-shrink-0">
+                            <div className="flex gap-3">
+                              <div className="pt-1.5 flex-shrink-0">
+                                <span
+                                  className={`block w-2 h-2 rounded-full ${
+                                    notification.readAt
+                                      ? darkMode
+                                        ? "bg-slate-600"
+                                        : "bg-slate-300"
+                                      : "bg-emerald-500"
+                                  }`}
+                                />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start gap-2">
+                                  <p className="text-xs font-bold break-words min-w-0 flex-1">
+                                    {notification.title}
+                                  </p>
+
                                   <span
-                                    className={`block w-2 h-2 rounded-full ${
-                                      notification.readAt
-                                        ? darkMode
-                                          ? "bg-slate-600"
-                                          : "bg-slate-300"
-                                        : "bg-emerald-500"
-                                    }`}
-                                  />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start gap-2">
-                                    <p className="text-xs font-bold break-words min-w-0 flex-1">
-                                      {
-                                        notification.title
-                                      }
-                                    </p>
-
-                                    <span
-                                      className={`text-[10px] whitespace-nowrap flex-shrink-0 ${
-                                        darkMode
-                                          ? "text-slate-500"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {new Date(
-                                        notification.createdAt
-                                      ).toLocaleDateString()}
-                                    </span>
-                                  </div>
-
-                                  <p
-                                    className={`text-xs mt-1 leading-5 break-words ${
+                                    className={`text-[10px] whitespace-nowrap flex-shrink-0 ${
                                       darkMode
-                                        ? "text-slate-400"
-                                        : "text-slate-500"
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
                                     }`}
                                   >
-                                    {
-                                      notification.message
-                                    }
-                                  </p>
+                                    {new Date(
+                                      notification.createdAt
+                                    ).toLocaleDateString()}
+                                  </span>
                                 </div>
-                              </div>
-                            </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteNotification(
-                                  notification.id
-                                )
-                              }
-                              aria-label="Delete notification"
-                              className={`
+                                <p
+                                  className={`text-xs mt-1 leading-5 break-words ${
+                                    darkMode
+                                      ? "text-slate-400"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  {notification.message}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteNotification(notification.id)}
+                            aria-label="Delete notification"
+                            className={`
                                 absolute right-3 top-3
                                 flex h-7 w-7
                                 items-center justify-center
@@ -1490,12 +1231,11 @@ const RegistrarPortalLayout = () => {
                                     : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                 }
                               `}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )
-                      )
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))
                     )}
                   </div>
 
@@ -1503,18 +1243,12 @@ const RegistrarPortalLayout = () => {
 
                   <div
                     className={`border-t ${
-                      darkMode
-                        ? "border-slate-700"
-                        : "border-slate-100"
+                      darkMode ? "border-slate-700" : "border-slate-100"
                     }`}
                   >
                     <button
                       type="button"
-                      onClick={() =>
-                        navigateTo(
-                          "/registrar/notifications"
-                        )
-                      }
+                      onClick={() => navigateTo("/registrar/notifications")}
                       className={`w-full py-3 text-xs font-bold ${
                         darkMode
                           ? "text-emerald-400 hover:bg-slate-700"
@@ -1532,24 +1266,16 @@ const RegistrarPortalLayout = () => {
                 PROFILE
             ================================================= */}
 
-            <div
-              className="relative"
-              ref={profileMenuRef}
-            >
+            <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
                 onClick={() => {
-                  setIsProfileOpen(
-                    (previous) =>
-                      !previous
-                  );
+                  setIsProfileOpen((previous) => !previous);
 
                   setIsNotificationOpen(false);
                 }}
                 className={`flex items-center gap-3 px-2 py-1.5 rounded-xl ${
-                  darkMode
-                    ? "hover:bg-slate-800"
-                    : "hover:bg-slate-100"
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
                 {/* PHOTO */}
@@ -1557,25 +1283,15 @@ const RegistrarPortalLayout = () => {
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
                   {profilePhotoUrl ? (
                     <img
-                      src={
-                        profilePhotoUrl
-                      }
-                      alt={
-                        registrarFullName
-                      }
+                      src={profilePhotoUrl}
+                      alt={registrarFullName}
                       className="w-full h-full object-cover"
                       onError={() => {
-                        setProfilePhotoUrl(
-                          ""
-                        );
+                        setProfilePhotoUrl("");
                       }}
                     />
                   ) : (
-                    <span>
-                      {profileLoading
-                        ? "..."
-                        : registrarInitials}
-                    </span>
+                    <span>{profileLoading ? "..." : registrarInitials}</span>
                   )}
                 </div>
 
@@ -1583,28 +1299,21 @@ const RegistrarPortalLayout = () => {
 
                 <div className="hidden sm:block text-left max-w-44">
                   <p className="text-sm font-semibold truncate">
-                    {profileLoading
-                      ? "Loading..."
-                      : registrarFullName}
+                    {profileLoading ? "Loading..." : registrarFullName}
                   </p>
 
                   <p
                     className={`text-xs truncate ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-400"
+                      darkMode ? "text-slate-400" : "text-slate-400"
                     }`}
                   >
-                    {registrarProfile.position ||
-                      "Registrar Advisor"}
+                    {registrarProfile.position || "Registrar Advisor"}
                   </p>
                 </div>
 
                 <span
                   className={`hidden sm:block text-xs transition-transform ${
-                    isProfileOpen
-                      ? "rotate-180"
-                      : ""
+                    isProfileOpen ? "rotate-180" : ""
                   }`}
                 >
                   ▼
@@ -1627,53 +1336,36 @@ const RegistrarPortalLayout = () => {
 
                   <div
                     className={`px-4 py-4 border-b ${
-                      darkMode
-                        ? "border-slate-700"
-                        : "border-slate-200"
+                      darkMode ? "border-slate-700" : "border-slate-200"
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
                         {profilePhotoUrl ? (
                           <img
-                            src={
-                              profilePhotoUrl
-                            }
-                            alt={
-                              registrarFullName
-                            }
+                            src={profilePhotoUrl}
+                            alt={registrarFullName}
                             className="w-full h-full object-cover"
                             onError={() => {
-                              setProfilePhotoUrl(
-                                ""
-                              );
+                              setProfilePhotoUrl("");
                             }}
                           />
                         ) : (
-                          <span>
-                            {
-                              registrarInitials
-                            }
-                          </span>
+                          <span>{registrarInitials}</span>
                         )}
                       </div>
 
                       <div className="min-w-0">
                         <p className="text-sm font-bold truncate">
-                          {
-                            registrarFullName
-                          }
+                          {registrarFullName}
                         </p>
 
                         <p
                           className={`text-xs mt-1 truncate ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
-                          {registrarProfile.email ||
-                            "Registrar Account"}
+                          {registrarProfile.email || "Registrar Account"}
                         </p>
                       </div>
                     </div>
@@ -1681,78 +1373,53 @@ const RegistrarPortalLayout = () => {
                     {registrarProfile.employee_id && (
                       <p
                         className={`text-[11px] mt-3 ${
-                          darkMode
-                            ? "text-slate-400"
-                            : "text-slate-500"
+                          darkMode ? "text-slate-400" : "text-slate-500"
                         }`}
                       >
                         Employee ID:{" "}
                         <span className="font-semibold">
-                          {
-                            registrarProfile.employee_id
-                          }
+                          {registrarProfile.employee_id}
                         </span>
                       </p>
                     )}
-
                   </div>
 
                   {/* MY PROFILE */}
 
                   <button
                     type="button"
-                    onClick={() =>
-                      navigateTo(
-                        "/registrar/profile"
-                      )
-                    }
+                    onClick={() => navigateTo("/registrar/profile")}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                      darkMode
-                        ? "hover:bg-slate-700"
-                        : "hover:bg-slate-50"
+                      darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                     }`}
                   >
                     <span>👤</span>
-                    <span>
-                      My Profile
-                    </span>
+                    <span>My Profile</span>
                   </button>
 
                   {/* SETTINGS */}
 
                   <button
                     type="button"
-                    onClick={() =>
-                      navigateTo(
-                        "/registrar/settings"
-                      )
-                    }
+                    onClick={() => navigateTo("/registrar/settings")}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
-                      darkMode
-                        ? "hover:bg-slate-700"
-                        : "hover:bg-slate-50"
+                      darkMode ? "hover:bg-slate-700" : "hover:bg-slate-50"
                     }`}
                   >
                     <span>⚙️</span>
-                    <span>
-                      Settings
-                    </span>
+                    <span>Settings</span>
                   </button>
 
                   {/* LOGOUT */}
 
                   <div
                     className={`border-t ${
-                      darkMode
-                        ? "border-slate-700"
-                        : "border-slate-200"
+                      darkMode ? "border-slate-700" : "border-slate-200"
                     }`}
                   >
                     <button
                       type="button"
-                      onClick={
-                        handleLogoutClick
-                      }
+                      onClick={handleLogoutClick}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left ${
                         darkMode
                           ? "text-red-400 hover:bg-red-950"
@@ -1760,9 +1427,7 @@ const RegistrarPortalLayout = () => {
                       }`}
                     >
                       <span>🚪</span>
-                      <span>
-                        Logout
-                      </span>
+                      <span>Logout</span>
                     </button>
                   </div>
                 </div>
@@ -1777,9 +1442,7 @@ const RegistrarPortalLayout = () => {
 
         <main
           className={`min-w-0 min-h-[calc(100vh-5rem)] transition-colors duration-300 ${
-            darkMode
-              ? "bg-slate-950"
-              : "bg-slate-50"
+            darkMode ? "bg-slate-950" : "bg-slate-50"
           }`}
         >
           <Outlet
@@ -1812,9 +1475,7 @@ const RegistrarPortalLayout = () => {
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 z-[80] lg:hidden"
-          onClick={() =>
-            setIsMobileSidebarOpen(false)
-          }
+          onClick={() => setIsMobileSidebarOpen(false)}
         >
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
         </div>
@@ -1826,9 +1487,7 @@ const RegistrarPortalLayout = () => {
 
       <aside
         className={`fixed inset-y-0 left-0 z-[90] w-[280px] max-w-[85vw] h-screen flex flex-col overflow-hidden border-r shadow-2xl transform transition-transform duration-300 lg:hidden ${
-          isMobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${
           darkMode
             ? "bg-slate-900 border-slate-700"
@@ -1845,9 +1504,7 @@ const RegistrarPortalLayout = () => {
       {selectedNotification && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={
-            closeNotificationModal
-          }
+          onClick={closeNotificationModal}
         >
           <div
             className={`w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl shadow-2xl border transition-colors ${
@@ -1855,12 +1512,9 @@ const RegistrarPortalLayout = () => {
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-white border-slate-200 text-slate-900"
             }`}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             style={{
-              WebkitOverflowScrolling:
-                "touch",
+              WebkitOverflowScrolling: "touch",
               touchAction: "pan-y",
             }}
           >
@@ -1868,9 +1522,7 @@ const RegistrarPortalLayout = () => {
 
             <div
               className={`px-5 sm:px-6 py-5 border-b flex items-start justify-between gap-4 ${
-                darkMode
-                  ? "border-slate-700"
-                  : "border-slate-200"
+                darkMode ? "border-slate-700" : "border-slate-200"
               }`}
             >
               <div className="flex gap-3 min-w-0">
@@ -1890,22 +1542,16 @@ const RegistrarPortalLayout = () => {
                   </p>
 
                   <h2 className="text-lg font-black break-words">
-                    {
-                      selectedNotification.title
-                    }
+                    {selectedNotification.title}
                   </h2>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={
-                  closeNotificationModal
-                }
+                onClick={closeNotificationModal}
                 className={`w-8 h-8 rounded-lg text-xl text-slate-400 flex-shrink-0 ${
-                  darkMode
-                    ? "hover:bg-slate-800"
-                    : "hover:bg-slate-100"
+                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
                 ×
@@ -1917,14 +1563,10 @@ const RegistrarPortalLayout = () => {
             <div className="px-5 sm:px-6 py-6">
               <p
                 className={`text-sm leading-relaxed break-words ${
-                  darkMode
-                    ? "text-slate-300"
-                    : "text-slate-600"
+                  darkMode ? "text-slate-300" : "text-slate-600"
                 }`}
               >
-                {
-                  selectedNotification.message
-                }
+                {selectedNotification.message}
               </p>
 
               {/* RELATED RECORD */}
@@ -1941,34 +1583,23 @@ const RegistrarPortalLayout = () => {
                 </p>
 
                 <p className="text-sm font-semibold mt-1 break-words">
-                  {
-                    selectedNotification.relatedEntityType
-                  }
+                  {selectedNotification.relatedEntityType}
                 </p>
 
                 <p
                   className={`text-xs mt-1 break-all ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
-                  ID:{" "}
-                  {
-                    selectedNotification.relatedEntityId
-                  }
+                  ID: {selectedNotification.relatedEntityId}
                 </p>
 
                 <p
                   className={`text-xs mt-2 ${
-                    darkMode
-                      ? "text-slate-500"
-                      : "text-slate-400"
+                    darkMode ? "text-slate-500" : "text-slate-400"
                   }`}
                 >
-                  {new Date(
-                    selectedNotification.createdAt
-                  ).toLocaleString()}
+                  {new Date(selectedNotification.createdAt).toLocaleString()}
                 </p>
               </div>
 
@@ -1984,9 +1615,7 @@ const RegistrarPortalLayout = () => {
                     onClick={() => {
                       closeNotificationModal();
 
-                      navigateTo(
-                        "/registrar/applications"
-                      );
+                      navigateTo("/registrar/applications");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
                   >
@@ -2003,9 +1632,7 @@ const RegistrarPortalLayout = () => {
                     onClick={() => {
                       closeNotificationModal();
 
-                      navigateTo(
-                        "/registrar/documents"
-                      );
+                      navigateTo("/registrar/documents");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
                   >
@@ -2015,16 +1642,13 @@ const RegistrarPortalLayout = () => {
 
                 {/* STUDENT RECORD */}
 
-                {selectedNotification.relatedEntityType ===
-                  "StudentRecord" && (
+                {selectedNotification.relatedEntityType === "StudentRecord" && (
                   <button
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
 
-                      navigateTo(
-                        "/registrar/students"
-                      );
+                      navigateTo("/registrar/students");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
                   >
@@ -2038,21 +1662,17 @@ const RegistrarPortalLayout = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const now =
-                        new Date().toISOString();
+                      const now = new Date().toISOString();
 
-                      markNotificationRead(
-                        selectedNotification.id
-                      );
+                      markNotificationRead(selectedNotification.id);
 
-                      setSelectedNotification(
-                        (previous) =>
-                          previous
-                            ? {
-                                ...previous,
-                                readAt: now,
-                              }
-                            : previous
+                      setSelectedNotification((previous) =>
+                        previous
+                          ? {
+                              ...previous,
+                              readAt: now,
+                            }
+                          : previous
                       );
                     }}
                     className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
@@ -2070,9 +1690,7 @@ const RegistrarPortalLayout = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    deleteNotification(
-                      selectedNotification.id
-                    );
+                    deleteNotification(selectedNotification.id);
                   }}
                   className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                     darkMode
@@ -2103,9 +1721,7 @@ const RegistrarPortalLayout = () => {
                 ? "bg-slate-900 border-slate-700 text-white"
                 : "bg-white border-slate-200 text-slate-900"
             }`}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
           >
             {/* ICON */}
 
@@ -2124,20 +1740,14 @@ const RegistrarPortalLayout = () => {
             {/* CONTENT */}
 
             <div className="px-6 pt-4">
-              <h2 className="text-lg font-bold">
-                Logout?
-              </h2>
+              <h2 className="text-lg font-bold">Logout?</h2>
 
               <p
                 className={`mt-2 text-sm leading-relaxed ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Are you sure you want to
-                logout from your Registrar
-                account?
+                Are you sure you want to logout from your Registrar account?
               </p>
             </div>
 
@@ -2152,20 +1762,14 @@ const RegistrarPortalLayout = () => {
                   darkMode
                     ? "text-slate-300 hover:bg-slate-800"
                     : "text-slate-600 hover:bg-slate-100"
-                } ${
-                  isLoggingOut
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
+                } ${isLoggingOut ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                onClick={
-                  handleLogout
-                }
+                onClick={handleLogout}
                 disabled={isLoggingOut}
                 className={`w-full sm:w-auto px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold transition ${
                   isLoggingOut
@@ -2173,9 +1777,7 @@ const RegistrarPortalLayout = () => {
                     : "hover:bg-red-700"
                 }`}
               >
-                {isLoggingOut
-                  ? "Logging out..."
-                  : "Yes, Logout"}
+                {isLoggingOut ? "Logging out..." : "Yes, Logout"}
               </button>
             </div>
           </div>

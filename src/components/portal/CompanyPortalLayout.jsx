@@ -316,7 +316,7 @@ export default function CompanyPortalLayout() {
       icon: "▦",
     },
     {
-      label: "Manage Jobs",
+      label: "Manage Opportunities",
       path: "/company/jobs",
       icon: "💼",
     },
@@ -335,11 +335,11 @@ export default function CompanyPortalLayout() {
       path: "/company/evaluate",
       icon: "⭐",
     },
-    {
-      label: "Feedback",
-      path: "/company/feedback",
-      icon: "💬",
-    },
+    // {
+    //   label: "Feedback",
+    //   path: "/company/feedback",
+    //   icon: "💬",
+    // },
     {
       label: "Notifications",
       path: "/company/notifications",

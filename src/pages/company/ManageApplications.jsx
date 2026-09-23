@@ -19,6 +19,8 @@ const ManageApplications = () => {
   const [processingId, setProcessingId] = useState(null);
   const [viewingDocumentId, setViewingDocumentId] = useState(null);
   const [viewingResumeId, setViewingResumeId] = useState(null);
+  const [viewingCorId, setViewingCorId] = useState(null);
+  const [isProfilePhotoExpanded, setIsProfilePhotoExpanded] = useState(false);
 
   // =========================================================
   // STATUS
@@ -31,10 +33,80 @@ const ManageApplications = () => {
     ASSIGNMENT_TERMINATED: "terminated",
 
     APPLICATION_APPROVED: "approved",
+    APPLICATION_ACCEPTED: "accepted",
   };
 
   const STORAGE_BUCKET = "internship-documents";
   const RESUME_BUCKET = "verification-documents";
+  const PROFILE_PHOTO_BUCKET = "profile-photos";
+
+  // =========================================================
+  // PROFILE PHOTO HELPERS
+  // =========================================================
+
+  const getProfilePhotoStoragePath = (path) => {
+    if (!path) return null;
+
+    let storagePath = path;
+
+    if (path.startsWith("http")) {
+      const publicMarker = `/storage/v1/object/public/${PROFILE_PHOTO_BUCKET}/`;
+
+      if (path.includes(publicMarker)) {
+        storagePath = path.split(publicMarker)[1];
+      } else {
+        const signedMarker = `/storage/v1/object/sign/${PROFILE_PHOTO_BUCKET}/`;
+
+        if (path.includes(signedMarker)) {
+          storagePath = path.split(signedMarker)[1].split("?")[0];
+        }
+      }
+    }
+
+    try {
+      return decodeURIComponent(storagePath);
+    } catch {
+      return storagePath;
+    }
+  };
+
+  const createProfilePhotoUrl = async (photoPath) => {
+    if (!photoPath) return null;
+
+    try {
+      const storagePath = getProfilePhotoStoragePath(photoPath);
+
+      if (!storagePath) {
+        return null;
+      }
+
+      const { data, error } = await supabaseCompany.storage
+        .from(PROFILE_PHOTO_BUCKET)
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (error) {
+        console.error("Error creating student profile photo URL:", error);
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (error) {
+      console.error("Student profile photo error:", error);
+      return null;
+    }
+  };
+
+  const getStudentInitials = (name) => {
+    if (!name) return "?";
+
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+  };
 
   // =========================================================
   // SEND APPLICATION DECISION EMAIL
@@ -139,11 +211,11 @@ const ManageApplications = () => {
         .from("companies")
         .select(
           `
-            id,
-            company_name,
-            company_email,
-            status
-          `
+              id,
+              company_name,
+              company_email,
+              status
+            `
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -264,10 +336,12 @@ const ManageApplications = () => {
               program,
               year_level,
               department,
-              gwa,
               school_id,
               resume_url,
-              resume_name
+              resume_name,
+              cor_url,
+              cor_name,
+              profile_photo_url
             `
           )
           .in("id", studentIds);
@@ -357,16 +431,16 @@ const ManageApplications = () => {
           .from("applications")
           .select(
             `
-              id,
-              student_id,
-              opportunity_id,
-              cover_letter,
-              status,
-              notes,
-              submitted_at,
-              created_at,
-              updated_at
-            `
+                id,
+                student_id,
+                opportunity_id,
+                cover_letter,
+                status,
+                notes,
+                submitted_at,
+                created_at,
+                updated_at
+              `
           )
           .in("id", applicationIds);
 
@@ -430,42 +504,61 @@ const ManageApplications = () => {
         (assignment) => assignment.id
       );
 
-      const { data: documents, error: documentsError } = await supabaseCompany
-        .from("documents")
-        .select(
-          `
-            id,
-            assignment_id,
-            student_id,
-            document_type_id,
-            file_name,
-            storage_path,
-            version,
-            status,
-            notes,
-            reviewed_at,
-            created_at,
-            updated_at
-          `
-        )
-        .in("assignment_id", assignmentIds)
-        .order("created_at", { ascending: false });
+      let documents = [];
 
-      if (documentsError) {
-        throw documentsError;
+      if (assignmentIds.length > 0) {
+        const { data, error: documentsError } = await supabaseCompany
+          .from("documents")
+          .select(
+            `
+              id,
+              assignment_id,
+              student_id,
+              document_type_id,
+              file_name,
+              storage_path,
+              version,
+              status,
+              notes,
+              reviewed_at,
+              created_at,
+              updated_at
+            `
+          )
+          .in("assignment_id", assignmentIds)
+          .order("created_at", { ascending: false });
+
+        if (documentsError) {
+          throw documentsError;
+        }
+
+        documents = data || [];
       }
 
       // -------------------------------------------------------
-      // 12. MAP DATA
+      // 12. CREATE PROFILE PHOTO URLS
+      // -------------------------------------------------------
+
+      const profilePhotoEntries = await Promise.all(
+        students.map(async (student) => ({
+          id: student.id,
+          url: await createProfilePhotoUrl(student.profile_photo_url),
+        }))
+      );
+
+      const profilePhotoMap = new Map(
+        profilePhotoEntries.map((entry) => [entry.id, entry.url])
+      );
+
+      // -------------------------------------------------------
+      // 13. MAP DATA
       // -------------------------------------------------------
 
       const studentMap = new Map(
         students.map((student) => [student.id, student])
       );
 
-      const schoolMap = new Map(
-        schools.map((school) => [school.id, school])
-      );
+      const schoolMap = new Map(schools.map((school) => [school.id, school]));
 
       const userMap = new Map(
         users.map((userRecord) => [userRecord.id, userRecord])
@@ -487,7 +580,7 @@ const ManageApplications = () => {
       );
 
       // -------------------------------------------------------
-      // 13. BUILD COMPANY APPLICATION LIST
+      // 14. BUILD COMPANY APPLICATION LIST
       // -------------------------------------------------------
 
       const formattedApplications = latestDeployedAssignments
@@ -497,7 +590,52 @@ const ManageApplications = () => {
           const application = applicationMap.get(assignment.application_id);
           const opportunity = opportunityMap.get(assignment.opportunity_id);
 
-          if (!student || !userRecord || !application || !opportunity) {
+          // -----------------------------------------------------
+          // REQUIRED RELATIONSHIP CHECKS
+          // -----------------------------------------------------
+
+          if (!student) {
+            console.warn(
+              "Company ManageApplications: student record not found.",
+              {
+                assignmentId: assignment.id,
+                studentId: assignment.student_id,
+              }
+            );
+
+            return null;
+          }
+
+          if (!userRecord) {
+            console.warn("Company ManageApplications: user record not found.", {
+              assignmentId: assignment.id,
+              studentId: assignment.student_id,
+            });
+
+            return null;
+          }
+
+          if (!application) {
+            console.warn(
+              "Company ManageApplications: application record not found.",
+              {
+                assignmentId: assignment.id,
+                applicationId: assignment.application_id,
+              }
+            );
+
+            return null;
+          }
+
+          if (!opportunity) {
+            console.warn(
+              "Company ManageApplications: opportunity record not found.",
+              {
+                assignmentId: assignment.id,
+                opportunityId: assignment.opportunity_id,
+              }
+            );
+
             return null;
           }
 
@@ -509,7 +647,7 @@ const ManageApplications = () => {
           // DOCUMENTS FOR THIS ASSIGNMENT
           // -----------------------------------------------------
 
-          const assignmentDocuments = (documents || [])
+          const assignmentDocuments = documents
             .filter((document) => document.assignment_id === assignment.id)
             .map((document) => {
               const documentType = documentTypeMap.get(
@@ -529,7 +667,7 @@ const ManageApplications = () => {
             });
 
           // -----------------------------------------------------
-          // REQUIRED DOCUMENT CHECK
+          // REQUIRED DOCUMENT STATUS
           // -----------------------------------------------------
 
           const requiredDocumentTypes = (documentTypes || []).filter(
@@ -538,18 +676,27 @@ const ManageApplications = () => {
 
           const requiredCount = requiredDocumentTypes.length;
 
-          const approvedRequiredCount = requiredDocumentTypes.filter(
+          const applicationAlreadyReviewed =
+            application.status === STATUS.APPLICATION_APPROVED ||
+            application.status === STATUS.APPLICATION_ACCEPTED;
+
+          const actualApprovedRequiredCount = requiredDocumentTypes.filter(
             (requiredType) =>
-              (documents || []).some(
+              assignmentDocuments.some(
                 (document) =>
-                  document.assignment_id === assignment.id &&
-                  document.document_type_id === requiredType.id &&
+                  document.documentTypeId === requiredType.id &&
                   document.status === "approved"
               )
           ).length;
 
+          const approvedRequiredCount = applicationAlreadyReviewed
+            ? requiredCount
+            : actualApprovedRequiredCount;
+
           const allRequiredDocumentsApproved =
-            requiredCount === 0 || approvedRequiredCount >= requiredCount;
+            applicationAlreadyReviewed ||
+            requiredCount === 0 ||
+            actualApprovedRequiredCount >= requiredCount;
 
           // -----------------------------------------------------
           // STUDENT NAME
@@ -622,6 +769,10 @@ const ManageApplications = () => {
             displayStatus = "Rejected";
           }
 
+          // -----------------------------------------------------
+          // RETURN FORMATTED APPLICATION
+          // -----------------------------------------------------
+
           return {
             id: assignment.id,
             assignmentId: assignment.id,
@@ -641,6 +792,12 @@ const ManageApplications = () => {
             school: school?.name || "Not specified",
 
             // ---------------------------------------------------
+            // PROFILE PHOTO
+            // ---------------------------------------------------
+
+            profilePhotoUrl: profilePhotoMap.get(student.id) || null,
+
+            // ---------------------------------------------------
             // COMPANY
             // ---------------------------------------------------
 
@@ -652,6 +809,13 @@ const ManageApplications = () => {
 
             resumeUrl: student.resume_url || "",
             resumeName: student.resume_name || "",
+
+            // ---------------------------------------------------
+            // CERTIFICATE OF REGISTRATION
+            // ---------------------------------------------------
+
+            corUrl: student.cor_url || "",
+            corName: student.cor_name || "",
 
             internshipPosition,
             department,
@@ -668,6 +832,10 @@ const ManageApplications = () => {
             applicationNotes: application.notes || "",
             coverLetter: application.cover_letter || "",
 
+            // ---------------------------------------------------
+            // DOCUMENT STATUS
+            // ---------------------------------------------------
+
             allRequiredDocumentsApproved,
             requiredDocumentCount: requiredCount,
             approvedRequiredDocumentCount: approvedRequiredCount,
@@ -677,8 +845,7 @@ const ManageApplications = () => {
             opportunity,
           };
         })
-        .filter(Boolean)
-        .filter((application) => application.allRequiredDocumentsApproved);
+        .filter(Boolean);
 
       setApplications(formattedApplications);
     } catch (err) {
@@ -805,6 +972,45 @@ const ManageApplications = () => {
       alert("An unexpected error occurred while opening the Resume/CV.");
     } finally {
       setViewingResumeId(null);
+    }
+  };
+
+  // =========================================================
+  // VIEW CERTIFICATE OF REGISTRATION
+  // =========================================================
+
+  const handleViewCOR = async (application) => {
+    if (!application?.corUrl) {
+      alert("This student has not uploaded a Certificate of Registration yet.");
+      return;
+    }
+
+    try {
+      setViewingCorId(application.id);
+
+      const { data, error } = await supabaseCompany.storage
+        .from(RESUME_BUCKET)
+        .createSignedUrl(application.corUrl, 60 * 10);
+
+      if (error) {
+        console.error("Create COR signed URL error:", error);
+        alert(`Unable to view COR: ${error.message}`);
+        return;
+      }
+
+      if (!data?.signedUrl) {
+        alert("Unable to generate the COR viewing link.");
+        return;
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("COR viewing error:", error);
+      alert(
+        "An unexpected error occurred while opening the Certificate of Registration."
+      );
+    } finally {
+      setViewingCorId(null);
     }
   };
 
@@ -975,7 +1181,10 @@ const ManageApplications = () => {
             updated_at: now,
           })
           .eq("id", selectedApplication.applicationId)
-          .eq("status", "approved")
+          .in("status", [
+            STATUS.APPLICATION_APPROVED,
+            STATUS.APPLICATION_ACCEPTED,
+          ])
           .select(
             `
               id,
@@ -996,7 +1205,7 @@ const ManageApplications = () => {
 
       if (!updatedApplication) {
         throw new Error(
-          "The internship assignment was terminated, but the application could not be changed from approved to rejected. Please check the applications UPDATE RLS policy for company accounts."
+          "The internship assignment was terminated, but the application could not be changed to rejected. Please check the applications UPDATE RLS policy for company accounts."
         );
       }
 
@@ -1079,6 +1288,7 @@ const ManageApplications = () => {
   // =========================================================
 
   const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
+
   const bodyTextClass = darkMode ? "text-slate-400" : "text-slate-500";
 
   const cardClass = darkMode
@@ -1140,8 +1350,8 @@ const ManageApplications = () => {
           </h1>
 
           <p className={`text-xs sm:text-sm mt-1 ${bodyTextClass}`}>
-            Review students endorsed to your company by the Registrar and
-            decide whether to accept or reject their internship placement.
+            Review students endorsed to your company by the Registrar and decide
+            whether to accept or reject their internship placement.
           </p>
         </div>
 
@@ -1378,19 +1588,40 @@ const ManageApplications = () => {
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${
+                        <button
+                          type="button"
+                          disabled={!application.profilePhotoUrl}
+                          onClick={() => {
+                            if (application.profilePhotoUrl) {
+                              setSelectedApplication(application);
+                              setIsProfilePhotoExpanded(true);
+                            }
+                          }}
+                          title={
+                            application.profilePhotoUrl
+                              ? "Click to view profile photo"
+                              : "No profile photo"
+                          }
+                          className={`w-10 h-10 flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold border transition ${
+                            application.profilePhotoUrl
+                              ? "cursor-zoom-in hover:scale-105"
+                              : "cursor-default"
+                          } ${
                             darkMode
-                              ? "bg-slate-700 text-white"
-                              : "bg-slate-100 text-slate-700"
+                              ? "bg-slate-700 text-white border-slate-600"
+                              : "bg-slate-100 text-slate-700 border-slate-200"
                           }`}
                         >
-                          {application.studentName
-                            .split(" ")
-                            .map((name) => name[0])
-                            .slice(0, 2)
-                            .join("")}
-                        </div>
+                          {application.profilePhotoUrl ? (
+                            <img
+                              src={application.profilePhotoUrl}
+                              alt={`${application.studentName} profile`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            getStudentInitials(application.studentName)
+                          )}
+                        </button>
 
                         <div>
                           <p className={`text-sm font-bold ${headingClass}`}>
@@ -1473,7 +1704,29 @@ const ManageApplications = () => {
 
                         <button
                           type="button"
-                          onClick={() => setSelectedApplication(application)}
+                          disabled={!application.corUrl}
+                          onClick={() => handleViewCOR(application)}
+                          className={`px-3 py-2 rounded-lg border text-[10px] font-bold transition ${
+                            application.corUrl
+                              ? darkMode
+                                ? "border-blue-800 text-blue-300 hover:bg-blue-950/40"
+                                : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                              : darkMode
+                              ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                              : "border-slate-200 text-slate-400 cursor-not-allowed"
+                          } disabled:opacity-70`}
+                        >
+                          {viewingCorId === application.id
+                            ? "Opening..."
+                            : "View COR"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedApplication(application);
+                            setIsProfilePhotoExpanded(false);
+                          }}
                           className={`px-3 py-2 rounded-lg border text-[10px] font-bold transition ${
                             darkMode
                               ? "border-slate-700 text-slate-300 hover:bg-slate-800"
@@ -1538,19 +1791,40 @@ const ManageApplications = () => {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
+                    <button
+                      type="button"
+                      disabled={!application.profilePhotoUrl}
+                      onClick={() => {
+                        if (application.profilePhotoUrl) {
+                          setSelectedApplication(application);
+                          setIsProfilePhotoExpanded(true);
+                        }
+                      }}
+                      title={
+                        application.profilePhotoUrl
+                          ? "Click to view profile photo"
+                          : "No profile photo"
+                      }
+                      className={`w-10 h-10 flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold border ${
+                        application.profilePhotoUrl
+                          ? "cursor-zoom-in"
+                          : "cursor-default"
+                      } ${
                         darkMode
-                          ? "bg-slate-700 text-white"
-                          : "bg-slate-100 text-slate-700"
+                          ? "bg-slate-700 text-white border-slate-600"
+                          : "bg-slate-100 text-slate-700 border-slate-200"
                       }`}
                     >
-                      {application.studentName
-                        .split(" ")
-                        .map((name) => name[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </div>
+                      {application.profilePhotoUrl ? (
+                        <img
+                          src={application.profilePhotoUrl}
+                          alt={`${application.studentName} profile`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        getStudentInitials(application.studentName)
+                      )}
+                    </button>
 
                     <div className="min-w-0">
                       <p
@@ -1670,6 +1944,28 @@ const ManageApplications = () => {
                         : "Not uploaded"}
                     </p>
                   </div>
+
+                  <div>
+                    <p
+                      className={`text-[9px] uppercase tracking-wider font-bold ${bodyTextClass}`}
+                    >
+                      Certificate of Registration
+                    </p>
+
+                    <p
+                      className={`text-xs font-semibold mt-0.5 truncate ${
+                        application.corUrl
+                          ? headingClass
+                          : darkMode
+                          ? "text-slate-600"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {application.corUrl
+                        ? application.corName || "COR uploaded"
+                        : "Not uploaded"}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 mt-4">
@@ -1694,7 +1990,29 @@ const ManageApplications = () => {
 
                   <button
                     type="button"
-                    onClick={() => setSelectedApplication(application)}
+                    disabled={!application.corUrl}
+                    onClick={() => handleViewCOR(application)}
+                    className={`px-3 py-2 rounded-lg border text-[10px] font-bold ${
+                      application.corUrl
+                        ? darkMode
+                          ? "border-blue-800 text-blue-300 hover:bg-blue-950/40"
+                          : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                        : darkMode
+                        ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                        : "border-slate-200 text-slate-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {viewingCorId === application.id
+                      ? "Opening..."
+                      : "View COR"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedApplication(application);
+                      setIsProfilePhotoExpanded(false);
+                    }}
                     className={`px-3 py-2 rounded-lg border text-[10px] font-bold ${
                       darkMode
                         ? "border-slate-700 text-slate-300"
@@ -1761,36 +2079,78 @@ const ManageApplications = () => {
             }`}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* MODAL HEADER */}
+
             <div
-              className={`px-5 sm:px-6 py-5 border-b flex items-start justify-between ${borderClass}`}
+              className={`px-5 sm:px-6 py-5 border-b flex items-start justify-between gap-4 ${borderClass}`}
             >
-              <div>
-                <p
-                  className={`text-[10px] uppercase tracking-widest font-bold ${bodyTextClass}`}
-                >
-                  Internship Deployment
-                </p>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="min-w-0">
+                  <p
+                    className={`text-[10px] uppercase tracking-widest font-bold ${bodyTextClass}`}
+                  >
+                    Internship Deployment
+                  </p>
 
-                <h2
-                  className={`text-lg sm:text-xl font-black mt-1 ${headingClass}`}
-                >
-                  {selectedApplication.studentName}
-                </h2>
+                  <h2
+                    className={`text-lg sm:text-xl font-black mt-1 truncate ${headingClass}`}
+                  >
+                    {selectedApplication.studentName}
+                  </h2>
 
-                <p className={`text-xs mt-1 ${bodyTextClass}`}>
-                  {selectedApplication.studentId}
-                </p>
+                  <p className={`text-xs mt-1 ${bodyTextClass}`}>
+                    {selectedApplication.studentId}
+                  </p>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedApplication(null)}
-                className={`w-9 h-9 rounded-lg text-xl text-slate-400 ${
-                  darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
-                }`}
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedApplication.profilePhotoUrl) {
+                      setIsProfilePhotoExpanded(true);
+                    }
+                  }}
+                  disabled={!selectedApplication.profilePhotoUrl}
+                  title={
+                    selectedApplication.profilePhotoUrl
+                      ? "Click to view profile photo"
+                      : "No profile photo"
+                  }
+                  className={`w-14 h-14 rounded-xl overflow-hidden border flex items-center justify-center transition ${
+                    selectedApplication.profilePhotoUrl
+                      ? "cursor-zoom-in hover:scale-105"
+                      : "cursor-default"
+                  } ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-800"
+                      : "border-slate-200 bg-slate-100"
+                  }`}
+                >
+                  {selectedApplication.profilePhotoUrl ? (
+                    <img
+                      src={selectedApplication.profilePhotoUrl}
+                      alt={`${selectedApplication.studentName} profile`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-black text-sm">
+                      {getStudentInitials(selectedApplication.studentName)}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedApplication(null)}
+                  className={`w-9 h-9 rounded-lg text-xl text-slate-400 ${
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
+                  }`}
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div className="p-5 sm:p-6 space-y-6">
@@ -1807,8 +2167,8 @@ const ManageApplications = () => {
 
                 <span className={`text-[10px] ${bodyTextClass}`}>
                   {selectedApplication.approvedRequiredDocumentCount}/
-                  {selectedApplication.requiredDocumentCount} required
-                  documents approved
+                  {selectedApplication.requiredDocumentCount} required documents
+                  approved
                 </span>
               </div>
 
@@ -1929,6 +2289,83 @@ const ManageApplications = () => {
                 </div>
               </section>
 
+              {/* CERTIFICATE OF REGISTRATION */}
+
+              <section>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className={`text-sm font-bold ${headingClass}`}>
+                      Certificate of Registration
+                    </h3>
+
+                    <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
+                      Review the student's Certificate of Registration.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`p-4 rounded-xl border ${borderClass} ${
+                    darkMode ? "bg-slate-800" : "bg-slate-50"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center ${
+                          darkMode ? "bg-slate-700" : "bg-white"
+                        }`}
+                      >
+                        📜
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className={`text-xs font-bold ${
+                            selectedApplication.corUrl
+                              ? headingClass
+                              : bodyTextClass
+                          }`}
+                        >
+                          {selectedApplication.corUrl
+                            ? selectedApplication.corName ||
+                              "Certificate of Registration uploaded"
+                            : "Certificate of Registration not uploaded"}
+                        </p>
+
+                        <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
+                          {selectedApplication.corUrl
+                            ? "Available from the student's profile"
+                            : "The student has not uploaded a Certificate of Registration."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={
+                        !selectedApplication.corUrl ||
+                        viewingCorId === selectedApplication.id
+                      }
+                      onClick={() => handleViewCOR(selectedApplication)}
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-lg border text-[10px] font-bold transition ${
+                        selectedApplication.corUrl
+                          ? darkMode
+                            ? "border-blue-800 text-blue-300 hover:bg-blue-950/40"
+                            : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                          : darkMode
+                          ? "border-slate-700 text-slate-600 cursor-not-allowed"
+                          : "border-slate-200 text-slate-400 cursor-not-allowed"
+                      } disabled:opacity-70`}
+                    >
+                      {viewingCorId === selectedApplication.id
+                        ? "Opening..."
+                        : "View COR"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
               {/* INTERNSHIP INFORMATION */}
 
               <section>
@@ -2008,65 +2445,82 @@ const ManageApplications = () => {
                 </div>
 
                 <div className="space-y-2">
-                  {selectedApplication.documents.map((document) => (
+                  {selectedApplication.documents.length === 0 ? (
                     <div
-                      key={document.id}
-                      className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${borderClass}`}
+                      className={`p-4 rounded-xl border text-center ${borderClass} ${
+                        darkMode ? "bg-slate-800" : "bg-slate-50"
+                      }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center ${
-                            darkMode ? "bg-slate-800" : "bg-slate-100"
-                          }`}
-                        >
-                          📄
-                        </div>
+                      <p className={`text-xs font-semibold ${headingClass}`}>
+                        No assignment documents available
+                      </p>
 
-                        <div className="min-w-0">
-                          <p
-                            className={`text-xs font-bold truncate ${headingClass}`}
-                          >
-                            {document.name}
-                          </p>
-
-                          <p
-                            className={`text-[10px] mt-0.5 truncate ${bodyTextClass}`}
-                          >
-                            {document.file}
-                          </p>
-
-                          <span
-                            className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[8px] font-bold ${
-                              document.status === "approved"
-                                ? darkMode
-                                  ? "bg-emerald-950 text-emerald-300"
-                                  : "bg-emerald-50 text-emerald-700"
-                                : darkMode
-                                ? "bg-amber-950 text-amber-300"
-                                : "bg-amber-50 text-amber-700"
+                      <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
+                        The Registrar has already reviewed the required
+                        documents before deployment.
+                      </p>
+                    </div>
+                  ) : (
+                    selectedApplication.documents.map((document) => (
+                      <div
+                        key={document.id}
+                        className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${borderClass}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center ${
+                              darkMode ? "bg-slate-800" : "bg-slate-100"
                             }`}
                           >
-                            {document.status}
-                          </span>
-                        </div>
-                      </div>
+                            📄
+                          </div>
 
-                      <button
-                        type="button"
-                        disabled={viewingDocumentId === document.id}
-                        onClick={() => handleViewDocument(document)}
-                        className={`flex-shrink-0 px-3 py-2 rounded-lg border text-[10px] font-bold transition ${
-                          darkMode
-                            ? "border-slate-700 text-slate-300 hover:bg-slate-800"
-                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {viewingDocumentId === document.id
-                          ? "Opening..."
-                          : "View"}
-                      </button>
-                    </div>
-                  ))}
+                          <div className="min-w-0">
+                            <p
+                              className={`text-xs font-bold truncate ${headingClass}`}
+                            >
+                              {document.name}
+                            </p>
+
+                            <p
+                              className={`text-[10px] mt-0.5 truncate ${bodyTextClass}`}
+                            >
+                              {document.file}
+                            </p>
+
+                            <span
+                              className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[8px] font-bold ${
+                                document.status === "approved"
+                                  ? darkMode
+                                    ? "bg-emerald-950 text-emerald-300"
+                                    : "bg-emerald-50 text-emerald-700"
+                                  : darkMode
+                                  ? "bg-amber-950 text-amber-300"
+                                  : "bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {document.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={viewingDocumentId === document.id}
+                          onClick={() => handleViewDocument(document)}
+                          className={`flex-shrink-0 px-3 py-2 rounded-lg border text-[10px] font-bold transition ${
+                            darkMode
+                              ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {viewingDocumentId === document.id
+                            ? "Opening..."
+                            : "View"}
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </section>
 
@@ -2098,6 +2552,34 @@ const ManageApplications = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROFILE PHOTO EXPANDED VIEW */}
+
+      {isProfilePhotoExpanded && selectedApplication?.profilePhotoUrl && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-5 bg-black/80 backdrop-blur-sm"
+          onClick={() => setIsProfilePhotoExpanded(false)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={selectedApplication.profilePhotoUrl}
+              alt={`${selectedApplication.studentName} profile`}
+              className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setIsProfilePhotoExpanded(false)}
+              className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white text-slate-900 text-xl font-bold shadow-lg hover:bg-slate-100"
+            >
+              ×
+            </button>
           </div>
         </div>
       )}
@@ -2144,9 +2626,7 @@ const ManageApplications = () => {
                 student may apply again to this opportunity.
               </div>
 
-              <label
-                className={`block text-xs font-bold mb-2 ${headingClass}`}
-              >
+              <label className={`block text-xs font-bold mb-2 ${headingClass}`}>
                 Reason for Rejection
                 <span className={`font-normal ml-1 ${bodyTextClass}`}>
                   (optional)
@@ -2199,4 +2679,3 @@ const ManageApplications = () => {
 };
 
 export default ManageApplications;
-

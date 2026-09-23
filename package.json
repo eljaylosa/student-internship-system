@@ -14,8 +14,10 @@
     "@tailwindcss/vite": "^4.3.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "libphonenumber-js": "^1.13.13",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-phone-number-input": "^3.4.18",
     "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.3.3"
   },

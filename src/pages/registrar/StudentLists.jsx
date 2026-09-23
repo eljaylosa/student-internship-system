@@ -6,6 +6,12 @@ const StudentLists = () => {
   const { darkMode } = useOutletContext();
 
   // =========================================================
+  // CONSTANTS
+  // =========================================================
+
+  const PROFILE_PHOTO_BUCKET = "profile-photos";
+
+  // =========================================================
   // STATE
   // =========================================================
 
@@ -14,6 +20,8 @@ const StudentLists = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedStudent, setSelectedStudent] = useState(null);
+
+  const [isProfilePhotoExpanded, setIsProfilePhotoExpanded] = useState(false);
 
   // =========================================================
   // THEME CLASSES
@@ -102,6 +110,64 @@ const StudentLists = () => {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
   };
 
+  // =========================================================
+  // PROFILE PHOTO HELPERS
+  // =========================================================
+
+  const getProfilePhotoStoragePath = (path) => {
+    if (!path) return null;
+
+    let storagePath = path;
+
+    if (path.startsWith("http")) {
+      const publicMarker = `/storage/v1/object/public/${PROFILE_PHOTO_BUCKET}/`;
+
+      if (path.includes(publicMarker)) {
+        storagePath = path.split(publicMarker)[1];
+      } else {
+        const signedMarker = `/storage/v1/object/sign/${PROFILE_PHOTO_BUCKET}/`;
+
+        if (path.includes(signedMarker)) {
+          storagePath = path.split(signedMarker)[1].split("?")[0];
+        }
+      }
+    }
+
+    return decodeURIComponent(storagePath);
+  };
+
+  const createProfilePhotoUrl = async (photoPath) => {
+    if (!photoPath) {
+      return null;
+    }
+
+    try {
+      const storagePath = getProfilePhotoStoragePath(photoPath);
+
+      if (!storagePath) {
+        return null;
+      }
+
+      const { data, error } = await supabaseRegistrar.storage
+        .from(PROFILE_PHOTO_BUCKET)
+        .createSignedUrl(storagePath, 60 * 60);
+
+      if (error) {
+        console.error("Error creating student profile photo URL:", error);
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (error) {
+      console.error("Student profile photo error:", error);
+      return null;
+    }
+  };
+
+  // =========================================================
+  // LOAD STUDENTS
+  // =========================================================
+
   const loadStudents = async () => {
     setLoading(true);
 
@@ -153,11 +219,10 @@ const StudentLists = () => {
       // 3. LOAD ALL STUDENTS IN THIS REGISTRAR'S CAMPUS
       // =======================================================
 
-      const { data: studentData, error: studentError } =
-        await supabaseRegistrar
-          .from("students")
-          .select(
-            `
+      const { data: studentData, error: studentError } = await supabaseRegistrar
+        .from("students")
+        .select(
+          `
             id,
             student_id,
             program,
@@ -166,7 +231,7 @@ const StudentLists = () => {
             phone,
             address,
             emergency_contact,
-            gwa,
+            profile_photo_url,
             school_id,
             created_at,
             users (
@@ -177,9 +242,9 @@ const StudentLists = () => {
               last_name
             )
           `
-          )
-          .eq("school_id", schoolId)
-          .order("created_at", { ascending: false });
+        )
+        .eq("school_id", schoolId)
+        .order("created_at", { ascending: false });
 
       if (studentError) {
         throw studentError;
@@ -288,133 +353,155 @@ const StudentLists = () => {
       // 7. BUILD STUDENT LIST
       // =======================================================
 
-      const formattedStudents = (studentData || []).map((student) => {
-        const userRecord = Array.isArray(student.users)
-          ? student.users[0]
-          : student.users;
+      const formattedStudents = await Promise.all(
+        (studentData || []).map(async (student) => {
+          const userRecord = Array.isArray(student.users)
+            ? student.users[0]
+            : student.users;
 
-        const assignment = latestAssignments.get(student.id);
-        const application = latestApplications.get(student.id);
+          const assignment = latestAssignments.get(student.id);
+          const application = latestApplications.get(student.id);
 
-        const studentName = [
-          userRecord?.first_name,
-          userRecord?.middle_name,
-          userRecord?.last_name,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
+          const studentName = [
+            userRecord?.first_name,
+            userRecord?.middle_name,
+            userRecord?.last_name,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
 
-        const assignmentStatus = assignment?.status?.toLowerCase();
-        const applicationStatus = application?.status?.toLowerCase();
+          const assignmentStatus = assignment?.status?.toLowerCase();
+          const applicationStatus = application?.status?.toLowerCase();
 
-        let status = "Not Started";
+          // ===================================================
+          // DISPLAY STATUS
+          //
+          // This intentionally uses user-friendly workflow
+          // statuses instead of raw database statuses.
+          // ===================================================
 
-        // =====================================================
-        // ASSIGNMENT STATUS HAS PRIORITY
-        // =====================================================
+          let status = "Not Started";
 
-        if (
-          assignmentStatus === "active" ||
-          assignmentStatus === "suspended"
-        ) {
-          status = "Active";
-        } else if (assignmentStatus === "completed") {
-          status = "Completed";
-        } else if (assignmentStatus === "terminated") {
-          status = "Terminated";
-        } else if (assignmentStatus === "pending") {
-          status = "Pending";
-        }
+          // ---------------------------------------------------
+          // ASSIGNMENT STATUS HAS PRIORITY
+          // ---------------------------------------------------
 
-        // =====================================================
-        // APPLICATION STATUS
-        // Only applies when there is NO ASSIGNMENT.
-        // =====================================================
+          if (assignmentStatus === "active") {
+            status = "Deployed";
+          } else if (assignmentStatus === "suspended") {
+            status = "Suspended";
+          } else if (assignmentStatus === "completed") {
+            status = "Completed";
+          } else if (assignmentStatus === "terminated") {
+            status = "Terminated";
+          } else if (assignmentStatus === "pending") {
+            status = "Ready to Deploy";
+          }
 
-        else if (applicationStatus === "rejected") {
-          status = "Rejected";
-        } else if (
-          applicationStatus === "submitted" ||
-          applicationStatus === "under_review" ||
-          applicationStatus === "info_requested" ||
-          applicationStatus === "approved"
-        ) {
-          status = "Pending";
-        }
+          // ---------------------------------------------------
+          // APPLICATION STATUS
+          //
+          // Only applies when there is no assignment.
+          // ---------------------------------------------------
+          else if (
+            applicationStatus === "submitted" ||
+            applicationStatus === "under_review"
+          ) {
+            status = "Pending Review";
+          } else if (applicationStatus === "info_requested") {
+            status = "Information Requested";
+          } else if (applicationStatus === "approved") {
+            status = "Pending Placement";
+          } else if (applicationStatus === "rejected") {
+            status = "Rejected";
+          }
 
-        // =====================================================
-        // PROGRESS
-        // =====================================================
+          // ===================================================
+          // PROGRESS
+          // ===================================================
 
-        const progress = getProgress(assignment);
+          const progress = getProgress(assignment);
 
-        // =====================================================
-        // COMPANY
-        //
-        // IMPORTANT:
-        // Only an actual assignment establishes an
-        // assigned company.
-        //
-        // Do NOT use the application opportunity company here.
-        // =====================================================
+          // ===================================================
+          // COMPANY
+          //
+          // Only an actual assignment establishes the
+          // assigned company.
+          // ===================================================
 
-        const company =
-          assignment?.companies?.company_name || "Not assigned";
+          const company = assignment?.companies?.company_name || "Not assigned";
 
-        // =====================================================
-        // POSITION
-        //
-        // Only show an internship position when there is
-        // an actual assignment.
-        // =====================================================
+          // ===================================================
+          // POSITION
+          //
+          // Only show an internship position when there is
+          // an actual assignment.
+          // ===================================================
 
-        const position =
-          assignment?.opportunities?.title || "No internship opportunity";
+          const position =
+            assignment?.opportunities?.title || "No internship opportunity";
 
-        const startDate = assignment?.start_date || null;
+          const startDate = assignment?.start_date || null;
 
-        return {
-          uuid: student.id,
-          id: student.student_id || "N/A",
-          name: studentName || "Unknown Student",
-          email: userRecord?.email || "No email",
-          status,
-          progress,
-          program: student.program || "Not specified",
-          yearLevel: student.year_level || "Not specified",
-          department: student.department || "Not specified",
-          company,
-          position,
-          startDate: startDate ? formatDate(startDate) : "Not started",
-          rawStartDate: startDate,
-          endDate: assignment?.end_date
-            ? formatDate(assignment.end_date)
-            : "Not set",
-          phone: student.phone || "Not provided",
-          address: student.address || "Not provided",
-          emergencyContact:
-            student.emergency_contact || "Not provided",
-          gwa:
-            student.gwa !== null && student.gwa !== undefined
-              ? String(student.gwa)
-              : "Not available",
-          assignmentStatus: assignment?.status || null,
-          applicationStatus: application?.status || null,
-          assignmentId: assignment?.id || null,
-          applicationId: application?.id || null,
-        };
-      });
+          // ===================================================
+          // PROFILE PHOTO
+          // ===================================================
+
+          const profilePhotoUrl = await createProfilePhotoUrl(
+            student.profile_photo_url
+          );
+
+          return {
+            uuid: student.id,
+            id: student.student_id || "N/A",
+            name: studentName || "Unknown Student",
+            email: userRecord?.email || "No email",
+
+            // User-friendly display status
+            status,
+
+            progress,
+
+            program: student.program || "Not specified",
+            yearLevel: student.year_level || "Not specified",
+            department: student.department || "Not specified",
+
+            company,
+            position,
+
+            startDate: startDate ? formatDate(startDate) : "Not started",
+            rawStartDate: startDate,
+
+            endDate: assignment?.end_date
+              ? formatDate(assignment.end_date)
+              : "Not set",
+
+            phone: student.phone || "Not provided",
+            address: student.address || "Not provided",
+            emergencyContact: student.emergency_contact || "Not provided",
+
+            profilePhotoUrl,
+            profilePhotoPath: student.profile_photo_url || null,
+
+            // Keep raw statuses for future use
+            assignmentStatus: assignment?.status || null,
+            applicationStatus: application?.status || null,
+
+            assignmentId: assignment?.id || null,
+            applicationId: application?.id || null,
+          };
+        })
+      );
 
       setStudents(formattedStudents);
 
-      console.log(
-        "👥 Campus-scoped students loaded:",
-        formattedStudents
-      );
+      console.log("👥 Campus-scoped students loaded:", formattedStudents);
     } catch (error) {
       console.error("❌ Load student list error:", error);
+
       setStudents([]);
+
       alert(error.message || "Unable to load students.");
     } finally {
       setLoading(false);
@@ -453,47 +540,79 @@ const StudentLists = () => {
 
   const getStatusClass = (status) => {
     if (darkMode) {
-      if (status === "Active") {
+      if (status === "Deployed") {
         return "bg-emerald-900/40 text-emerald-300 border-emerald-800";
-      }
-
-      if (status === "Pending") {
-        return "bg-amber-900/40 text-amber-300 border-amber-800";
       }
 
       if (status === "Completed") {
         return "bg-blue-900/40 text-blue-300 border-blue-800";
       }
 
-      if (status === "Rejected") {
+      if (status === "Pending Placement") {
+        return "bg-indigo-900/40 text-indigo-300 border-indigo-800";
+      }
+
+      if (status === "Ready to Deploy") {
+        return "bg-amber-900/40 text-amber-300 border-amber-800";
+      }
+
+      if (status === "Pending Review") {
+        return "bg-violet-900/40 text-violet-300 border-violet-800";
+      }
+
+      if (status === "Information Requested") {
+        return "bg-orange-900/40 text-orange-300 border-orange-800";
+      }
+
+      if (status === "Suspended") {
+        return "bg-yellow-900/40 text-yellow-300 border-yellow-800";
+      }
+
+      if (status === "Rejected" || status === "Terminated") {
         return "bg-red-900/40 text-red-300 border-red-800";
       }
 
-      if (status === "Terminated") {
-        return "bg-red-900/40 text-red-300 border-red-800";
+      if (status === "Not Started") {
+        return "bg-slate-800 text-slate-400 border-slate-700";
       }
 
       return "bg-slate-800 text-slate-400 border-slate-700";
     }
 
-    if (status === "Active") {
+    if (status === "Deployed") {
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    }
-
-    if (status === "Pending") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
     }
 
     if (status === "Completed") {
       return "bg-blue-50 text-blue-700 border-blue-200";
     }
 
-    if (status === "Rejected") {
+    if (status === "Pending Placement") {
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    }
+
+    if (status === "Ready to Deploy") {
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    }
+
+    if (status === "Pending Review") {
+      return "bg-violet-50 text-violet-700 border-violet-200";
+    }
+
+    if (status === "Information Requested") {
+      return "bg-orange-50 text-orange-700 border-orange-200";
+    }
+
+    if (status === "Suspended") {
+      return "bg-yellow-50 text-yellow-700 border-yellow-200";
+    }
+
+    if (status === "Rejected" || status === "Terminated") {
       return "bg-red-50 text-red-700 border-red-200";
     }
 
-    if (status === "Terminated") {
-      return "bg-red-50 text-red-700 border-red-200";
+    if (status === "Not Started") {
+      return "bg-slate-100 text-slate-500 border-slate-200";
     }
 
     return "bg-slate-100 text-slate-500 border-slate-200";
@@ -520,15 +639,35 @@ const StudentLists = () => {
   };
 
   // =========================================================
+  // STUDENT INITIALS
+  // =========================================================
+
+  const getStudentInitials = (student) => {
+    if (!student?.name) {
+      return "?";
+    }
+
+    const parts = student.name.trim().split(/\s+/).filter(Boolean);
+
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  };
+
+  // =========================================================
   // VIEW STUDENT
   // =========================================================
 
   const handleViewStudent = (student) => {
     setSelectedStudent(student);
+    setIsProfilePhotoExpanded(false);
   };
 
   const closeStudentModal = () => {
     setSelectedStudent(null);
+    setIsProfilePhotoExpanded(false);
   };
 
   // =========================================================
@@ -560,7 +699,6 @@ const StudentLists = () => {
       "End Date",
       "Year Level",
       "Department",
-      "GWA",
     ];
 
     const rows = filteredStudents.map((student) => [
@@ -576,16 +714,11 @@ const StudentLists = () => {
       student.endDate,
       student.yearLevel,
       student.department,
-      student.gwa,
     ]);
 
     const csvContent = [headers, ...rows]
       .map((row) =>
-        row
-          .map((value) =>
-            `"${String(value).replace(/"/g, '""')}"`
-          )
-          .join(",")
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
       )
       .join("\n");
 
@@ -633,7 +766,6 @@ const StudentLists = () => {
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
       <div className="max-w-[1400px] mx-auto">
-
         {/* =====================================================
             PAGE HEADER
         ===================================================== */}
@@ -647,9 +779,7 @@ const StudentLists = () => {
             Registrar Portal
           </p>
 
-          <h1
-            className={`text-xl sm:text-2xl font-black ${headingClass}`}
-          >
+          <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
             Student List
           </h1>
 
@@ -669,11 +799,8 @@ const StudentLists = () => {
               SEARCH / FILTER / EXPORT
           =================================================== */}
 
-          <div
-            className={`p-4 sm:p-5 border-b ${filterContainerClass}`}
-          >
+          <div className={`p-4 sm:p-5 border-b ${filterContainerClass}`}>
             <div className="flex flex-col lg:flex-row gap-3">
-
               {/* SEARCH */}
 
               <div className="relative flex-1">
@@ -712,7 +839,7 @@ const StudentLists = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className={`
                   h-11
-                  lg:w-44
+                  lg:w-56
                   px-4
                   rounded-lg
                   border
@@ -724,60 +851,31 @@ const StudentLists = () => {
                   ${inputClass}
                 `}
               >
-                <option
-                  value="All"
-                  className={
-                    darkMode
-                      ? "bg-slate-900 text-slate-100"
-                      : "bg-white text-slate-900"
-                  }
-                >
-                  All Status
-                </option>
-
-                <option
-                  value="Active"
-                  className={
-                    darkMode
-                      ? "bg-slate-900 text-slate-100"
-                      : "bg-white text-slate-900"
-                  }
-                >
-                  Active
-                </option>
-
-                <option
-                  value="Pending"
-                  className={
-                    darkMode
-                      ? "bg-slate-900 text-slate-100"
-                      : "bg-white text-slate-900"
-                  }
-                >
-                  Pending
-                </option>
-
-                <option
-                  value="Completed"
-                  className={
-                    darkMode
-                      ? "bg-slate-900 text-slate-100"
-                      : "bg-white text-slate-900"
-                  }
-                >
-                  Completed
-                </option>
-
-                <option
-                  value="Rejected"
-                  className={
-                    darkMode
-                      ? "bg-slate-900 text-slate-100"
-                      : "bg-white text-slate-900"
-                  }
-                >
-                  Rejected
-                </option>
+                {[
+                  "All",
+                  "Pending Review",
+                  "Information Requested",
+                  "Pending Placement",
+                  "Ready to Deploy",
+                  "Deployed",
+                  "Suspended",
+                  "Completed",
+                  "Rejected",
+                  "Terminated",
+                  "Not Started",
+                ].map((status) => (
+                  <option
+                    key={status}
+                    value={status}
+                    className={
+                      darkMode
+                        ? "bg-slate-900 text-slate-100"
+                        : "bg-white text-slate-900"
+                    }
+                  >
+                    {status === "All" ? "All Status" : status}
+                  </option>
+                ))}
               </select>
 
               {/* CLEAR FILTER */}
@@ -835,9 +933,7 @@ const StudentLists = () => {
           <div className="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <p className={`text-xs font-semibold ${mutedClass}`}>
               Showing {filteredStudents.length}{" "}
-              {filteredStudents.length === 1
-                ? "student"
-                : "students"}
+              {filteredStudents.length === 1 ? "student" : "students"}
             </p>
 
             {statusFilter !== "All" && (
@@ -854,9 +950,6 @@ const StudentLists = () => {
           {filteredStudents.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1050px] border-collapse">
-
-                {/* TABLE HEADER */}
-
                 <thead>
                   <tr className={tableHeaderClass}>
                     <th className="px-4 py-4 text-left text-[10px] font-bold uppercase tracking-wide border-b">
@@ -885,15 +978,12 @@ const StudentLists = () => {
                   </tr>
                 </thead>
 
-                {/* TABLE BODY */}
-
                 <tbody>
                   {filteredStudents.map((student) => (
                     <tr
-                      key={student.id}
+                      key={student.uuid}
                       className={`transition ${tableRowClass}`}
                     >
-
                       {/* ID */}
 
                       <td
@@ -905,18 +995,40 @@ const StudentLists = () => {
                       {/* STUDENT NAME */}
 
                       <td className="px-4 py-5 border-b">
-                        <div>
-                          <p
-                            className={`text-xs font-bold ${tableTextClass}`}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-xl overflow-hidden border flex items-center justify-center flex-shrink-0 ${
+                              darkMode
+                                ? "border-slate-700 bg-slate-800 text-slate-200"
+                                : "border-slate-200 bg-slate-100 text-slate-700"
+                            }`}
                           >
-                            {student.name}
-                          </p>
+                            {student.profilePhotoUrl ? (
+                              <img
+                                src={student.profilePhotoUrl}
+                                alt={`${student.name} profile`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-xs font-black">
+                                {getStudentInitials(student)}
+                              </span>
+                            )}
+                          </div>
 
-                          <p
-                            className={`text-[10px] mt-1 truncate max-w-[220px] ${mutedClass}`}
-                          >
-                            {student.email}
-                          </p>
+                          <div className="min-w-0">
+                            <p
+                              className={`text-xs font-bold ${tableTextClass}`}
+                            >
+                              {student.name}
+                            </p>
+
+                            <p
+                              className={`text-[10px] mt-1 truncate max-w-[220px] ${mutedClass}`}
+                            >
+                              {student.email}
+                            </p>
+                          </div>
                         </div>
                       </td>
 
@@ -1049,10 +1161,6 @@ const StudentLists = () => {
               </table>
             </div>
           ) : (
-            /* =================================================
-               NO RESULTS
-            ================================================= */
-
             <div
               className={`
                 mx-4
@@ -1071,17 +1179,13 @@ const StudentLists = () => {
             >
               <div
                 className={`text-3xl mb-3 ${
-                  darkMode
-                    ? "text-slate-600"
-                    : "text-slate-300"
+                  darkMode ? "text-slate-600" : "text-slate-300"
                 }`}
               >
                 🔍
               </div>
 
-              <h2
-                className={`text-sm font-bold ${headingClass}`}
-              >
+              <h2 className={`text-sm font-bold ${headingClass}`}>
                 No students found
               </h2>
 
@@ -1136,7 +1240,7 @@ const StudentLists = () => {
             className={`
               w-full
               max-w-2xl
-              max-h-[90vh]
+              max-h-[100vh]
               rounded-2xl
               border
               shadow-2xl
@@ -1149,7 +1253,6 @@ const StudentLists = () => {
             `}
             onClick={(e) => e.stopPropagation()}
           >
-
             {/* MODAL HEADER */}
 
             <div
@@ -1179,9 +1282,7 @@ const StudentLists = () => {
                   Student Details
                 </p>
 
-                <h2
-                  className={`text-lg sm:text-xl font-black ${headingClass}`}
-                >
+                <h2 className={`text-lg sm:text-xl font-black ${headingClass}`}>
                   {selectedStudent.name}
                 </h2>
 
@@ -1190,39 +1291,91 @@ const StudentLists = () => {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={closeStudentModal}
-                className={`
-                  w-9
-                  h-9
-                  flex-shrink-0
-                  rounded-lg
-                  flex
-                  items-center
-                  justify-center
-                  text-lg
-                  transition
-                  ${
-                    darkMode
-                      ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
-                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {/* PROFILE PHOTO */}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedStudent.profilePhotoUrl) {
+                      setIsProfilePhotoExpanded(true);
+                    }
+                  }}
+                  disabled={!selectedStudent.profilePhotoUrl}
+                  title={
+                    selectedStudent.profilePhotoUrl
+                      ? "Click to view profile photo"
+                      : "No profile photo"
                   }
-                `}
-                aria-label="Close"
-              >
-                ×
-              </button>
+                  className={`
+                    w-14
+                    h-14
+                    rounded-xl
+                    overflow-hidden
+                    border
+                    flex
+                    items-center
+                    justify-center
+                    transition
+                    ${
+                      selectedStudent.profilePhotoUrl
+                        ? "cursor-zoom-in hover:scale-105"
+                        : "cursor-default"
+                    }
+                    ${
+                      darkMode
+                        ? "border-slate-700 bg-slate-800"
+                        : "border-slate-200 bg-slate-100"
+                    }
+                  `}
+                >
+                  {selectedStudent.profilePhotoUrl ? (
+                    <img
+                      src={selectedStudent.profilePhotoUrl}
+                      alt={`${selectedStudent.name} profile`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-black text-sm">
+                      {getStudentInitials(selectedStudent)}
+                    </span>
+                  )}
+                </button>
+
+                {/* CLOSE */}
+
+                <button
+                  type="button"
+                  onClick={closeStudentModal}
+                  className={`
+                    w-9
+                    h-9
+                    flex-shrink-0
+                    rounded-lg
+                    flex
+                    items-center
+                    justify-center
+                    text-lg
+                    transition
+                    ${
+                      darkMode
+                        ? "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+                    }
+                  `}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             {/* MODAL BODY */}
 
             <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(90vh-145px)]">
-
               {/* STATUS + PROGRESS */}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-
                 {/* STATUS */}
 
                 <div
@@ -1293,9 +1446,7 @@ const StudentLists = () => {
                       Internship Progress
                     </p>
 
-                    <span
-                      className={`text-xs font-bold ${headingClass}`}
-                    >
+                    <span className={`text-xs font-bold ${headingClass}`}>
                       {selectedStudent.progress}%
                     </span>
                   </div>
@@ -1370,9 +1521,7 @@ const StudentLists = () => {
                   </div>
 
                   <div className="min-w-0">
-                    <p
-                      className={`text-sm font-bold ${headingClass}`}
-                    >
+                    <p className={`text-sm font-bold ${headingClass}`}>
                       {selectedStudent.company}
                     </p>
 
@@ -1386,7 +1535,6 @@ const StudentLists = () => {
               {/* DETAILS GRID */}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-
                 {/* EMAIL */}
 
                 <div>
@@ -1403,9 +1551,7 @@ const StudentLists = () => {
                     Email
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.email}
                   </p>
                 </div>
@@ -1426,9 +1572,7 @@ const StudentLists = () => {
                     Program
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.program}
                   </p>
                 </div>
@@ -1449,9 +1593,7 @@ const StudentLists = () => {
                     Assigned Company
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.company}
                   </p>
                 </div>
@@ -1472,9 +1614,7 @@ const StudentLists = () => {
                     Internship Position
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.position}
                   </p>
                 </div>
@@ -1495,9 +1635,7 @@ const StudentLists = () => {
                     Internship Start
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.startDate}
                   </p>
                 </div>
@@ -1518,9 +1656,7 @@ const StudentLists = () => {
                     Student ID
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.id}
                   </p>
                 </div>
@@ -1541,9 +1677,7 @@ const StudentLists = () => {
                     Year Level
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.yearLevel}
                   </p>
                 </div>
@@ -1564,33 +1698,8 @@ const StudentLists = () => {
                     Department
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.department}
-                  </p>
-                </div>
-
-                {/* GWA */}
-
-                <div>
-                  <p
-                    className={`
-                      text-[10px]
-                      uppercase
-                      tracking-wide
-                      font-bold
-                      mb-1
-                      ${mutedClass}
-                    `}
-                  >
-                    GWA
-                  </p>
-
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
-                    {selectedStudent.gwa}
                   </p>
                 </div>
 
@@ -1610,9 +1719,7 @@ const StudentLists = () => {
                     Phone
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.phone}
                   </p>
                 </div>
@@ -1633,9 +1740,7 @@ const StudentLists = () => {
                     Address
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.address}
                   </p>
                 </div>
@@ -1656,9 +1761,7 @@ const StudentLists = () => {
                     Emergency Contact
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.emergencyContact}
                   </p>
                 </div>
@@ -1679,9 +1782,7 @@ const StudentLists = () => {
                     Internship End
                   </p>
 
-                  <p
-                    className={`text-sm font-semibold ${headingClass}`}
-                  >
+                  <p className={`text-sm font-semibold ${headingClass}`}>
                     {selectedStudent.endDate}
                   </p>
                 </div>
@@ -1725,9 +1826,38 @@ const StudentLists = () => {
           </div>
         </div>
       )}
+
+      {/* =======================================================
+          EXPANDED PROFILE PHOTO
+      ======================================================= */}
+
+      {isProfilePhotoExpanded && selectedStudent?.profilePhotoUrl && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-5 bg-black/80 backdrop-blur-sm"
+          onClick={() => setIsProfilePhotoExpanded(false)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={selectedStudent.profilePhotoUrl}
+              alt={`${selectedStudent.name} profile`}
+              className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+            />
+
+            <button
+              type="button"
+              onClick={() => setIsProfilePhotoExpanded(false)}
+              className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-white text-slate-900 text-xl font-bold shadow-lg hover:bg-slate-100"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default StudentLists;
-

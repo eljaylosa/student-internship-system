@@ -1,6 +1,78 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
+import {
+  getCountryCallingCode,
+  isValidPhoneNumber,
+} from "react-phone-number-input";
+
+/*
+ * =========================================================
+ * PHONE HELPERS
+ * =========================================================
+ *
+ * The country calling code (+63, +1, +81, etc.) is shown
+ * separately and is NOT counted toward the national number
+ * maximum.
+ *
+ * PHILIPPINES:
+ *
+ * National number:
+ * 9XXXXXXXXX
+ *
+ * Maximum:
+ * 10 digits
+ *
+ * Examples:
+ *
+ * 0              -> ignored
+ * 09171234567    -> 9171234567
+ * 9171234567     -> 9171234567
+ *
+ * Stored:
+ *
+ * +639171234567
+ */
+
+/*
+ * Maximum NATIONAL phone-number lengths for the countries
+ * available in the selector.
+ *
+ * PH is explicitly 10 digits because Philippine mobile
+ * numbers use 9XXXXXXXXX.
+ *
+ * For countries not listed here, we use 15 as the general
+ * international maximum and still perform final validation
+ * with libphonenumber-js.
+ */
+const PHONE_MAX_LENGTHS = {
+  PH: 10,
+  US: 10,
+  CA: 10,
+  GB: 10,
+  JP: 10,
+  KR: 10,
+  AU: 9,
+  SG: 8,
+  MY: 10,
+  ID: 12,
+  IN: 10,
+  CN: 11,
+  HK: 8,
+  TW: 9,
+  TH: 9,
+  VN: 10,
+};
+
+const getNationalPhoneMaxLength = (country) => {
+  return PHONE_MAX_LENGTHS[country] || 15;
+};
+
+/*
+ * =========================================================
+ * SIGN UP
+ * =========================================================
+ */
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -40,10 +112,6 @@ const SignUp = () => {
   const [schools, setSchools] = useState([]);
   const [isLoadingSchools, setIsLoadingSchools] = useState(true);
   const [schoolLoadError, setSchoolLoadError] = useState("");
-
-  /*
-   * Load all active schools from Supabase.
-   */
 
   useEffect(() => {
     const loadSchools = async () => {
@@ -188,6 +256,26 @@ const SignUp = () => {
 
   /*
    * =========================================================
+   * PHONE COUNTRY
+   * =========================================================
+   *
+   * Separate country selection for:
+   *
+   * Student Mobile Number
+   * Registrar Mobile Number
+   * Company Supervisor Mobile Number
+   * Company Contact Number
+   */
+
+  const [phoneCountries, setPhoneCountries] = useState({
+    studentPhone: "PH",
+    registrarPhone: "PH",
+    companyPhone: "PH",
+    companyContact: "PH",
+  });
+
+  /*
+   * =========================================================
    * HANDLE FORM CHANGE
    * =========================================================
    */
@@ -202,10 +290,8 @@ const SignUp = () => {
     }));
 
     /*
-     * Email verification belongs to the email address.
-     *
-     * If ANY role changes their email, the previous
-     * verification is immediately invalidated.
+     * If the email changes, invalidate the previous
+     * verification immediately.
      */
 
     if (field === "email") {
@@ -217,6 +303,170 @@ const SignUp = () => {
 
   const handleFileChange = (role, field, file) => {
     handleChange(role, field, file);
+  };
+
+  /*
+   * =========================================================
+   * PHONE NUMBER VALIDATION
+   * =========================================================
+   */
+
+  const validatePhoneNumber = (phone, fieldLabel = "Mobile Number") => {
+    if (!phone) {
+      alert(`Please enter your ${fieldLabel}.`);
+      return false;
+    }
+
+    if (!isValidPhoneNumber(phone)) {
+      alert(`Please enter a valid ${fieldLabel}.`);
+      return false;
+    }
+
+    return true;
+  };
+
+  /*
+   * =========================================================
+   * PHONE INPUT HANDLER
+   * =========================================================
+   *
+   * IMPORTANT:
+   *
+   * The input contains ONLY the NATIONAL number.
+   *
+   * Example:
+   *
+   * Country: Philippines
+   * Calling code: +63
+   *
+   * Input:
+   * 9171234567
+   *
+   * Stored:
+   * +639171234567
+   *
+   * The +63 is NOT part of the input maxLength.
+   */
+
+  const handlePhoneChange = ({ role, field, countryKey, value }) => {
+    const selectedCountry = phoneCountries[countryKey] || "PH";
+
+    /*
+     * Keep digits only.
+     */
+
+    let nationalDigits = (value || "").replace(/\D/g, "");
+
+    /*
+     * =====================================================
+     * PHILIPPINES SPECIAL RULE
+     * =====================================================
+     *
+     * Philippine mobile numbers:
+     *
+     * 9XXXXXXXXX
+     *
+     * If user types:
+     *
+     * 0
+     *
+     * ignore it.
+     *
+     * If user types:
+     *
+     * 09171234567
+     *
+     * convert to:
+     *
+     * 9171234567
+     */
+
+    if (selectedCountry === "PH") {
+      /*
+       * Remove leading zero(s).
+       */
+
+      nationalDigits = nationalDigits.replace(/^0+/, "");
+
+      /*
+       * If the user only typed 0, keep it empty.
+       */
+
+      if (!nationalDigits) {
+        handleChange(role, field, "");
+        return;
+      }
+
+      /*
+       * Philippine mobile numbers must begin with 9.
+       *
+       * This prevents values such as:
+       *
+       * 1...
+       * 2...
+       * 8...
+       */
+
+      if (!nationalDigits.startsWith("9")) {
+        return;
+      }
+    }
+
+    /*
+     * =====================================================
+     * HARD NATIONAL MAXIMUM
+     * =====================================================
+     *
+     * The country calling code is NOT included.
+     */
+
+    const maxLength = getNationalPhoneMaxLength(selectedCountry);
+
+    /*
+     * Cut anything beyond the allowed national length.
+     *
+     * This means the user cannot have an 11th digit.
+     */
+
+    nationalDigits = nationalDigits.slice(0, maxLength);
+
+    /*
+     * =====================================================
+     * STORE AS E.164
+     * =====================================================
+     *
+     * Example:
+     *
+     * country = PH
+     * national = 9171234567
+     *
+     * stored = +639171234567
+     */
+
+    if (nationalDigits) {
+      const callingCode = getCountryCallingCode(selectedCountry);
+
+      handleChange(role, field, `+${callingCode}${nationalDigits}`);
+    } else {
+      handleChange(role, field, "");
+    }
+  };
+
+  /*
+   * =========================================================
+   * PHONE COUNTRY CHANGE
+   * =========================================================
+   */
+
+  const handlePhoneCountryChange = (countryKey, country) => {
+    if (!country) {
+      return;
+    }
+
+    setPhoneCountries((prev) => ({
+      ...prev,
+      [countryKey]: country,
+    }));
   };
 
   /*
@@ -248,7 +498,6 @@ const SignUp = () => {
       return;
     }
 
-    // Prevent frontend resend while cooldown is active
     if (
       verification.resendAvailableAt &&
       Date.now() < verification.resendAvailableAt
@@ -281,10 +530,6 @@ const SignUp = () => {
         }
       );
 
-      // =====================================================
-      // GET ACTUAL EDGE FUNCTION ERROR BODY
-      // =====================================================
-
       let response = data;
 
       if (error?.context?.json) {
@@ -299,19 +544,11 @@ const SignUp = () => {
         }
       }
 
-      // =====================================================
-      // HANDLE SERVER ERROR
-      // =====================================================
-
       if (error && !response) {
         throw new Error(error.message || "Unable to send verification code.");
       }
 
       if (!response?.success) {
-        // -----------------------------------------------
-        // COOLDOWN
-        // -----------------------------------------------
-
         if (response?.cooldown) {
           const retryAfter = Number(response.retryAfter) || 60;
 
@@ -329,20 +566,12 @@ const SignUp = () => {
           return;
         }
 
-        // -----------------------------------------------
-        // OTHER ERROR
-        // -----------------------------------------------
-
         throw new Error(
           response?.error ||
             response?.message ||
             "Unable to send verification code."
         );
       }
-
-      // =====================================================
-      // SUCCESS
-      // =====================================================
 
       const cooldownSeconds = Number(response.cooldownSeconds) || 60;
 
@@ -414,10 +643,6 @@ const SignUp = () => {
         }
       );
 
-      // =====================================================
-      // GET THE ACTUAL ERROR BODY FROM THE EDGE FUNCTION
-      // =====================================================
-
       let response = data;
 
       if (error?.context?.json) {
@@ -432,10 +657,6 @@ const SignUp = () => {
         }
       }
 
-      // =====================================================
-      // HANDLE ERROR RESPONSE
-      // =====================================================
-
       if (error && !response) {
         throw new Error(
           error.message || "Unable to verify your email address."
@@ -443,10 +664,6 @@ const SignUp = () => {
       }
 
       if (!response?.success) {
-        // -----------------------------------------------
-        // MAX ATTEMPTS
-        // -----------------------------------------------
-
         if (response?.maxAttemptsReached) {
           setVerification((prev) => ({
             ...prev,
@@ -464,10 +681,6 @@ const SignUp = () => {
 
           return;
         }
-
-        // -----------------------------------------------
-        // EXPIRED CODE
-        // -----------------------------------------------
 
         if (response?.expired) {
           setVerification((prev) => ({
@@ -487,10 +700,6 @@ const SignUp = () => {
           return;
         }
 
-        // -----------------------------------------------
-        // WRONG CODE
-        // -----------------------------------------------
-
         if (response?.attemptsRemaining !== undefined) {
           setVerification((prev) => ({
             ...prev,
@@ -504,20 +713,12 @@ const SignUp = () => {
           return;
         }
 
-        // -----------------------------------------------
-        // OTHER SERVER ERROR
-        // -----------------------------------------------
-
         throw new Error(
           response?.error ||
             response?.message ||
             "Unable to verify your email address."
         );
       }
-
-      // =====================================================
-      // SUCCESS
-      // =====================================================
 
       setVerification((prev) => ({
         ...prev,
@@ -624,22 +825,11 @@ const SignUp = () => {
 
           firstName: currentForm.firstName.trim(),
 
-          /*
-           * Removed the old resubmission:true.
-           *
-           * The backend determines whether this
-           * is a rejected resubmission itself.
-           */
-
           middleInitial: currentForm.middleInitial?.trim() || "",
 
           lastName: currentForm.lastName.trim(),
 
-          phone: currentForm.phone.trim(),
-
-          /*
-           * SCHOOL
-           */
+          phone: currentForm.phone,
 
           schoolId:
             activeRole === "student" || activeRole === "registrar"
@@ -722,13 +912,13 @@ const SignUp = () => {
 
           lastName: currentForm.lastName.trim(),
 
-          phone: currentForm.phone.trim(),
+          phone: currentForm.phone,
 
           companyName: currentForm.companyName.trim(),
 
           companyEmail: currentForm.companyEmail.trim(),
 
-          companyPhone: currentForm.companyPhone.trim(),
+          companyPhone: currentForm.companyPhone,
 
           companyAddress: currentForm.companyAddress.trim(),
 
@@ -776,15 +966,7 @@ const SignUp = () => {
     const currentForm = forms[activeRole];
 
     /*
-     * =======================================================
      * EMAIL VERIFICATION
-     * =======================================================
-     *
-     * ALL PORTALS now require email verification:
-     *
-     * Student
-     * Registrar Adviser
-     * Company Supervisor
      */
 
     if (!verification.isVerified) {
@@ -804,9 +986,22 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
+     * PHONE VALIDATION
+     */
+
+    if (!validatePhoneNumber(currentForm.phone, "Mobile Number")) {
+      return;
+    }
+
+    if (
+      activeRole === "company" &&
+      !validatePhoneNumber(currentForm.companyPhone, "Company Contact Number")
+    ) {
+      return;
+    }
+
+    /*
      * PASSWORD VALIDATION
-     * =======================================================
      */
 
     if (currentForm.password !== currentForm.confirmPassword) {
@@ -828,9 +1023,7 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
      * SCHOOL VALIDATION
-     * =======================================================
      */
 
     if (activeRole === "student" || activeRole === "registrar") {
@@ -850,9 +1043,7 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
      * COMPANY
-     * =======================================================
      */
 
     if (activeRole === "company") {
@@ -895,9 +1086,7 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
      * STUDENT DOCUMENT VALIDATION
-     * =======================================================
      */
 
     if (activeRole === "student") {
@@ -915,9 +1104,7 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
      * REGISTRAR DOCUMENT VALIDATION
-     * =======================================================
      */
 
     if (activeRole === "registrar") {
@@ -937,9 +1124,7 @@ const SignUp = () => {
     }
 
     /*
-     * =======================================================
      * STUDENT / REGISTRAR SUBMISSION
-     * =======================================================
      */
 
     try {
@@ -950,7 +1135,7 @@ const SignUp = () => {
       alert(
         activeRole === "student"
           ? "Registration submitted successfully. Your Student account is now pending review by the administrator."
-          : "Registration submitted successfully. Your Registrar Adviser account is now pending review by the administrator."
+          : "Registration submitted successfully. Your Registrar account is now pending review by the administrator."
       );
 
       navigate("/login", {
@@ -1005,7 +1190,7 @@ const SignUp = () => {
 
     {
       key: "registrar",
-      label: "Registrar Adviser",
+      label: "Registrar",
       accent: "from-emerald-500 to-teal-600",
       activeText: "text-emerald-600",
       icon: (
@@ -1027,7 +1212,7 @@ const SignUp = () => {
 
     {
       key: "company",
-      label: "Company Supervisor",
+      label: "Company",
       accent: "from-purple-500 to-purple-700",
       activeText: "text-purple-600",
       icon: (
@@ -1060,6 +1245,9 @@ const SignUp = () => {
 
   const inputClass =
     "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition";
+
+  const phoneInputClass =
+    "phone-input w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm focus-within:ring-2 focus-within:ring-slate-800 focus-within:bg-white transition";
 
   const labelClass =
     "block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5";
@@ -1189,6 +1377,190 @@ const SignUp = () => {
 
   /*
    * =========================================================
+   * PHONE INPUT
+   * =========================================================
+   *
+   * This is intentionally NOT using PhoneInput's built-in
+   * input anymore.
+   *
+   * We have:
+   *
+   * [ Country ] [ +63 ] [ National Number ]
+   *
+   * The national number is the only editable part.
+   */
+
+  const renderPhoneInput = ({
+    role,
+    field,
+    countryKey,
+    label = "Mobile Number",
+    required = true,
+  }) => {
+    const storedValue = forms[role][field] || "";
+
+    const selectedCountry = phoneCountries[countryKey] || "PH";
+
+    const callingCode = getCountryCallingCode(selectedCountry);
+
+    const maxNationalLength = getNationalPhoneMaxLength(selectedCountry);
+
+    /*
+     * Convert stored E.164 value back to national
+     * digits for display.
+     *
+     * Example:
+     *
+     * +639171234567
+     *
+     * becomes:
+     *
+     * 9171234567
+     */
+
+    let displayedNationalNumber = storedValue.replace(/\D/g, "");
+
+    /*
+     * Remove country calling code from the displayed
+     * value.
+     */
+
+    if (displayedNationalNumber.startsWith(callingCode)) {
+      displayedNationalNumber = displayedNationalNumber.slice(
+        callingCode.length
+      );
+    }
+
+    /*
+     * PH safety:
+     *
+     * +6309171234567
+     *
+     * should still display:
+     *
+     * 9171234567
+     */
+
+    if (selectedCountry === "PH") {
+      displayedNationalNumber = displayedNationalNumber.replace(/^0+/, "");
+    }
+
+    /*
+     * Never allow the displayed input to exceed
+     * the national maximum.
+     */
+
+    displayedNationalNumber = displayedNationalNumber.slice(
+      0,
+      maxNationalLength
+    );
+
+    return (
+      <div>
+        <label className={labelClass}>
+          {label}
+
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+
+        <div
+          className={`${phoneInputClass} flex items-center gap-0 overflow-hidden`}
+        >
+          {/* COUNTRY */}
+
+          <select
+            value={selectedCountry}
+            onChange={(event) => {
+              const newCountry = event.target.value;
+
+              handlePhoneCountryChange(countryKey, newCountry);
+
+              /*
+               * Clear the previous number when
+               * changing country.
+               */
+              handleChange(role, field, "");
+            }}
+            className="flex-shrink-0 bg-transparent border-0 outline-none text-sm font-medium text-slate-700 cursor-pointer pr-2 focus:ring-0"
+            aria-label={`${label} country`}
+          >
+            <option value="PH">🇵🇭 PH</option>
+
+            <option value="US">🇺🇸 US</option>
+
+            <option value="CA">🇨🇦 CA</option>
+
+            <option value="GB">🇬🇧 GB</option>
+
+            <option value="JP">🇯🇵 JP</option>
+
+            <option value="KR">🇰🇷 KR</option>
+
+            <option value="AU">🇦🇺 AU</option>
+
+            <option value="SG">🇸🇬 SG</option>
+
+            <option value="MY">🇲🇾 MY</option>
+
+            <option value="ID">🇮🇩 ID</option>
+
+            <option value="IN">🇮🇳 IN</option>
+
+            <option value="CN">🇨🇳 CN</option>
+
+            <option value="HK">🇭🇰 HK</option>
+
+            <option value="TW">🇹🇼 TW</option>
+
+            <option value="TH">🇹🇭 TH</option>
+
+            <option value="VN">🇻🇳 VN</option>
+          </select>
+
+          {/* CALLING CODE */}
+
+          <div className="flex-shrink-0 px-3 border-l border-slate-200">
+            <span className="text-sm font-semibold text-slate-700">
+              +{callingCode}
+            </span>
+          </div>
+
+          {/* NATIONAL NUMBER */}
+
+          <input
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            required={required}
+            value={displayedNationalNumber}
+            onChange={(event) =>
+              handlePhoneChange({
+                role,
+                field,
+                countryKey,
+                value: event.target.value,
+              })
+            }
+            maxLength={maxNationalLength}
+            placeholder={
+              selectedCountry === "PH" ? "9171234567" : "Enter phone number"
+            }
+            aria-label={label}
+            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm placeholder-slate-400 focus:ring-0"
+          />
+        </div>
+
+        <p className="text-[10px] text-slate-400 mt-1.5">
+          {selectedCountry === "PH"
+            ? "Enter a Philippine mobile number starting with 9. Maximum 10 digits. +63 is added automatically."
+            : `Enter the national phone number. +${callingCode} is added automatically and is not counted toward the maximum.`}
+        </p>
+      </div>
+    );
+  };
+
+  /*
+   * =========================================================
    * SCHOOL DROPDOWN
    * =========================================================
    */
@@ -1229,6 +1601,7 @@ const SignUp = () => {
           {schools.map((school) => (
             <option key={school.id} value={school.id}>
               {school.name}
+
               {school.code ? ` (${school.code})` : ""}
             </option>
           ))}
@@ -1525,7 +1898,7 @@ const SignUp = () => {
 
               <p className="text-xs text-emerald-700 leading-relaxed mt-1">
                 Your email must be verified first. Your credentials will then be
-                reviewed before your Registrar Adviser account can be activated.
+                reviewed before your Registrar account can be activated.
               </p>
             </div>
           </div>
@@ -1561,11 +1934,6 @@ const SignUp = () => {
 
   const handleRoleChange = (role) => {
     setActiveRole(role);
-
-    /*
-     * Always reset verification when
-     * switching signup portals.
-     */
 
     setVerification({
       ...emptyVerification,
@@ -1686,20 +2054,17 @@ const SignUp = () => {
 
                 {/* PHONE */}
 
-                <div>
-                  <label className={labelClass}>Mobile Number</label>
-
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+63 9XX XXX XXXX"
-                    value={currentForm.phone}
-                    onChange={(event) =>
-                      handleChange(activeRole, "phone", event.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
+                {renderPhoneInput({
+                  role: activeRole,
+                  field: "phone",
+                  countryKey:
+                    activeRole === "student"
+                      ? "studentPhone"
+                      : activeRole === "registrar"
+                      ? "registrarPhone"
+                      : "companyPhone",
+                  label: "Mobile Number",
+                })}
               </div>
             </section>
 
@@ -1947,7 +2312,7 @@ const SignUp = () => {
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Registrar Adviser"
+                        placeholder="e.g. Registrar / University Registrar"
                         value={currentForm.position}
                         onChange={(event) =>
                           handleChange(
@@ -2083,26 +2448,14 @@ const SignUp = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className={labelClass}>
-                        Company Contact Number
-                      </label>
+                    {/* COMPANY CONTACT NUMBER */}
 
-                      <input
-                        type="tel"
-                        required
-                        placeholder="+63 9XX XXX XXXX"
-                        value={currentForm.companyPhone}
-                        onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "companyPhone",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
+                    {renderPhoneInput({
+                      role: "company",
+                      field: "companyPhone",
+                      countryKey: "companyContact",
+                      label: "Company Contact Number",
+                    })}
 
                     <div>
                       <label className={labelClass}>Industry</label>
@@ -2178,7 +2531,7 @@ const SignUp = () => {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. HR Manager / Company Supervisor"
+                      placeholder="e.g. HR Manager / Company Head"
                       value={currentForm.designation}
                       onChange={(event) =>
                         handleChange(
