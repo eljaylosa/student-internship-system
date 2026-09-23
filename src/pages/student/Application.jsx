@@ -207,6 +207,7 @@ export default function Application() {
   // ---------------------------------------------------------
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
 
   const [opportunityView, setOpportunityView] = useState("browse");
@@ -2369,6 +2370,25 @@ export default function Application() {
   // OPPORTUNITY SEARCH + SORT
   // =========================================================
 
+  // =========================================================
+  // OPPORTUNITY SEARCH + INDUSTRY FILTER + SORT
+  // =========================================================
+
+  const industryOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        opportunities
+          .filter(
+            (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+          )
+          .map((opportunity) => opportunity.companies?.industry)
+          .filter(Boolean)
+          .map((industry) => String(industry).trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [opportunities]);
+
   const filteredActiveOpportunities = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -2377,6 +2397,19 @@ export default function Application() {
     );
 
     const filtered = active.filter((opportunity) => {
+      // INDUSTRY FILTER
+      const selectedIndustry = String(
+        opportunity.companies?.industry || ""
+      ).trim();
+
+      if (
+        industryFilter !== "all" &&
+        selectedIndustry.toLowerCase() !== industryFilter.toLowerCase()
+      ) {
+        return false;
+      }
+
+      // SEARCH FILTER
       if (!query) {
         return true;
       }
@@ -2400,7 +2433,6 @@ export default function Application() {
       switch (sortBy) {
         case "oldest": {
           const dateA = new Date(a.created_at || 0).getTime();
-
           const dateB = new Date(b.created_at || 0).getTime();
 
           return dateA - dateB;
@@ -2414,7 +2446,6 @@ export default function Application() {
 
         case "most_openings": {
           const capacityA = getOpportunityCapacity(a.id);
-
           const capacityB = getOpportunityCapacity(b.id);
 
           return (
@@ -2425,7 +2456,6 @@ export default function Application() {
 
         case "least_openings": {
           const capacityA = getOpportunityCapacity(a.id);
-
           const capacityB = getOpportunityCapacity(b.id);
 
           return (
@@ -2437,14 +2467,30 @@ export default function Application() {
         case "newest":
         default: {
           const dateA = new Date(a.created_at || 0).getTime();
-
           const dateB = new Date(b.created_at || 0).getTime();
 
           return dateB - dateA;
         }
       }
     });
-  }, [opportunities, searchQuery, sortBy, capacityByOpportunityId]);
+  }, [
+    opportunities,
+    searchQuery,
+    industryFilter,
+    sortBy,
+    capacityByOpportunityId,
+  ]);
+
+  // Reset stale industry filter if the selected industry
+  // no longer exists in the currently loaded opportunities.
+  useEffect(() => {
+    if (industryFilter !== "all" && !industryOptions.includes(industryFilter)) {
+      setIndustryFilter("all");
+    }
+  }, [industryFilter, industryOptions]);
+
+  const hasOpportunityFilters =
+    searchQuery.trim().length > 0 || industryFilter !== "all";
 
   // =========================================================
   // OPEN STATUS PAGE
@@ -2646,7 +2692,7 @@ export default function Application() {
 
             {opportunityView === "browse" && (
               <div className="space-y-5">
-                {/* SEARCH + SORT */}
+                {/* SEARCH + FILTER + SORT */}
 
                 <div
                   className={`rounded-2xl border p-4 ${
@@ -2656,7 +2702,9 @@ export default function Application() {
                   }`}
                 >
                   <div className="flex flex-col lg:flex-row gap-3">
-                    <div className="relative flex-1">
+                    {/* SEARCH */}
+
+                    <div className="relative flex-1 min-w-0">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                         🔍
                       </span>
@@ -2674,36 +2722,69 @@ export default function Application() {
                       />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <label
-                        className={`text-xs font-bold whitespace-nowrap ${
-                          darkMode ? "text-slate-400" : "text-slate-500"
-                        }`}
-                      >
-                        Sort by
-                      </label>
+                    {/* INDUSTRY + SORT */}
 
-                      <select
-                        value={sortBy}
-                        onChange={(event) => setSortBy(event.target.value)}
-                        className={`rounded-xl border px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode
-                            ? "bg-slate-950 border-slate-700 text-white"
-                            : "bg-slate-50 border-slate-200 text-slate-900"
-                        }`}
-                      >
-                        <option value="newest">Newest</option>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* INDUSTRY */}
 
-                        <option value="oldest">Oldest</option>
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`text-xs font-bold whitespace-nowrap ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
+                          Industry
+                        </label>
 
-                        <option value="title_asc">Title A–Z</option>
+                        <select
+                          value={industryFilter}
+                          onChange={(event) =>
+                            setIndustryFilter(event.target.value)
+                          }
+                          className={`w-full rounded-xl border px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode
+                              ? "bg-slate-950 border-slate-700 text-white"
+                              : "bg-slate-50 border-slate-200 text-slate-900"
+                          }`}
+                        >
+                          <option value="all">All Industries</option>
 
-                        <option value="title_desc">Title Z–A</option>
+                          {industryOptions.map((industry) => (
+                            <option key={industry} value={industry}>
+                              {industry}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                        <option value="most_openings">Most Openings</option>
+                      {/* SORT */}
 
-                        <option value="least_openings">Least Openings</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`text-xs font-bold whitespace-nowrap ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
+                          Sort by
+                        </label>
+
+                        <select
+                          value={sortBy}
+                          onChange={(event) => setSortBy(event.target.value)}
+                          className={`w-full rounded-xl border px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode
+                              ? "bg-slate-950 border-slate-700 text-white"
+                              : "bg-slate-50 border-slate-200 text-slate-900"
+                          }`}
+                        >
+                          <option value="newest">Newest</option>
+                          <option value="oldest">Oldest</option>
+                          <option value="title_asc">Title A–Z</option>
+                          <option value="title_desc">Title Z–A</option>
+                          <option value="most_openings">Most Openings</option>
+                          <option value="least_openings">Least Openings</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2727,8 +2808,10 @@ export default function Application() {
                   </div>
 
                   <p className="text-xs font-bold text-slate-500">
-                    {filteredActiveOpportunities.length} opportunity
-                    {filteredActiveOpportunities.length === 1 ? "" : "ies"}
+                    {filteredActiveOpportunities.length}{" "}
+                    {filteredActiveOpportunities.length === 1
+                      ? "opportunity"
+                      : "opportunities"}
                   </p>
                 </div>
 
@@ -2743,11 +2826,11 @@ export default function Application() {
                     }`}
                   >
                     <div className="text-4xl mb-3">
-                      {searchQuery ? "🔎" : "📭"}
+                      {hasOpportunityFilters ? "🔎" : "📭"}
                     </div>
 
                     <p className="font-bold">
-                      {searchQuery
+                      {hasOpportunityFilters
                         ? "No internships found."
                         : "No internship opportunities are currently available."}
                     </p>
@@ -2757,18 +2840,21 @@ export default function Application() {
                         darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      {searchQuery
-                        ? "Try a different search term."
+                      {hasOpportunityFilters
+                        ? "Try a different search term or industry filter."
                         : "Please check again later."}
                     </p>
 
-                    {searchQuery && (
+                    {hasOpportunityFilters && (
                       <button
                         type="button"
-                        onClick={() => setSearchQuery("")}
+                        onClick={() => {
+                          setSearchQuery("");
+                          setIndustryFilter("all");
+                        }}
                         className="mt-4 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700"
                       >
-                        Clear Search
+                        Clear Filters
                       </button>
                     )}
                   </div>
@@ -2849,6 +2935,15 @@ export default function Application() {
                                   "Location not specified"}
                               </span>
                             </p>
+
+                            {opportunity.companies?.industry && (
+                              <p className="flex gap-2">
+                                <span>🏢</span>
+                                <span className="truncate">
+                                  {opportunity.companies.industry}
+                                </span>
+                              </p>
+                            )}
 
                             <p className="flex gap-2">
                               <span>📅</span>
