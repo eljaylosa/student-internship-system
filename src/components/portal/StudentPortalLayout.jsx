@@ -128,21 +128,21 @@ export default function StudentPortalLayout() {
       path: "/student/evaluation",
       icon: "⭐",
     },
-    {
-      label: "Document Template",
-      path: "/student/templates",
-      icon: "📄",
-    },
+    // {
+    //   label: "Document Template",
+    //   path: "/student/templates",
+    //   icon: "📄",
+    // },
     {
       label: "Notifications",
       path: "/student/notifications",
       icon: "🔔",
     },
-    {
-      label: "Information",
-      path: "/student/info",
-      icon: "ℹ️",
-    },
+    // {
+    //   label: "Information",
+    //   path: "/student/info",
+    //   icon: "ℹ️",
+    // },
     {
       label: "Messages",
       path: "/student/messages",

@@ -145,16 +145,16 @@ const AdminPortalLayout = () => {
     //   path: "/admin/internships",
     //   icon: "▣",
     // },
-    {
-      label: "Document Management",
-      path: "/admin/documents",
-      icon: "▰",
-    },
-    {
-      label: "Information Management",
-      path: "/admin/information",
-      icon: "ⓘ",
-    },
+    // {
+    //   label: "Document Management",
+    //   path: "/admin/documents",
+    //   icon: "▰",
+    // },
+    // {
+    //   label: "Information Management",
+    //   path: "/admin/information",
+    //   icon: "ⓘ",
+    // },
     {
       label: "Evaluation Management",
       path: "/admin/evaluations",
