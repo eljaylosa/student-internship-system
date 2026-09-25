@@ -595,29 +595,14 @@ export default function ReviewApplications() {
   };
 
   const getRequiredDocumentTypes = (application) => {
-    const systemRequired = documentTypes.filter(
-      (documentType) => documentType.required
-    );
-
-    const optionalRequirementIds = getRequirementIds(
+    const requirementIds = getRequirementIds(
       application?.opportunities?.requirements
     );
 
-    const optional = optionalRequirementIds
+    return requirementIds
       .map((id) => documentTypes.find((documentType) => documentType.id === id))
       .filter(Boolean);
-
-    return [
-      ...systemRequired,
-      ...optional.filter(
-        (documentType) =>
-          !systemRequired.some(
-            (systemDocument) => systemDocument.id === documentType.id
-          )
-      ),
-    ];
   };
-
   const getApplicationDocuments = (applicationId) => {
     if (!applicationId) return [];
 

@@ -5,6 +5,14 @@ import { supabase } from "../../supabaseClient";
 // =========================================================
 // COMPANY MANAGEMENT
 // =========================================================
+//
+// Personal Email = users.email
+//   → SIMS/Auth login email
+//
+// Company Email = companies.company_email
+//   → Official company / HR contact email
+//
+// =========================================================
 
 const CompanyManagement = () => {
   const { darkMode } = useOutletContext();
@@ -64,7 +72,7 @@ const CompanyManagement = () => {
   };
 
   // =========================================================
-  // DATE FORMATTER
+  // DATE FORMATTERS
   // =========================================================
 
   const formatDate = (date) => {
@@ -73,6 +81,16 @@ const CompanyManagement = () => {
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatShortDate = (date) => {
+    if (!date) return "Unknown";
+
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
       day: "numeric",
     });
   };
@@ -112,6 +130,10 @@ const CompanyManagement = () => {
     try {
       setLoading(true);
 
+      // =====================================================
+      // 1. LOAD COMPANY RECORDS
+      // =====================================================
+
       const { data: companyData, error: companyError } = await supabase
         .from("companies")
         .select("*")
@@ -128,9 +150,38 @@ const CompanyManagement = () => {
         return;
       }
 
+      // =====================================================
+      // 2. LOAD LINKED USER RECORDS
+      // =====================================================
+      //
+      // users.email = Personal Email / SIMS Login Email
+      //
+      // companies.company_email = Company Email
+      //
+      // =====================================================
+
       const userIds = companyData
         .map((company) => company.user_id)
         .filter(Boolean);
+
+      let userData = [];
+
+      if (userIds.length > 0) {
+        const { data, error: userError } = await supabase
+          .from("users")
+          .select("id, email, role, status, created_at, updated_at")
+          .in("id", userIds);
+
+        if (userError) {
+          console.warn("Unable to load linked user information:", userError);
+        } else {
+          userData = data || [];
+        }
+      }
+
+      // =====================================================
+      // 3. LOAD CREATE REQUEST INFORMATION
+      // =====================================================
 
       let requestData = [];
 
@@ -150,10 +201,16 @@ const CompanyManagement = () => {
         }
       }
 
+      // =====================================================
+      // 4. FORMAT COMPANY DATA
+      // =====================================================
+
       const formattedCompanies = companyData.map((company) => {
         const request = requestData.find(
           (item) => item.user_id === company.user_id
         );
+
+        const user = userData.find((item) => item.id === company.user_id);
 
         const firstName = request?.first_name || "";
 
@@ -166,6 +223,10 @@ const CompanyManagement = () => {
             middleInitial ? `${middleInitial} ` : ""
           }${lastName}`.trim() || "Company Representative";
 
+        // ===================================================
+        // DOCUMENTS
+        // ===================================================
+
         const documents = [];
 
         if (company.business_registration_url) {
@@ -174,7 +235,6 @@ const CompanyManagement = () => {
             fileName:
               company.business_registration_url.split("/").pop() ||
               "business-registration",
-
             filePath: company.business_registration_url,
           });
         }
@@ -185,7 +245,6 @@ const CompanyManagement = () => {
             fileName:
               company.bir_registration_url.split("/").pop() ||
               "bir-registration",
-
             filePath: company.bir_registration_url,
           });
         }
@@ -196,30 +255,36 @@ const CompanyManagement = () => {
             fileName:
               company.supporting_document_url.split("/").pop() ||
               "supporting-document",
-
             filePath: company.supporting_document_url,
           });
         }
 
         return {
           id: company.id,
+
           userId: company.user_id,
 
+          // Company information
           company: company.company_name,
+          companyEmail: company.company_email || "",
+          phone: company.company_phone || "",
+          address: company.company_address || "",
+          website: company.website || "",
+          industry: company.industry || "",
+          designation: company.designation || "",
+
+          // Representative
           contact: contactName,
 
-          email: company.company_email,
-          phone: company.company_phone,
-          address: company.company_address,
+          // Account information
+          personalEmail: user?.email || "",
+          userStatus: user?.status || "",
+          userRole: user?.role || "",
 
-          website: company.website,
-
-          industry: company.industry,
-          designation: company.designation,
-
+          // Registration information
           status: databaseStatusToUi(company.status),
-
           submittedAt: formatDate(company.created_at),
+          registeredAt: company.created_at,
 
           createdAt: company.created_at,
           updatedAt: company.updated_at,
@@ -262,14 +327,17 @@ const CompanyManagement = () => {
   // =========================================================
 
   const filteredCompanies = useMemo(() => {
-    return companies.filter((company) => {
-      const search = searchTerm.toLowerCase().trim();
+    const search = searchTerm.toLowerCase().trim();
 
+    return companies.filter((company) => {
       const matchesSearch =
+        !search ||
         company.company?.toLowerCase().includes(search) ||
         company.contact?.toLowerCase().includes(search) ||
+        company.personalEmail?.toLowerCase().includes(search) ||
+        company.companyEmail?.toLowerCase().includes(search) ||
         company.industry?.toLowerCase().includes(search) ||
-        company.email?.toLowerCase().includes(search);
+        company.designation?.toLowerCase().includes(search);
 
       const matchesStatus =
         filterStatus === "All" || company.status === filterStatus;
@@ -277,6 +345,26 @@ const CompanyManagement = () => {
       return matchesSearch && matchesStatus;
     });
   }, [companies, searchTerm, filterStatus]);
+
+  // =========================================================
+  // STATUS COUNTS
+  // =========================================================
+
+  const pendingCount = companies.filter(
+    (company) => company.status === "Pending Review"
+  ).length;
+
+  const approvedCount = companies.filter(
+    (company) => company.status === "Approved"
+  ).length;
+
+  const rejectedCount = companies.filter(
+    (company) => company.status === "Rejected"
+  ).length;
+
+  const suspendedCount = companies.filter(
+    (company) => company.status === "Suspended"
+  ).length;
 
   // =========================================================
   // UPDATE COMPANY STATUS
@@ -312,7 +400,6 @@ const CompanyManagement = () => {
 
     if (company.status !== "Pending Review") {
       alert("Only companies with Pending Review status can be approved.");
-
       return;
     }
 
@@ -338,16 +425,6 @@ const CompanyManagement = () => {
       // =====================================================
       // 2. ACTIVATE SIMS USER RECORD
       // =====================================================
-      //
-      // IMPORTANT:
-      //
-      // The Auth account already exists.
-      //
-      // We now activate the matching
-      // public.users record using the same
-      // UUID stored in companies.user_id.
-      //
-      // =====================================================
 
       if (!company.userId) {
         throw new Error(
@@ -368,12 +445,6 @@ const CompanyManagement = () => {
       if (userUpdateError) {
         console.error("SIMS user activation failed:", userUpdateError);
 
-        /*
-         * Roll the company status back
-         * because both records should stay
-         * synchronized.
-         */
-
         await supabase
           .from("companies")
           .update({
@@ -388,14 +459,6 @@ const CompanyManagement = () => {
       }
 
       if (!activatedUser) {
-        /*
-         * No users row was found.
-         *
-         * Roll back the company status so
-         * the registration does not become
-         * partially activated.
-         */
-
         await supabase
           .from("companies")
           .update({
@@ -414,11 +477,6 @@ const CompanyManagement = () => {
       // =====================================================
 
       if (activatedUser.role?.toLowerCase() !== "company") {
-        /*
-         * Roll back both records if the linked
-         * user does not have the expected role.
-         */
-
         await supabase
           .from("users")
           .update({
@@ -447,7 +505,7 @@ const CompanyManagement = () => {
       const { data: emailData, error: emailError } =
         await supabase.functions.invoke("send-registration-email", {
           body: {
-            email: company.email,
+            email: company.personalEmail || company.companyEmail,
             name: company.contact,
             type: "approved",
             role: "company",
@@ -467,11 +525,9 @@ const CompanyManagement = () => {
 
       const updatedCompany = {
         ...company,
-
         status: "Approved",
-
-        emailVerified: false,
-
+        personalEmail: activatedUser.email || company.personalEmail,
+        userStatus: "active",
         rejectionReason: "",
       };
 
@@ -487,17 +543,19 @@ const CompanyManagement = () => {
       // 6. SUCCESS MESSAGE
       // =====================================================
 
+      const notificationEmail = company.personalEmail || company.companyEmail;
+
       if (emailError || emailData?.success === false) {
         alert(
           `Company approved successfully.\n\n` +
             `The company account has been activated in SIMS.\n\n` +
-            `However, the approval notification email could not be sent to ${company.email}.`
+            `However, the approval notification email could not be sent to ${notificationEmail}.`
         );
       } else {
         alert(
           `Company approved successfully.\n\n` +
             `The company account has been activated and can now log in.\n\n` +
-            `An approval notification has been sent to ${company.email}.`
+            `An approval notification has been sent to ${notificationEmail}.`
         );
       }
     } catch (error) {
@@ -540,7 +598,6 @@ const CompanyManagement = () => {
 
     if (!reason) {
       alert("Please provide a reason for rejecting this registration.");
-
       return;
     }
 
@@ -570,14 +627,7 @@ const CompanyManagement = () => {
       }
 
       // =====================================================
-      // 2. KEEP USER PENDING
-      // =====================================================
-      //
-      // The public.users record stays pending.
-      //
-      // This prevents login while the company
-      // registration is rejected.
-      //
+      // 2. UPDATE USER STATUS
       // =====================================================
 
       if (selectedCompany.userId) {
@@ -598,19 +648,17 @@ const CompanyManagement = () => {
       // 3. SEND REJECTION EMAIL
       // =====================================================
 
+      const notificationEmail =
+        selectedCompany.personalEmail || selectedCompany.companyEmail;
+
       const { data: emailData, error: emailError } =
         await supabase.functions.invoke("send-registration-email", {
           body: {
-            email: selectedCompany.email,
-
+            email: notificationEmail,
             name: selectedCompany.contact,
-
             type: "rejected",
-
             role: "company",
-
             companyName: selectedCompany.company,
-
             reason,
           },
         });
@@ -621,7 +669,7 @@ const CompanyManagement = () => {
         console.error("Rejection email was not sent:", emailData);
       } else {
         console.log(
-          `Rejection email successfully sent to ${selectedCompany.email}`
+          `Rejection email successfully sent to ${notificationEmail}`
         );
       }
 
@@ -647,6 +695,8 @@ const CompanyManagement = () => {
 
         status: "Rejected",
 
+        userStatus: "inactive",
+
         rejectionReason: reason,
 
         rejectionEmailSent: emailWasSent,
@@ -655,7 +705,6 @@ const CompanyManagement = () => {
 
         rejectionHistory: [
           ...(selectedCompany.rejectionHistory || []),
-
           historyEntry,
         ],
       };
@@ -678,12 +727,12 @@ const CompanyManagement = () => {
       if (!emailWasSent) {
         alert(
           `Registration for ${selectedCompany.company} was rejected successfully.\n\n` +
-            `However, the rejection notification email could not be sent to ${selectedCompany.email}.`
+            `However, the rejection notification email could not be sent to ${notificationEmail}.`
         );
       } else {
         alert(
           `Registration for ${selectedCompany.company} was rejected successfully.\n\n` +
-            `A rejection notification with the reason has been sent to ${selectedCompany.email}.`
+            `A rejection notification with the reason has been sent to ${notificationEmail}.`
         );
       }
     } catch (error) {
@@ -757,10 +806,12 @@ const CompanyManagement = () => {
       // 2. SEND REOPENED EMAIL
       // =====================================================
 
+      const notificationEmail = company.personalEmail || company.companyEmail;
+
       const { data: emailData, error: emailError } =
         await supabase.functions.invoke("send-registration-email", {
           body: {
-            email: company.email,
+            email: notificationEmail,
             name: company.contact,
             type: "reopened",
             role: "company",
@@ -774,7 +825,7 @@ const CompanyManagement = () => {
       } else if (emailData?.success === false) {
         console.error("Reopened email was not sent:", emailData);
       } else {
-        console.log(`Reopened email successfully sent to ${company.email}`);
+        console.log(`Reopened email successfully sent to ${notificationEmail}`);
       }
 
       // =====================================================
@@ -813,7 +864,7 @@ const CompanyManagement = () => {
       } else {
         alert(
           `Registration for ${company.company} has been reopened for resubmission.\n\n` +
-            `A secure document upload link has been generated and sent to ${company.email}.\n\n` +
+            `A secure document upload link has been generated and sent to ${notificationEmail}.\n\n` +
             `The company will remain Rejected until the new documents are successfully submitted.`
         );
       }
@@ -837,7 +888,6 @@ const CompanyManagement = () => {
   const viewDocument = async (document) => {
     if (!document?.filePath) {
       alert("This document is unavailable.");
-
       return;
     }
 
@@ -887,22 +937,6 @@ const CompanyManagement = () => {
   };
 
   // =========================================================
-  // COUNTS
-  // =========================================================
-
-  const pendingCount = companies.filter(
-    (company) => company.status === "Pending Review"
-  ).length;
-
-  const approvedCount = companies.filter(
-    (company) => company.status === "Approved"
-  ).length;
-
-  const rejectedCount = companies.filter(
-    (company) => company.status === "Rejected"
-  ).length;
-
-  // =========================================================
   // SHARED STYLES
   // =========================================================
 
@@ -916,13 +950,49 @@ const CompanyManagement = () => {
 
   const muted = darkMode ? "text-slate-400" : "text-slate-500";
 
+  const secondaryText = darkMode ? "text-slate-300" : "text-slate-700";
+
+  // =========================================================
+  // STATUS FILTER BUTTON
+  // =========================================================
+
+  const statusFilters = [
+    {
+      key: "All",
+      label: "All",
+      count: companies.length,
+    },
+    {
+      key: "Pending Review",
+      label: "Pending",
+      count: pendingCount,
+    },
+    {
+      key: "Approved",
+      label: "Approved",
+      count: approvedCount,
+    },
+    {
+      key: "Rejected",
+      label: "Rejected",
+      count: rejectedCount,
+    },
+    {
+      key: "Suspended",
+      label: "Suspended",
+      count: suspendedCount,
+    },
+  ];
+
   // =========================================================
   // RETURN
   // =========================================================
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      {/* PAGE HEADER */}
+      {/* =====================================================
+          PAGE HEADER
+          ===================================================== */}
 
       <div className="mb-6">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
@@ -960,7 +1030,9 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* SUMMARY CARDS */}
+      {/* =====================================================
+          SUMMARY CARDS
+          ===================================================== */}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <div className={`border rounded-xl p-4 ${panel}`}>
@@ -1002,17 +1074,25 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* FILTER / SEARCH */}
+      {/* =====================================================
+          SEARCH
+          ===================================================== */}
 
-      <div className={`border rounded-xl p-3 sm:p-4 mb-5 ${panel}`}>
+      <div className={`border rounded-xl p-3 sm:p-4 mb-3 ${panel}`}>
         <div className="flex flex-col lg:flex-row gap-3">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <span
+              className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm ${muted}`}
+            >
+              🔎
+            </span>
+
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search company, contact, email, or industry..."
-              className={`w-full h-10 px-3 rounded-lg border text-xs sm:text-sm outline-none transition ${
+              placeholder="Search company, representative, personal email, company email, industry..."
+              className={`w-full h-10 pl-9 pr-3 rounded-lg border text-xs sm:text-sm outline-none transition ${
                 darkMode
                   ? "bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500"
                   : "bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500"
@@ -1020,51 +1100,111 @@ const CompanyManagement = () => {
             />
           </div>
 
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className={`h-10 px-3 rounded-lg border text-xs sm:text-sm outline-none cursor-pointer ${
-              darkMode
-                ? "bg-slate-800 border-slate-700 text-white"
-                : "bg-white border-slate-300 text-slate-700"
-            }`}
-          >
-            <option value="All">All Status</option>
-
-            <option value="Pending Review">Pending Review</option>
-
-            <option value="Approved">Approved</option>
-
-            <option value="Rejected">Rejected</option>
-
-            <option value="Suspended">Suspended</option>
-          </select>
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className={`h-10 px-3 rounded-lg border text-xs font-semibold transition ${
+                darkMode
+                  ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                  : "border-slate-300 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* =====================================================
+          STATUS FILTER TABS
+          ===================================================== */}
+
+      <div className={`border rounded-xl p-2 mb-5 ${panel}`}>
+        <div className="flex flex-wrap gap-1">
+          {statusFilters.map((filter) => {
+            const active = filterStatus === filter.key;
+
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setFilterStatus(filter.key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] sm:text-xs font-semibold transition ${
+                  active
+                    ? darkMode
+                      ? "bg-blue-600 text-white"
+                      : "bg-blue-600 text-white"
+                    : darkMode
+                    ? "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <span>{filter.label}</span>
+
+                <span
+                  className={`min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                    active
+                      ? "bg-white/20 text-white"
+                      : darkMode
+                      ? "bg-slate-800 text-slate-400"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {filter.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* =====================================================
+          TABLE
+          ===================================================== */}
 
       <div className={`border rounded-xl overflow-hidden ${panel}`}>
         <div className={`px-4 py-3 border-b ${border}`}>
-          <div>
-            <h2 className={`text-sm font-bold ${heading}`}>
-              Registered Companies
-            </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h2 className={`text-sm font-bold ${heading}`}>
+                Registered Companies
+              </h2>
 
-            <p className={`text-[10px] mt-0.5 ${muted}`}>
-              {loading
-                ? "Loading companies..."
-                : `${filteredCompanies.length} companies found`}
-            </p>
+              <p className={`text-[10px] mt-0.5 ${muted}`}>
+                {loading
+                  ? "Loading companies..."
+                  : `${filteredCompanies.length} ${
+                      filteredCompanies.length === 1 ? "company" : "companies"
+                    } found`}
+              </p>
+            </div>
+
+            {(searchTerm || filterStatus !== "All") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setFilterStatus("All");
+                }}
+                className={`text-[10px] font-semibold ${
+                  darkMode
+                    ? "text-blue-400 hover:text-blue-300"
+                    : "text-blue-600 hover:text-blue-700"
+                }`}
+              >
+                Reset filters
+              </button>
+            )}
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse">
+          <table className="w-full min-w-[1180px] border-collapse">
             <thead>
               <tr className={darkMode ? "bg-slate-800" : "bg-slate-50"}>
                 <th
-                  className={`px-3 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
+                  className={`px-4 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
                   }`}
                 >
@@ -1072,15 +1212,23 @@ const CompanyManagement = () => {
                 </th>
 
                 <th
-                  className={`px-3 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
+                  className={`px-4 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
                   }`}
                 >
-                  Contact
+                  Representative
                 </th>
 
                 <th
-                  className={`px-3 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
+                  className={`px-4 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
+                    darkMode ? "text-slate-300" : "text-slate-600"
+                  }`}
+                >
+                  Contact Emails
+                </th>
+
+                <th
+                  className={`px-4 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
                   }`}
                 >
@@ -1088,7 +1236,15 @@ const CompanyManagement = () => {
                 </th>
 
                 <th
-                  className={`px-3 py-3 border-b text-center text-[10px] font-bold uppercase tracking-wide ${border} ${
+                  className={`px-4 py-3 border-b text-left text-[10px] font-bold uppercase tracking-wide ${border} ${
+                    darkMode ? "text-slate-300" : "text-slate-600"
+                  }`}
+                >
+                  Registered
+                </th>
+
+                <th
+                  className={`px-4 py-3 border-b text-center text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
                   }`}
                 >
@@ -1096,7 +1252,7 @@ const CompanyManagement = () => {
                 </th>
 
                 <th
-                  className={`px-3 py-3 border-b text-center text-[10px] font-bold uppercase tracking-wide ${border} ${
+                  className={`px-4 py-3 border-b text-center text-[10px] font-bold uppercase tracking-wide ${border} ${
                     darkMode ? "text-slate-300" : "text-slate-600"
                   }`}
                 >
@@ -1108,7 +1264,7 @@ const CompanyManagement = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="5" className={`px-4 py-16 text-center ${muted}`}>
+                  <td colSpan="7" className={`px-4 py-16 text-center ${muted}`}>
                     <div className="text-2xl mb-2 animate-pulse">🏢</div>
 
                     <p className="text-sm font-semibold">
@@ -1128,45 +1284,138 @@ const CompanyManagement = () => {
                       darkMode ? "hover:bg-slate-800/70" : "hover:bg-slate-50"
                     }`}
                   >
-                    <td className={`px-3 py-3 border-b ${border}`}>
-                      <div>
-                        <p className={`text-xs font-semibold ${heading}`}>
+                    {/* COMPANY */}
+
+                    <td className={`px-4 py-3 border-b ${border}`}>
+                      <div className="min-w-[190px]">
+                        <p className={`text-xs font-bold ${heading}`}>
                           {company.company}
                         </p>
 
-                        <p className={`text-[10px] mt-0.5 ${muted}`}>
-                          Submitted {company.submittedAt}
+                        {company.website ? (
+                          <a
+                            href={
+                              company.website.startsWith("http")
+                                ? company.website
+                                : `https://${company.website}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block text-[10px] mt-1 text-blue-500 hover:underline truncate max-w-[190px]"
+                          >
+                            🌐 {company.website}
+                          </a>
+                        ) : (
+                          <p className={`text-[10px] mt-1 ${muted}`}>
+                            No website provided
+                          </p>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* REPRESENTATIVE */}
+
+                    <td className={`px-4 py-3 border-b ${border}`}>
+                      <div className="min-w-[160px]">
+                        <p className={`text-xs font-semibold ${secondaryText}`}>
+                          {company.contact}
+                        </p>
+
+                        <p className={`text-[10px] mt-1 ${muted}`}>
+                          {company.designation || "Representative"}
                         </p>
                       </div>
                     </td>
 
-                    <td className={`px-3 py-3 border-b ${border}`}>
-                      <p
-                        className={`text-xs ${
-                          darkMode ? "text-slate-300" : "text-slate-700"
-                        }`}
-                      >
-                        {company.contact}
-                      </p>
+                    {/* EMAILS */}
 
-                      <p className={`text-[10px] mt-0.5 ${muted}`}>
-                        {company.email}
-                      </p>
+                    <td className={`px-4 py-3 border-b ${border}`}>
+                      <div className="space-y-1.5 min-w-[250px]">
+                        {/* PERSONAL EMAIL */}
+
+                        <div>
+                          <p
+                            className={`text-[9px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Personal / Login
+                          </p>
+
+                          {company.personalEmail ? (
+                            <a
+                              href={`mailto:${company.personalEmail}`}
+                              className={`text-[10px] hover:underline break-all ${
+                                darkMode ? "text-blue-300" : "text-blue-600"
+                              }`}
+                            >
+                              {company.personalEmail}
+                            </a>
+                          ) : (
+                            <p className={`text-[10px] ${muted}`}>
+                              Not available
+                            </p>
+                          )}
+                        </div>
+
+                        {/* COMPANY EMAIL */}
+
+                        <div>
+                          <p
+                            className={`text-[9px] uppercase tracking-wide font-bold ${muted}`}
+                          >
+                            Company / HR
+                          </p>
+
+                          {company.companyEmail ? (
+                            <a
+                              href={`mailto:${company.companyEmail}`}
+                              className={`text-[10px] hover:underline break-all ${
+                                darkMode
+                                  ? "text-emerald-300"
+                                  : "text-emerald-600"
+                              }`}
+                            >
+                              {company.companyEmail}
+                            </a>
+                          ) : (
+                            <p className={`text-[10px] ${muted}`}>
+                              Not provided
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
-                    <td
-                      className={`px-3 py-3 border-b text-xs ${
-                        darkMode
-                          ? "border-slate-700 text-slate-300"
-                          : "border-slate-200 text-slate-600"
-                      }`}
-                    >
-                      {company.industry}
-                    </td>
+                    {/* INDUSTRY */}
 
-                    <td className={`px-3 py-3 border-b text-center ${border}`}>
+                    <td className={`px-4 py-3 border-b text-xs ${border}`}>
                       <span
-                        className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${getStatusStyle(
+                        className={
+                          darkMode ? "text-slate-300" : "text-slate-600"
+                        }
+                      >
+                        {company.industry || "Not specified"}
+                      </span>
+                    </td>
+
+                    {/* REGISTERED */}
+
+                    <td className={`px-4 py-3 border-b ${border}`}>
+                      <div className="min-w-[100px]">
+                        <p className={`text-xs font-medium ${secondaryText}`}>
+                          {formatShortDate(company.registeredAt)}
+                        </p>
+
+                        <p className={`text-[10px] mt-0.5 ${muted}`}>
+                          Registration
+                        </p>
+                      </div>
+                    </td>
+
+                    {/* STATUS */}
+
+                    <td className={`px-4 py-3 border-b text-center ${border}`}>
+                      <span
+                        className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap ${getStatusStyle(
                           company.status
                         )}`}
                       >
@@ -1174,11 +1423,13 @@ const CompanyManagement = () => {
                       </span>
                     </td>
 
-                    <td className={`px-3 py-3 border-b text-center ${border}`}>
+                    {/* ACTION */}
+
+                    <td className={`px-4 py-3 border-b text-center ${border}`}>
                       <button
                         type="button"
                         onClick={() => setSelectedCompany(company)}
-                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-semibold transition ${
+                        className={`px-3.5 py-1.5 rounded-lg border text-[10px] font-semibold transition ${
                           darkMode
                             ? "border-slate-600 text-slate-300 hover:bg-slate-800"
                             : "border-slate-300 text-slate-700 hover:bg-slate-50"
@@ -1191,14 +1442,27 @@ const CompanyManagement = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className={`px-4 py-12 text-center ${muted}`}>
+                  <td colSpan="7" className={`px-4 py-12 text-center ${muted}`}>
                     <div className="text-2xl mb-2">🏢</div>
 
                     <p className="text-sm font-semibold">No companies found</p>
 
                     <p className="text-xs mt-1">
-                      Try changing your search or filter.
+                      Try changing your search or status filter.
                     </p>
+
+                    {(searchTerm || filterStatus !== "All") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchTerm("");
+                          setFilterStatus("All");
+                        }}
+                        className="mt-3 text-xs font-semibold text-blue-500 hover:underline"
+                      >
+                        Clear all filters
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}
@@ -1207,11 +1471,23 @@ const CompanyManagement = () => {
         </div>
       </div>
 
-      {/* FOOTER INFO */}
+      {/* =====================================================
+          FOOTER INFO
+          ===================================================== */}
 
-      <div className={`mt-3 text-[10px] ${muted}`}>
-        Showing {filteredCompanies.length} of {companies.length} registered
-        companies
+      <div
+        className={`mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[10px] ${muted}`}
+      >
+        <span>
+          Showing {filteredCompanies.length} of {companies.length} registered
+          companies
+        </span>
+
+        {filterStatus !== "All" && (
+          <span>
+            Filtered by: <strong className={heading}>{filterStatus}</strong>
+          </span>
+        )}
       </div>
 
       {/* =====================================================
@@ -1232,7 +1508,7 @@ const CompanyManagement = () => {
 
             <div className={`p-5 border-b ${border}`}>
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <p
                     className={`text-[10px] uppercase tracking-widest font-bold ${muted}`}
                   >
@@ -1243,7 +1519,7 @@ const CompanyManagement = () => {
                     {selectedCompany.company}
                   </h2>
 
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span
                       className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${getStatusStyle(
                         selectedCompany.status
@@ -1261,7 +1537,7 @@ const CompanyManagement = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedCompany(null)}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${
+                  className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-lg ${
                     darkMode
                       ? "hover:bg-slate-800 text-slate-400"
                       : "hover:bg-slate-100 text-slate-500"
@@ -1276,14 +1552,22 @@ const CompanyManagement = () => {
             {/* CONTENT */}
 
             <div className="p-5 space-y-6">
-              {/* COMPANY DETAILS */}
+              {/* =================================================
+                  COMPANY INFORMATION
+                  ================================================= */}
 
               <section>
-                <h3 className={`text-sm font-bold ${heading}`}>
-                  Registration Information
-                </h3>
+                <div className="mb-3">
+                  <h3 className={`text-sm font-bold ${heading}`}>
+                    Company Information
+                  </h3>
 
-                <div className="grid sm:grid-cols-2 gap-4 mt-3">
+                  <p className={`text-[10px] mt-1 ${muted}`}>
+                    Official information submitted by the company.
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <p className={`text-[10px] uppercase font-bold ${muted}`}>
                       Company Name
@@ -1300,7 +1584,7 @@ const CompanyManagement = () => {
                     </p>
 
                     <p className={`text-sm font-medium mt-1 ${heading}`}>
-                      {selectedCompany.industry}
+                      {selectedCompany.industry || "Not specified"}
                     </p>
                   </div>
 
@@ -1320,17 +1604,7 @@ const CompanyManagement = () => {
                     </p>
 
                     <p className={`text-sm font-medium mt-1 ${heading}`}>
-                      {selectedCompany.designation}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className={`text-[10px] uppercase font-bold ${muted}`}>
-                      Email Address
-                    </p>
-
-                    <p className={`text-sm font-medium mt-1 ${heading}`}>
-                      {selectedCompany.email}
+                      {selectedCompany.designation || "Not provided"}
                     </p>
                   </div>
 
@@ -1340,7 +1614,19 @@ const CompanyManagement = () => {
                     </p>
 
                     <p className={`text-sm font-medium mt-1 ${heading}`}>
-                      {selectedCompany.phone}
+                      {selectedCompany.phone || "Not provided"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className={`text-[10px] uppercase font-bold ${muted}`}>
+                      Registered Date
+                    </p>
+
+                    <p className={`text-sm font-medium mt-1 ${heading}`}>
+                      {selectedCompany.registeredAt
+                        ? formatDate(selectedCompany.registeredAt)
+                        : "Unknown"}
                     </p>
                   </div>
 
@@ -1361,7 +1647,11 @@ const CompanyManagement = () => {
 
                     {selectedCompany.website ? (
                       <a
-                        href={selectedCompany.website}
+                        href={
+                          selectedCompany.website.startsWith("http")
+                            ? selectedCompany.website
+                            : `https://${selectedCompany.website}`
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="text-sm font-medium mt-1 text-blue-500 hover:underline break-all"
@@ -1377,7 +1667,126 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* DOCUMENTS */}
+              {/* =================================================
+                  ACCOUNT & CONTACT INFORMATION
+                  ================================================= */}
+
+              <section>
+                <div className="mb-3">
+                  <h3 className={`text-sm font-bold ${heading}`}>
+                    Account & Contact Information
+                  </h3>
+
+                  <p className={`text-[10px] mt-1 ${muted}`}>
+                    The personal email is used for the SIMS account, while the
+                    company email represents the official company or HR contact.
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {/* PERSONAL EMAIL */}
+
+                  <div
+                    className={`rounded-xl border p-4 ${
+                      darkMode
+                        ? "bg-blue-950/20 border-blue-900/50"
+                        : "bg-blue-50 border-blue-100"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                          darkMode ? "bg-blue-900/40" : "bg-blue-100"
+                        }`}
+                      >
+                        👤
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className={`text-[10px] uppercase font-bold ${
+                            darkMode ? "text-blue-300" : "text-blue-700"
+                          }`}
+                        >
+                          Personal Email
+                        </p>
+
+                        <p className={`text-[9px] mt-0.5 ${muted}`}>
+                          SIMS / login account
+                        </p>
+
+                        {selectedCompany.personalEmail ? (
+                          <a
+                            href={`mailto:${selectedCompany.personalEmail}`}
+                            className={`block text-xs font-semibold mt-2 break-all hover:underline ${
+                              darkMode ? "text-blue-300" : "text-blue-700"
+                            }`}
+                          >
+                            {selectedCompany.personalEmail}
+                          </a>
+                        ) : (
+                          <p className={`text-xs mt-2 ${muted}`}>
+                            Not available
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* COMPANY EMAIL */}
+
+                  <div
+                    className={`rounded-xl border p-4 ${
+                      darkMode
+                        ? "bg-emerald-950/20 border-emerald-900/50"
+                        : "bg-emerald-50 border-emerald-100"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                          darkMode ? "bg-emerald-900/40" : "bg-emerald-100"
+                        }`}
+                      >
+                        🏢
+                      </div>
+
+                      <div className="min-w-0">
+                        <p
+                          className={`text-[10px] uppercase font-bold ${
+                            darkMode ? "text-emerald-300" : "text-emerald-700"
+                          }`}
+                        >
+                          Company Email
+                        </p>
+
+                        <p className={`text-[9px] mt-0.5 ${muted}`}>
+                          Official company / HR contact
+                        </p>
+
+                        {selectedCompany.companyEmail ? (
+                          <a
+                            href={`mailto:${selectedCompany.companyEmail}`}
+                            className={`block text-xs font-semibold mt-2 break-all hover:underline ${
+                              darkMode ? "text-emerald-300" : "text-emerald-700"
+                            }`}
+                          >
+                            {selectedCompany.companyEmail}
+                          </a>
+                        ) : (
+                          <p className={`text-xs mt-2 ${muted}`}>
+                            Not provided
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* =================================================
+                  SUBMITTED DOCUMENTS
+                  ================================================= */}
 
               <section>
                 <div className="flex items-end justify-between gap-3 mb-3">
@@ -1403,21 +1812,23 @@ const CompanyManagement = () => {
                         key={index}
                         className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border ${border}`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                               darkMode ? "bg-slate-800" : "bg-slate-100"
                             }`}
                           >
                             📄
                           </div>
 
-                          <div>
+                          <div className="min-w-0">
                             <p className={`text-xs font-semibold ${heading}`}>
                               {document.type}
                             </p>
 
-                            <p className={`text-[10px] mt-0.5 ${muted}`}>
+                            <p
+                              className={`text-[10px] mt-0.5 ${muted} truncate`}
+                            >
                               {document.fileName}
                             </p>
                           </div>
@@ -1426,7 +1837,7 @@ const CompanyManagement = () => {
                         <button
                           type="button"
                           onClick={() => viewDocument(document)}
-                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold text-center transition"
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold text-center transition shrink-0"
                         >
                           View File
                         </button>
@@ -1451,7 +1862,9 @@ const CompanyManagement = () => {
                 </div>
               </section>
 
-              {/* REJECTION REASON */}
+              {/* =================================================
+                  REJECTION REASON
+                  ================================================= */}
 
               {selectedCompany.status === "Rejected" &&
                 selectedCompany.rejectionReason && (
@@ -1476,7 +1889,9 @@ const CompanyManagement = () => {
                   </section>
                 )}
 
-              {/* REJECTION HISTORY */}
+              {/* =================================================
+                  REJECTION HISTORY
+                  ================================================= */}
 
               {selectedCompany.rejectionHistory?.length > 0 && (
                 <section>
@@ -1524,7 +1939,9 @@ const CompanyManagement = () => {
                 </section>
               )}
 
-              {/* ACCOUNT STATUS */}
+              {/* =================================================
+                  ACCOUNT STATUS
+                  ================================================= */}
 
               <section
                 className={`rounded-xl border p-4 ${
@@ -1537,21 +1954,51 @@ const CompanyManagement = () => {
                   Account Status
                 </p>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-2">
                   <div>
                     <p className={`text-xs font-semibold ${heading}`}>
-                      Company Registration
+                      SIMS Company Account
                     </p>
 
                     <p className={`text-[10px] mt-0.5 ${muted}`}>
-                      The registration status is stored directly in Supabase.
+                      User account and company registration status.
                     </p>
+
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedCompany.userStatus && (
+                        <span
+                          className={`text-[9px] px-2 py-1 rounded-full border ${
+                            selectedCompany.userStatus === "active"
+                              ? darkMode
+                                ? "bg-emerald-900/30 text-emerald-300 border-emerald-800"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : darkMode
+                              ? "bg-slate-800 text-slate-400 border-slate-700"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          }`}
+                        >
+                          User: {selectedCompany.userStatus}
+                        </span>
+                      )}
+
+                      {selectedCompany.userRole && (
+                        <span
+                          className={`text-[9px] px-2 py-1 rounded-full border ${
+                            darkMode
+                              ? "bg-slate-800 text-slate-400 border-slate-700"
+                              : "bg-white text-slate-500 border-slate-200"
+                          }`}
+                        >
+                          Role: {selectedCompany.userRole}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <span
                     className={`text-[10px] font-bold ${getStatusStyle(
                       selectedCompany.status
-                    )} px-2.5 py-1 rounded-full border`}
+                    )} px-2.5 py-1 rounded-full border whitespace-nowrap`}
                   >
                     {selectedCompany.status}
                   </span>
@@ -1559,7 +2006,9 @@ const CompanyManagement = () => {
               </section>
             </div>
 
-            {/* MODAL ACTIONS */}
+            {/* =================================================
+                MODAL ACTIONS
+                ================================================= */}
 
             <div className={`p-5 border-t ${border}`}>
               {selectedCompany.status === "Pending Review" && (
@@ -1604,6 +2053,12 @@ const CompanyManagement = () => {
                   </button>
                 </div>
               )}
+
+              {selectedCompany.status === "Suspended" && (
+                <div className={`text-[10px] ${muted}`}>
+                  This company account is currently suspended.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1621,7 +2076,6 @@ const CompanyManagement = () => {
               if (actionLoading) return;
 
               setShowRejectModal(false);
-
               setRejectReason("");
             }}
           />
@@ -1681,41 +2135,63 @@ const CompanyManagement = () => {
                 </p>
               </div>
 
-              {/* EMAIL */}
+              {/* EMAIL INFORMATION */}
 
-              <div
-                className={`rounded-xl border p-4 ${
-                  darkMode
-                    ? "bg-blue-950/20 border-blue-900/50"
-                    : "bg-blue-50 border-blue-100"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p
-                      className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
-                    >
-                      Registration Email
-                    </p>
-
-                    <p
-                      className={`text-xs font-semibold mt-1 ${
-                        darkMode ? "text-blue-300" : "text-blue-700"
-                      }`}
-                    >
-                      {selectedCompany.email}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`text-[10px] font-bold px-2 py-1 rounded-full ${
-                      darkMode
-                        ? "bg-blue-900/40 text-blue-300"
-                        : "bg-blue-100 text-blue-700"
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div
+                  className={`rounded-xl border p-3 ${
+                    darkMode
+                      ? "bg-blue-950/20 border-blue-900/50"
+                      : "bg-blue-50 border-blue-100"
+                  }`}
+                >
+                  <p
+                    className={`text-[9px] uppercase tracking-wide font-bold ${
+                      darkMode ? "text-blue-300" : "text-blue-700"
                     }`}
                   >
-                    EMAIL
-                  </span>
+                    Personal Email
+                  </p>
+
+                  <p
+                    className={`text-[10px] mt-1 break-all ${
+                      darkMode ? "text-blue-200" : "text-blue-700"
+                    }`}
+                  >
+                    {selectedCompany.personalEmail || "Not available"}
+                  </p>
+
+                  <p className={`text-[9px] mt-1 ${muted}`}>
+                    SIMS login account
+                  </p>
+                </div>
+
+                <div
+                  className={`rounded-xl border p-3 ${
+                    darkMode
+                      ? "bg-emerald-950/20 border-emerald-900/50"
+                      : "bg-emerald-50 border-emerald-100"
+                  }`}
+                >
+                  <p
+                    className={`text-[9px] uppercase tracking-wide font-bold ${
+                      darkMode ? "text-emerald-300" : "text-emerald-700"
+                    }`}
+                  >
+                    Company Email
+                  </p>
+
+                  <p
+                    className={`text-[10px] mt-1 break-all ${
+                      darkMode ? "text-emerald-200" : "text-emerald-700"
+                    }`}
+                  >
+                    {selectedCompany.companyEmail || "Not provided"}
+                  </p>
+
+                  <p className={`text-[9px] mt-1 ${muted}`}>
+                    Official company / HR contact
+                  </p>
                 </div>
               </div>
 
@@ -1747,8 +2223,7 @@ const CompanyManagement = () => {
                   </p>
 
                   <p className={`text-[10px] ${muted}`}>
-                    {rejectReason.length}
-                    /500
+                    {rejectReason.length}/500
                   </p>
                 </div>
               </div>
@@ -1771,7 +2246,8 @@ const CompanyManagement = () => {
 
                   <p className={`text-[10px] mt-0.5 ${muted}`}>
                     The company status will change from pending to rejected in
-                    Supabase.
+                    Supabase. The linked SIMS user account will also be
+                    inactive.
                   </p>
                 </div>
               </div>
@@ -1786,7 +2262,6 @@ const CompanyManagement = () => {
                   disabled={actionLoading}
                   onClick={() => {
                     setShowRejectModal(false);
-
                     setRejectReason("");
                   }}
                   className={`px-4 py-2.5 rounded-lg border text-xs font-semibold ${

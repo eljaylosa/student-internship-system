@@ -105,32 +105,15 @@ export default function ManageDeployment() {
       .filter(Boolean);
   };
 
-  const getFinalRequiredDocumentTypes = ({ documentTypes, opportunity }) => {
-    const systemRequired = (documentTypes || []).filter(
-      (documentType) => documentType.required
-    );
+const getFinalRequiredDocumentTypes = ({ documentTypes, opportunity }) => {
+  const requirementIds = getRequirementIds(opportunity?.requirements);
 
-    const optionalRequirementIds = getRequirementIds(opportunity?.requirements);
-
-    const optionalRequired = optionalRequirementIds
-      .map((id) => documentTypes.find((documentType) => documentType.id === id))
-      .filter(Boolean);
-
-    const finalRequirements = [...systemRequired];
-
-    optionalRequired.forEach((documentType) => {
-      if (
-        !finalRequirements.some(
-          (existingType) => existingType.id === documentType.id
-        )
-      ) {
-        finalRequirements.push(documentType);
-      }
-    });
-
-    return finalRequirements;
-  };
-
+  return requirementIds
+    .map((id) =>
+      (documentTypes || []).find((documentType) => documentType.id === id)
+    )
+    .filter(Boolean);
+};
   // =========================================================
   // PROFILE PHOTO
   // =========================================================

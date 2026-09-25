@@ -13,12 +13,6 @@ const Login = () => {
   // =========================================================
   // INITIAL ROLE
   // =========================================================
-  //
-  // If the user came back from Forgot Password,
-  // preserve the portal they were using.
-  //
-  // Otherwise default to Student.
-  // =========================================================
 
   const initialRole =
     location.state?.role === "registrar" || location.state?.role === "company"
@@ -37,17 +31,17 @@ const Login = () => {
 
   const [forms, setForms] = useState({
     student: {
-      email: "",
+      credential: "",
       password: "",
     },
 
     registrar: {
-      email: "",
+      credential: "",
       password: "",
     },
 
     company: {
-      email: "",
+      credential: "",
       password: "",
     },
   });
@@ -56,13 +50,6 @@ const Login = () => {
 
   // =========================================================
   // GET ROLE-SPECIFIC SUPABASE CLIENT
-  // =========================================================
-  //
-  // Student   → sims-student-auth
-  // Registrar → sims-registrar-auth
-  // Company   → sims-company-auth
-  //
-  // Each portal keeps its own auth session.
   // =========================================================
 
   const getSupabaseClient = (role) => {
@@ -82,6 +69,64 @@ const Login = () => {
   };
 
   // =========================================================
+  // CREATE AUDIT LOG
+  // =========================================================
+  //
+  // Audit logs are created server-side through the
+  // create-audit-log Edge Function.
+  //
+  // Failure to create an audit log must NOT prevent the user
+  // from logging in successfully.
+  //
+  // =========================================================
+
+  const createAuditLog = async (
+    supabaseClient,
+    {
+      action,
+      module,
+      targetEntityType = null,
+      targetEntityId = null,
+      details = null,
+    }
+  ) => {
+    try {
+      const { data, error } = await supabaseClient.functions.invoke(
+        "create-audit-log",
+        {
+          body: {
+            action,
+            module,
+            target_entity_type: targetEntityType,
+            target_entity_id: targetEntityId,
+            details,
+          },
+        }
+      );
+
+      if (error) {
+        console.error("Create audit log function error:", error);
+
+        return null;
+      }
+
+      if (!data?.success) {
+        console.error("Create audit log failed:", data?.error);
+
+        return null;
+      }
+
+      console.log("Audit log created successfully:", data.auditLog);
+
+      return data.auditLog;
+    } catch (error) {
+      console.error("Unexpected audit log error:", error);
+
+      return null;
+    }
+  };
+
+  // =========================================================
   // UPDATE FORM
   // =========================================================
 
@@ -93,6 +138,98 @@ const Login = () => {
         [field]: value,
       },
     }));
+  };
+
+  // =========================================================
+  // CREDENTIAL LABEL
+  // =========================================================
+
+  const getCredentialLabel = (role) => {
+    switch (role) {
+      case "student":
+        return "Email Address or Student Number";
+
+      case "registrar":
+        return "Email Address or Employee ID";
+
+      case "company":
+        return "Personal Email or Company Email";
+
+      default:
+        return "Email Address";
+    }
+  };
+
+  // =========================================================
+  // CREDENTIAL PLACEHOLDER
+  // =========================================================
+
+  const getCredentialPlaceholder = (role) => {
+    switch (role) {
+      case "student":
+        return "Enter your email or student number";
+
+      case "registrar":
+        return "Enter your email or employee ID";
+
+      case "company":
+        return "Enter your personal or company email";
+
+      default:
+        return "Enter your email";
+    }
+  };
+
+  // =========================================================
+  // RESOLVE LOGIN CREDENTIAL
+  // =========================================================
+
+  const resolveLoginEmail = async (role, credential) => {
+    const normalizedCredential = credential.trim();
+
+    if (!normalizedCredential) {
+      throw new Error("Please enter your login credential.");
+    }
+
+    const { data, error } = await supabaseCompany.functions.invoke(
+      "resolve-login-credential",
+      {
+        body: {
+          role,
+          credential: normalizedCredential,
+        },
+      }
+    );
+
+    if (error) {
+      console.error("Resolve login credential function error:", error);
+
+      throw new Error(
+        "Unable to verify your login credential. Please try again."
+      );
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || "Invalid login credential.");
+    }
+
+    if (!data?.email) {
+      throw new Error(
+        "Unable to resolve the login email associated with this credential."
+      );
+    }
+
+    const resolvedEmail = data.email.trim().toLowerCase();
+
+    console.log("Login credential resolved:", {
+      portal: role,
+      credentialType: normalizedCredential.includes("@")
+        ? "email"
+        : "identifier",
+      resolvedEmail,
+    });
+
+    return resolvedEmail;
   };
 
   // =========================================================
@@ -108,11 +245,13 @@ const Login = () => {
 
     const currentForm = forms[activeRole];
 
-    const email = currentForm.email.trim().toLowerCase();
+    const credential = currentForm.credential.trim();
+
     const password = currentForm.password;
 
-    if (!email || !password) {
-      alert("Please enter your email and password.");
+    if (!credential || !password) {
+      alert(`${getCredentialLabel(activeRole)} and password are required.`);
+
       return;
     }
 
@@ -131,7 +270,13 @@ const Login = () => {
       setIsSubmitting(true);
 
       // =====================================================
-      // 1. AUTHENTICATE THROUGH ROLE-SPECIFIC SUPABASE CLIENT
+      // 1. RESOLVE LOGIN CREDENTIAL
+      // =====================================================
+
+      const email = await resolveLoginEmail(activeRole, credential);
+
+      // =====================================================
+      // 2. AUTHENTICATE
       // =====================================================
 
       const { data: authData, error: authError } =
@@ -144,6 +289,7 @@ const Login = () => {
         console.error("Login authentication error:", authError);
 
         alert("Invalid email or password.");
+
         return;
       }
 
@@ -151,6 +297,7 @@ const Login = () => {
 
       if (!authenticatedUser) {
         alert("Unable to authenticate your account.");
+
         return;
       }
 
@@ -161,21 +308,21 @@ const Login = () => {
       });
 
       // =====================================================
-      // 2. FETCH OFFICIAL USER RECORD
+      // 3. FETCH OFFICIAL USER RECORD
       // =====================================================
 
       const { data: userRecord, error: userError } = await supabaseClient
         .from("users")
         .select(
           `
-          id,
-          email,
-          role,
-          first_name,
-          middle_name,
-          last_name,
-          status
-        `
+            id,
+            email,
+            role,
+            first_name,
+            middle_name,
+            last_name,
+            status
+          `
         )
         .eq("id", authenticatedUser.id)
         .maybeSingle();
@@ -193,7 +340,7 @@ const Login = () => {
       }
 
       // =====================================================
-      // 3. MAKE SURE USERS RECORD EXISTS
+      // 4. MAKE SURE USERS RECORD EXISTS
       // =====================================================
 
       if (!userRecord) {
@@ -214,7 +361,7 @@ const Login = () => {
       console.log("SIMS user record:", userRecord);
 
       // =====================================================
-      // 4. CHECK ACCOUNT STATUS
+      // 5. CHECK ACCOUNT STATUS
       // =====================================================
 
       const accountStatus = userRecord.status?.toLowerCase();
@@ -245,7 +392,7 @@ const Login = () => {
       }
 
       // =====================================================
-      // 5. CHECK SELECTED PORTAL ROLE
+      // 6. CHECK SELECTED PORTAL ROLE
       // =====================================================
 
       const databaseRole = userRecord.role?.toLowerCase();
@@ -265,7 +412,7 @@ const Login = () => {
         } else if (databaseRole === "registrar") {
           expectedPortal = "Registrar Adviser";
         } else if (databaseRole === "company") {
-          expectedPortal = "Company Supervisor";
+          expectedPortal = "Company";
         }
 
         alert(
@@ -276,7 +423,7 @@ const Login = () => {
       }
 
       // =====================================================
-      // 6. DETERMINE DESTINATION
+      // 7. DETERMINE DESTINATION
       // =====================================================
 
       let destination = "/";
@@ -307,7 +454,36 @@ const Login = () => {
       }
 
       // =====================================================
-      // 7. SUCCESSFUL LOGIN
+      // 8. CREATE LOGIN AUDIT LOG
+      // =====================================================
+
+      const fullName = [
+        userRecord.first_name,
+        userRecord.middle_name,
+        userRecord.last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      await createAuditLog(supabaseClient, {
+        action: "LOGIN",
+        module: "Authentication",
+
+        targetEntityType: "User",
+        targetEntityId: userRecord.id,
+
+        details: {
+          name: fullName || null,
+          email: userRecord.email,
+          role: userRecord.role,
+          portal: activeRole,
+          login_method: credential.includes("@") ? "email" : "identifier",
+        },
+      });
+
+      // =====================================================
+      // 9. SUCCESSFUL LOGIN
       // =====================================================
 
       console.log("Login successful:", {
@@ -325,7 +501,10 @@ const Login = () => {
     } catch (error) {
       console.error("Unexpected login error:", error);
 
-      alert("Something went wrong while signing in. Please try again.");
+      alert(
+        error?.message ||
+          "Something went wrong while signing in. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -378,7 +557,7 @@ const Login = () => {
 
     {
       key: "registrar",
-      label: "Registrar Advisor",
+      label: "Registrar",
       accent: "from-emerald-500 to-teal-600",
       activeText: "text-emerald-600",
       icon: (
@@ -400,7 +579,7 @@ const Login = () => {
 
     {
       key: "company",
-      label: "Company Supervisor",
+      label: "Company",
       accent: "from-purple-500 to-purple-700",
       activeText: "text-purple-600",
       icon: (
@@ -487,21 +666,22 @@ const Login = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* EMAIL */}
+            {/* LOGIN CREDENTIAL */}
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Email Address
+                {getCredentialLabel(activeRole)}
               </label>
 
               <input
-                type="email"
+                type="text"
                 required
                 disabled={isSubmitting}
-                placeholder="Enter your email"
-                value={forms[activeRole].email}
+                autoComplete="username"
+                placeholder={getCredentialPlaceholder(activeRole)}
+                value={forms[activeRole].credential}
                 onChange={(e) =>
-                  handleChange(activeRole, "email", e.target.value)
+                  handleChange(activeRole, "credential", e.target.value)
                 }
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
               />
@@ -518,6 +698,7 @@ const Login = () => {
                 type="password"
                 required
                 disabled={isSubmitting}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={forms[activeRole].password}
                 onChange={(e) =>

@@ -447,6 +447,52 @@ export default function StudentPortalLayout() {
   };
 
   /* =========================================================
+     AUDIT LOG
+     ========================================================= */
+  const createAuditLog = async ({
+    action,
+    module,
+    targetEntityType = null,
+    targetEntityId = null,
+    details = null,
+  }) => {
+    try {
+      const { data, error } = await supabaseStudent.functions.invoke(
+        "create-audit-log",
+        {
+          body: {
+            action,
+            module,
+            target_entity_type: targetEntityType,
+            target_entity_id: targetEntityId,
+            details,
+          },
+        }
+      );
+
+      if (error) {
+        console.error("Create audit log function error:", error);
+
+        return null;
+      }
+
+      if (!data?.success) {
+        console.error("Create audit log failed:", data?.error);
+
+        return null;
+      }
+
+      console.log("Audit log created successfully:", data.auditLog);
+
+      return data.auditLog;
+    } catch (error) {
+      console.error("Unexpected audit log error:", error);
+
+      return null;
+    }
+  };
+
+  /* =========================================================
      LOGOUT
      ========================================================= */
   const handleLogoutClick = () => {
@@ -462,10 +508,49 @@ export default function StudentPortalLayout() {
     try {
       setIsLoggingOut(true);
 
+      // =====================================================
+      // GET CURRENT AUTHENTICATED USER
+      // =====================================================
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (userError) {
+        console.error("Unable to get current user before logout:", userError);
+      }
+
+      // =====================================================
+      // CREATE LOGOUT AUDIT LOG
+      // =====================================================
+
+      if (user) {
+        await createAuditLog({
+          action: "LOGOUT",
+          module: "Authentication",
+
+          targetEntityType: "User",
+          targetEntityId: user.id,
+
+          details: {
+            name: fullName || null,
+            email: user.email || null,
+            role: "student",
+            portal: "student",
+          },
+        });
+      }
+
+      // =====================================================
+      // SIGN OUT
+      // =====================================================
+
       const { error } = await supabaseStudent.auth.signOut();
 
       if (error) {
         console.error("Logout error:", error);
+
         setIsLoggingOut(false);
         return;
       }
@@ -478,6 +563,7 @@ export default function StudentPortalLayout() {
       });
     } catch (error) {
       console.error("Logout failed:", error);
+
       setIsLoggingOut(false);
     }
   };

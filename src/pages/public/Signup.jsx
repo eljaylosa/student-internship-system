@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
+import { INDUSTRIES } from "../../constants/industries";
 import {
   getCountryCallingCode,
   isValidPhoneNumber,
@@ -937,19 +938,70 @@ const SignUp = () => {
       }
     );
 
+    /*
+     * =========================================================
+     * READ EDGE FUNCTION ERROR RESPONSE
+     * =========================================================
+     *
+     * Supabase FunctionsClient can return a FunctionsHttpError
+     * while the actual JSON error message is inside:
+     *
+     * error.context
+     *
+     * Read that response so the user sees the REAL backend
+     * error instead of only:
+     *
+     * "Edge Function returned a non-2xx status code"
+     */
+
+    let response = data;
+
+    if (error?.context?.json) {
+      try {
+        const errorBody = await error.context.json();
+
+        if (errorBody) {
+          response = errorBody;
+        }
+      } catch (parseError) {
+        console.error(
+          "Unable to parse Company Registration Edge Function error:",
+          parseError
+        );
+      }
+    }
+
+    /*
+     * Log everything useful for debugging.
+     */
+
     if (error) {
       console.error("Company Registration Edge Function error:", error);
 
+      console.error("Company Registration Edge Function response:", response);
+
       throw new Error(
-        data?.error || error.message || "Unable to submit company registration."
+        response?.error ||
+          response?.message ||
+          error.message ||
+          "Unable to submit company registration."
       );
     }
 
-    if (!data?.success) {
-      throw new Error(data?.error || "Unable to submit company registration.");
+    /*
+     * Handle a normal HTTP 200 response that nevertheless
+     * reports success: false.
+     */
+
+    if (!response?.success) {
+      throw new Error(
+        response?.error ||
+          response?.message ||
+          "Unable to submit company registration."
+      );
     }
 
-    return data;
+    return response;
   };
 
   /*
@@ -2089,7 +2141,7 @@ const SignUp = () => {
                     {renderSchoolField()}
 
                     <div>
-                      <label className={labelClass}>Student ID</label>
+                      <label className={labelClass}>Student ID number</label>
 
                       <input
                         type="text"
@@ -2458,12 +2510,13 @@ const SignUp = () => {
                     })}
 
                     <div>
-                      <label className={labelClass}>Industry</label>
+                      <label className={labelClass}>
+                        Industry
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
 
-                      <input
-                        type="text"
+                      <select
                         required
-                        placeholder="e.g. Information Technology"
                         value={currentForm.industry}
                         onChange={(event) =>
                           handleChange(
@@ -2472,8 +2525,22 @@ const SignUp = () => {
                             event.target.value
                           )
                         }
-                        className={inputClass}
-                      />
+                        className={`${inputClass} cursor-pointer`}
+                      >
+                        <option value="" disabled>
+                          Select your industry
+                        </option>
+
+                        {INDUSTRIES.map((industry) => (
+                          <option key={industry} value={industry}>
+                            {industry}
+                          </option>
+                        ))}
+                      </select>
+
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        Select the industry that best represents your company.
+                      </p>
                     </div>
 
                     <div>

@@ -1,5 +1,5 @@
 import "./App.css";
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -7,6 +7,7 @@ import {
   useLocation,
   Navigate,
 } from "react-router-dom";
+import { supabase } from "./supabaseClient";
 
 import ScrollToTop from "./assets/ScrollToTop.jsx";
 
@@ -20,6 +21,7 @@ import About from "./pages/public/About.jsx";
 import Services from "./pages/public/Services.jsx";
 import Contact from "./pages/public/Contact.jsx";
 import Footer from "./components/layout/Footer.jsx";
+import MaintenancePage from "./pages/public/MaintenancePage.jsx";
 
 // =========================================================
 // AUTH
@@ -167,6 +169,82 @@ function RoleGuard({ role, children }) {
 }
 
 // =========================================================
+// MAINTENANCE GATE
+// =========================================================
+
+function MaintenanceGate({ children }) {
+  const location = useLocation();
+
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [checkingMaintenance, setCheckingMaintenance] = useState(true);
+
+  const checkMaintenanceMode = useCallback(async () => {
+    if (isAdminRoute) {
+      setCheckingMaintenance(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc("get_maintenance_mode");
+
+      if (error) {
+        throw error;
+      }
+
+      setMaintenanceMode(data === true);
+    } catch (error) {
+      console.error("Error checking maintenance mode:", error);
+
+      // Fail open if the maintenance check itself fails.
+      setMaintenanceMode(false);
+    } finally {
+      setCheckingMaintenance(false);
+    }
+  }, [isAdminRoute]);
+
+  useEffect(() => {
+    checkMaintenanceMode();
+  }, [checkMaintenanceMode]);
+
+  useEffect(() => {
+    if (isAdminRoute) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      checkMaintenanceMode();
+    }, 10000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [checkMaintenanceMode, isAdminRoute]);
+
+  if (isAdminRoute) {
+    return children;
+  }
+
+  if (checkingMaintenance) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        <div className="flex items-center gap-3 text-sm text-slate-400">
+          <div className="h-4 w-4 border-2 border-slate-700 border-t-slate-200 rounded-full animate-spin" />
+          <span>Checking system status...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (maintenanceMode) {
+    return <MaintenancePage />;
+  }
+
+  return children;
+}
+
+// =========================================================
 // APP CONTENT
 // =========================================================
 
@@ -186,178 +264,183 @@ function AppContent() {
     isStudentPortal || isRegistrarPortal || isCompanyPortal || isAdminPortal;
 
   return (
-    <>
-      <ScrollToTop />
+    <MaintenanceGate>
+      <>
+        <ScrollToTop />
 
-      {/* PUBLIC NAVBAR */}
-      {!isPortal && <Navbar />}
+        {/* PUBLIC NAVBAR */}
+        {!isPortal && <Navbar />}
 
-      <Routes>
-        {/* =====================================================
-            PUBLIC ROUTES
-        ===================================================== */}
+        <Routes>
+          {/* =====================================================
+              PUBLIC ROUTES
+          ===================================================== */}
 
-        <Route path="/" element={<Home />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/contact" element={<Contact />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/contact" element={<Contact />} />
 
-        {/* =====================================================
-            AUTH ROUTES
-        ===================================================== */}
+          {/* =====================================================
+              AUTH ROUTES
+          ===================================================== */}
 
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/login" element={<Login />} />
 
-        {/* PASSWORD RECOVERY */}
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+          {/* PASSWORD RECOVERY */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-        <Route path="/terms" element={<TermsAndConditions />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsAndConditions />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
 
-        {/* =====================================================
-            STUDENT PORTAL
-        ===================================================== */}
-
-        <Route
-          path="/student"
-          element={
-            <RoleGuard role="student">
-              <StudentPortalLayout />
-            </RoleGuard>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
+          {/* =====================================================
+              STUDENT PORTAL
+          ===================================================== */}
 
           <Route
-            path="/student/certificate/:certificateId"
-            element={<Certificate />}
-          />
+            path="/student"
+            element={
+              <RoleGuard role="student">
+                <StudentPortalLayout />
+              </RoleGuard>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
 
-          <Route path="dashboard" element={<StudentDashboard />} />
-          <Route path="profile" element={<StudentProfile />} />
-          <Route path="application" element={<StudentApplication />} />
-          <Route path="documents" element={<StudentDocuments />} />
-          <Route path="status" element={<ViewStatus />} />
-          <Route path="templates" element={<StudentDocumentTemplate />} />
-          <Route path="notifications" element={<StudentNotification />} />
-          <Route path="info" element={<StudentInfo />} />
-          <Route path="evaluation" element={<StudentEvaluation />} />
-          <Route path="messages" element={<StudentMessages />} />
-          <Route path="settings" element={<StudentSettings />} />
-        </Route>
+            <Route
+              path="/student/certificate/:certificateId"
+              element={<Certificate />}
+            />
 
-        {/* =====================================================
-            REGISTRAR PORTAL
-        ===================================================== */}
+            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="profile" element={<StudentProfile />} />
+            <Route path="application" element={<StudentApplication />} />
+            <Route path="documents" element={<StudentDocuments />} />
+            <Route path="status" element={<ViewStatus />} />
+            <Route path="templates" element={<StudentDocumentTemplate />} />
+            <Route path="notifications" element={<StudentNotification />} />
+            <Route path="info" element={<StudentInfo />} />
+            <Route path="evaluation" element={<StudentEvaluation />} />
+            <Route path="messages" element={<StudentMessages />} />
+            <Route path="settings" element={<StudentSettings />} />
+          </Route>
 
-        <Route
-          path="/registrar"
-          element={
-            <RoleGuard role="registrar">
-              <RegistrarPortalLayout />
-            </RoleGuard>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-
-          <Route path="dashboard" element={<RegistrarDashboard />} />
-          <Route path="profile" element={<RegistrarProfile />} />
-          <Route path="students" element={<RegistrarStudentLists />} />
+          {/* =====================================================
+              REGISTRAR PORTAL
+          ===================================================== */}
 
           <Route
-            path="applications"
-            element={<RegistrarReviewApplications />}
+            path="/registrar"
+            element={
+              <RoleGuard role="registrar">
+                <RegistrarPortalLayout />
+              </RoleGuard>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+
+            <Route path="dashboard" element={<RegistrarDashboard />} />
+            <Route path="profile" element={<RegistrarProfile />} />
+            <Route path="students" element={<RegistrarStudentLists />} />
+
+            <Route
+              path="applications"
+              element={<RegistrarReviewApplications />}
+            />
+
+            <Route path="documents" element={<RegistrarDocuments />} />
+            <Route path="deployment" element={<RegistrarManageDeployments />} />
+            <Route path="evaluations" element={<RegistrarEvaluations />} />
+            <Route path="reports" element={<RegistrarReports />} />
+            <Route path="notifications" element={<RegistrarNotification />} />
+            <Route path="messages" element={<RegistrarMessages />} />
+            <Route path="settings" element={<RegistrarSettings />} />
+          </Route>
+
+          {/* =====================================================
+              COMPANY VERIFICATION DOCUMENT UPLOAD
+              Public route accessed through secure email link
+          ===================================================== */}
+
+          <Route
+            path="/company/verification-upload"
+            element={<CompanyVerificationUpload />}
           />
 
-          <Route path="documents" element={<RegistrarDocuments />} />
-          <Route path="deployment" element={<RegistrarManageDeployments />} />
-          <Route path="evaluations" element={<RegistrarEvaluations />} />
-          <Route path="reports" element={<RegistrarReports />} />
-          <Route path="notifications" element={<RegistrarNotification />} />
-          <Route path="messages" element={<RegistrarMessages />} />
-          <Route path="settings" element={<RegistrarSettings />} />
-        </Route>
+          {/* =====================================================
+              COMPANY PORTAL
+          ===================================================== */}
 
-        {/* =====================================================
-            COMPANY VERIFICATION DOCUMENT UPLOAD
-            Public route accessed through secure email link
-        ===================================================== */}
+          <Route
+            path="/company"
+            element={
+              <RoleGuard role="company">
+                <CompanyPortalLayout />
+              </RoleGuard>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
 
-        <Route
-          path="/company/verification-upload"
-          element={<CompanyVerificationUpload />}
-        />
+            <Route path="dashboard" element={<CompanyDashboard />} />
+            <Route path="jobs" element={<CompanyManageJobs />} />
+            <Route path="applications" element={<CompanyManageApplication />} />
+            <Route path="interns" element={<CompanyInterns />} />
+            <Route path="evaluate" element={<CompanyEvaluate />} />
+            <Route path="feedback" element={<CompanyFeedback />} />
+            <Route path="notifications" element={<CompanyNotification />} />
+            <Route path="messages" element={<CompanyMessages />} />
 
-        {/* =====================================================
-            COMPANY PORTAL
-        ===================================================== */}
+            {/* Company information is now managed through Settings */}
+            <Route path="settings" element={<CompanySettings />} />
+          </Route>
 
-        <Route
-          path="/company"
-          element={
-            <RoleGuard role="company">
-              <CompanyPortalLayout />
-            </RoleGuard>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
+          {/* =====================================================
+              ADMIN PORTAL
+          ===================================================== */}
 
-          <Route path="dashboard" element={<CompanyDashboard />} />
-          <Route path="jobs" element={<CompanyManageJobs />} />
-          <Route path="applications" element={<CompanyManageApplication />} />
-          <Route path="interns" element={<CompanyInterns />} />
-          <Route path="evaluate" element={<CompanyEvaluate />} />
-          <Route path="feedback" element={<CompanyFeedback />} />
-          <Route path="notifications" element={<CompanyNotification />} />
-          <Route path="messages" element={<CompanyMessages />} />
+          {/* ADMIN LOGIN */}
 
-          {/* Company information is now managed through Settings */}
-          <Route path="settings" element={<CompanySettings />} />
-        </Route>
+          <Route path="/admin/login" element={<AdminLogin />} />
 
-        {/* =====================================================
-            ADMIN PORTAL
-        ===================================================== */}
+          {/* ADMIN ENVIRONMENT */}
 
-        {/* ADMIN LOGIN */}
+          <Route
+            path="/admin"
+            element={
+              <RoleGuard role="admin">
+                <AdminPortalLayout />
+              </RoleGuard>
+            }
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
 
-        <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="profile" element={<AdminProfile />} />
+            <Route path="users" element={<AdminUserManagement />} />
+            <Route path="requests" element={<ReviewCreateRequests />} />
+            <Route path="companies" element={<AdminCompanyManagement />} />
+            <Route path="internships" element={<AdminInternshipRecords />} />
+            <Route path="documents" element={<AdminDocumentManagement />} />
+            <Route path="schools" element={<ManageSchools />} />
+            <Route
+              path="information"
+              element={<AdminInformationManagement />}
+            />
+            <Route path="evaluations" element={<AdminEvaluationManagement />} />
+            <Route path="reports" element={<AdminReports />} />
+            <Route path="notifications" element={<AdminSystemNotification />} />
+            <Route path="settings" element={<AdminSystemSettings />} />
+            <Route path="audit-logs" element={<AdminAuditLogs />} />
+          </Route>
+        </Routes>
 
-        {/* ADMIN ENVIRONMENT */}
-
-        <Route
-          path="/admin"
-          element={
-            <RoleGuard role="admin">
-              <AdminPortalLayout />
-            </RoleGuard>
-          }
-        >
-          <Route index element={<Navigate to="dashboard" replace />} />
-
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="profile" element={<AdminProfile />} />
-          <Route path="users" element={<AdminUserManagement />} />
-          <Route path="requests" element={<ReviewCreateRequests />} />
-          <Route path="companies" element={<AdminCompanyManagement />} />
-          <Route path="internships" element={<AdminInternshipRecords />} />
-          <Route path="documents" element={<AdminDocumentManagement />} />
-          <Route path="schools" element={<ManageSchools />} />
-          <Route path="information" element={<AdminInformationManagement />} />
-          <Route path="evaluations" element={<AdminEvaluationManagement />} />
-          <Route path="reports" element={<AdminReports />} />
-          <Route path="notifications" element={<AdminSystemNotification />} />
-          <Route path="settings" element={<AdminSystemSettings />} />
-          <Route path="audit-logs" element={<AdminAuditLogs />} />
-        </Route>
-      </Routes>
-
-      {/* PUBLIC FOOTER */}
-      {!isPortal && <Footer />}
-    </>
+        {/* PUBLIC FOOTER */}
+        {!isPortal && <Footer />}
+      </>
+    </MaintenanceGate>
   );
 }
 

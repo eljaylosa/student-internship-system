@@ -513,7 +513,7 @@ const RegistrarPortalLayout = () => {
       path: "/registrar/profile",
     },
     {
-      name: "Student Records",
+      name: "Student List",
       icon: "🎓",
       path: "/registrar/students",
     },
@@ -668,7 +668,55 @@ const RegistrarPortalLayout = () => {
     try {
       setIsLoggingOut(true);
 
-      await supabaseRegistrar.auth.signOut();
+      // -----------------------------------------------------
+      // LOG AUDIT EVENT BEFORE SIGNING OUT
+      // -----------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (userError) {
+        console.error(
+          "Error getting authenticated user for logout:",
+          userError
+        );
+      }
+
+      if (user) {
+        const { error: auditError } = await supabaseRegistrar.functions.invoke(
+          "create-audit-log",
+          {
+            body: {
+              action: "LOGOUT",
+              module: "Authentication",
+              target_entity_type: "User",
+              target_entity_id: user.id,
+              details: {
+                email: user.email || registrarProfile.email || null,
+                role: "registrar",
+              },
+            },
+          }
+        );
+
+        if (auditError) {
+          console.error("Logout audit log error:", auditError);
+        }
+      }
+
+      // -----------------------------------------------------
+      // SIGN OUT
+      // -----------------------------------------------------
+
+      const { error: signOutError } = await supabaseRegistrar.auth.signOut();
+
+      if (signOutError) {
+        console.error("Logout error:", signOutError);
+        setIsLoggingOut(false);
+        return;
+      }
 
       logout();
 
@@ -1307,7 +1355,7 @@ const RegistrarPortalLayout = () => {
                       darkMode ? "text-slate-400" : "text-slate-400"
                     }`}
                   >
-                    {registrarProfile.position || "Registrar Advisor"}
+                    {registrarProfile.position || "Registrar"}
                   </p>
                 </div>
 
@@ -1365,7 +1413,7 @@ const RegistrarPortalLayout = () => {
                             darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
-                          {registrarProfile.email || "Registrar Account"}
+                          {registrarProfile.email || "Registrar"}
                         </p>
                       </div>
                     </div>

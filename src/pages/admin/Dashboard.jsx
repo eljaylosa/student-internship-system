@@ -1,106 +1,180 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  "users": [
-    {
-      "id": "USR-001",
-      "role": "student",
-      "email": "student@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "STU-001"
-    },
-    {
-      "id": "USR-002",
-      "role": "registrar",
-      "email": "registrar@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "FAC-001"
-    },
-    {
-      "id": "USR-003",
-      "role": "company",
-      "email": "company@gmail.com",
-      "password": "password",
-      "status": "Active",
-      "profileId": "SUP-001"
-    },
-    {
-      "id": "USR-004",
-      "role": "admin",
-      "email": "admin@sims.local",
-      "password": "password",
-      "status": "Active",
-      "profileId": "ADM-001"
-    }
-  ],
-  "applications": [
-    {
-      "id": "APP-001",
-      "studentId": "STU-001",
-      "opportunityId": "OPP-001",
-      "submittedAt": "2026-05-01T09:00:00.000Z",
-      "status": "Submitted",
-      "coverLetter": "I am excited to contribute to the team and learn through this placement.",
-      "reviewerId": "FAC-001",
-      "notes": "Awaiting registrar review."
-    }
-  ],
-  "assignments": [],
-  "auditEvents": [
-    {
-      "id": "AUD-001",
-      "actorUserId": "USR-004",
-      "actorRole": "admin",
-      "action": "LOGIN",
-      "module": "Authentication",
-      "targetEntityType": "User",
-      "targetEntityId": "USR-004",
-      "timestamp": "2026-08-17T09:42:18.000Z",
-      "details": "Administrator logged into the mock system."
-    }
-  ]
-};
-
+// =========================================================
+// ADMIN DASHBOARD
+// =========================================================
+//
+// Admin focuses on:
+// - System users
+// - Pending system items
+// - Reports / system monitoring
+// - Recent system activity
+//
+// Internship operational monitoring is intentionally excluded.
+// Active internships, assignments, and deployment are handled
+// by the Registrar portal.
+// =========================================================
 
 const Dashboard = () => {
   const { darkMode } = useOutletContext();
-  const state = localState;
 
   // =========================================================
-  // LIVE MOCK STORE DATA
+  // STATE
   // =========================================================
 
-  const users = state.users || [];
-  const applications = state.applications || [];
-  const assignments = state.assignments || [];
-  const auditEvents = state.auditEvents || [];
+  const [users, setUsers] = useState([]);
+  const [applications, setApplications] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // =========================================================
+  // LOAD DASHBOARD DATA
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        // ---------------------------------------------------
+        // USERS
+        // ---------------------------------------------------
+
+        const usersPromise = supabase
+          .from("users")
+          .select(
+            "id, role, email, first_name, middle_name, last_name, status, created_at"
+          )
+          .order("created_at", { ascending: false });
+
+        // ---------------------------------------------------
+        // APPLICATIONS
+        // ---------------------------------------------------
+        //
+        // Applications are currently used only to determine
+        // pending items shown on the dashboard.
+        //
+        // Internship deployment/assignment data is intentionally
+        // NOT loaded here because that belongs to Registrar.
+        // ---------------------------------------------------
+
+        const applicationsPromise = supabase
+          .from("applications")
+          .select(
+            "id, status, submitted_at, created_at, student_id, opportunity_id"
+          )
+          .order("submitted_at", { ascending: false });
+
+        const [usersResult, applicationsResult] =
+          await Promise.all([
+            usersPromise,
+            applicationsPromise,
+          ]);
+
+        if (usersResult.error) {
+          throw new Error(
+            `Unable to load users: ${usersResult.error.message}`
+          );
+        }
+
+        if (applicationsResult.error) {
+          throw new Error(
+            `Unable to load applications: ${applicationsResult.error.message}`
+          );
+        }
+
+        if (!mounted) return;
+
+        setUsers(usersResult.data || []);
+        setApplications(applicationsResult.data || []);
+      } catch (err) {
+        console.error("Admin Dashboard loading error:", err);
+
+        if (!mounted) return;
+
+        setError(
+          err?.message ||
+            "Unable to load dashboard data. Please try again."
+        );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboardData();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // =========================================================
   // SYSTEM COUNTS
   // =========================================================
 
-  const totalUsers = users.length;
+  // ---------------------------------------------------------
+  // TOTAL USERS
+  // ---------------------------------------------------------
+  //
+  // Admin accounts are excluded because they are system
+  // administrator accounts rather than regular SIMS users.
+  //
+  // Included:
+  // - Student
+  // - Registrar
+  // - Company
+  //
+  // Excluded:
+  // - Admin
+  // ---------------------------------------------------------
 
-  const activeInternships = assignments.filter(
-    (assignment) => assignment.status === "Active"
+  const totalUsers = users.filter(
+    (user) => user.role !== "admin"
   ).length;
+
+  // ---------------------------------------------------------
+  // PENDING
+  // ---------------------------------------------------------
+  //
+  // Current application-related items awaiting processing.
+  //
+  // These statuses match the current SIMS application workflow.
+  // ---------------------------------------------------------
 
   const pendingApplications = applications.filter(
-    (application) =>
-      application.status === "Pending" ||
-      application.status === "Under Review" ||
-      application.status === "Information Requested"
+    (application) => {
+      const status = String(
+        application.status || ""
+      ).toLowerCase();
+
+      return [
+        "pending",
+        "submitted",
+        "under_review",
+        "information_requested",
+        "info_requested",
+      ].includes(status);
+    }
   ).length;
 
-  // Reports are not yet a dedicated mockStore entity.
-  // For now, use audit events that represent important system actions.
-  const reportsCount = auditEvents.filter((event) =>
-    ["REPORT", "WARNING", "ISSUE"].includes(event.action)
-  ).length;
+  // ---------------------------------------------------------
+  // REPORTS
+  // ---------------------------------------------------------
+  //
+  // audit_logs does not exist yet.
+  // Keep this at 0 until a proper reporting/audit system
+  // is implemented.
+  // ---------------------------------------------------------
+
+  const reportsCount = 0;
 
   // =========================================================
   // OVERVIEW CARDS
@@ -110,14 +184,8 @@ const Dashboard = () => {
     {
       title: "Total Users",
       value: totalUsers,
-      description: "Registered users",
+      description: "Students, registrars, and companies",
       icon: "👥",
-    },
-    {
-      title: "Active Internships",
-      value: activeInternships,
-      description: "Currently active",
-      icon: "💼",
     },
     {
       title: "Pending",
@@ -134,66 +202,68 @@ const Dashboard = () => {
   ];
 
   // =========================================================
-  // INTERNSHIP DISTRIBUTION
-  // =========================================================
-
-  const activeCount = assignments.filter(
-    (assignment) => assignment.status === "Active"
-  ).length;
-
-  const pendingCount = assignments.filter(
-    (assignment) => assignment.status === "Pending"
-  ).length;
-
-  const completedCount = assignments.filter(
-    (assignment) => assignment.status === "Completed"
-  ).length;
-
-  const totalAssignments = assignments.length;
-
-  const activeDegrees =
-    totalAssignments > 0 ? (activeCount / totalAssignments) * 360 : 0;
-
-  const pendingDegrees =
-    totalAssignments > 0 ? (pendingCount / totalAssignments) * 360 : 0;
-
-  // =========================================================
   // USER GROWTH
   // =========================================================
   //
-  // Since the current users in mockStore do not have registration
-  // dates, we create a simple distribution based on the existing
-  // audit/user data instead of inventing database dates.
+  // Uses the real users.created_at values.
   //
-  // This can later be replaced with real registration timestamps.
+  // Admin accounts are excluded from the chart, just like the
+  // Total Users count.
+  //
+  // The chart shows cumulative registered regular users at
+  // the end of each of the last six calendar months.
   // =========================================================
 
-  const userGrowthData = [
-    {
-      month: "Mar",
-      value: Math.max(1, Math.round(totalUsers * 0.35)),
-    },
-    {
-      month: "Apr",
-      value: Math.max(1, Math.round(totalUsers * 0.48)),
-    },
-    {
-      month: "May",
-      value: Math.max(1, Math.round(totalUsers * 0.58)),
-    },
-    {
-      month: "Jun",
-      value: Math.max(1, Math.round(totalUsers * 0.72)),
-    },
-    {
-      month: "Jul",
-      value: Math.max(1, Math.round(totalUsers * 0.86)),
-    },
-    {
-      month: "Aug",
-      value: Math.max(1, totalUsers),
-    },
-  ];
+  const userGrowthData = useMemo(() => {
+    const regularUsers = users.filter(
+      (user) => user.role !== "admin"
+    );
+
+    const now = new Date();
+
+    const months = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(
+        now.getFullYear(),
+        now.getMonth() - i,
+        1
+      );
+
+      months.push({
+        year: date.getFullYear(),
+        monthIndex: date.getMonth(),
+        month: date.toLocaleString("en-US", {
+          month: "short",
+        }),
+      });
+    }
+
+    return months.map((month) => {
+      const endOfMonth = new Date(
+        month.year,
+        month.monthIndex + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+
+      const value = regularUsers.filter((user) => {
+        if (!user.created_at) return false;
+
+        const createdAt = new Date(user.created_at);
+
+        return createdAt <= endOfMonth;
+      }).length;
+
+      return {
+        month: month.month,
+        value,
+      };
+    });
+  }, [users]);
 
   const maxGrowthValue = Math.max(
     ...userGrowthData.map((item) => item.value),
@@ -203,83 +273,153 @@ const Dashboard = () => {
   // =========================================================
   // RECENT SYSTEM ACTIVITY
   // =========================================================
+  //
+  // audit_logs does not exist yet.
+  //
+  // For now, recent activity is derived from actual records:
+  // - User registrations
+  // - Application submissions/status changes
+  //
+  // Once audit_logs is created, this section can be replaced
+  // with the real audit trail.
+  // =========================================================
 
-  const recentActivities = auditEvents.slice(0, 5).map((event, index) => {
-    const actor = users.find((user) => user.id === event.actorUserId);
+  const recentActivities = useMemo(() => {
+    const activities = [];
 
-    const actorLabel =
-      actor?.email || actor?.profileId || event.actorUserId || "System";
+    // -------------------------------------------------------
+    // USER REGISTRATIONS
+    // -------------------------------------------------------
 
-    let actionLabel = event.action || "System activity";
+    users.forEach((user) => {
+      // Admin registrations are not included in regular user
+      // activity because Admin is treated as a system account.
+      if (user.role === "admin") return;
 
-    switch (event.action) {
-      case "LOGIN":
-        actionLabel = "User logged into the system";
-        break;
+      if (!user.created_at) return;
 
-      case "LOGOUT":
-        actionLabel = "User logged out of the system";
-        break;
+      const fullName = [
+        user.first_name,
+        user.middle_name,
+        user.last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
 
-      case "SUBMIT":
-        actionLabel = "New submission recorded";
-        break;
+      activities.push({
+        id: `user-${user.id}`,
+        action: "New user registered",
+        user:
+          fullName ||
+          user.email ||
+          "Unknown user",
+        timeValue: new Date(user.created_at),
+        type: "User",
+      });
+    });
 
-      case "CREATE":
-        actionLabel = "New record created";
-        break;
+    // -------------------------------------------------------
+    // APPLICATIONS
+    // -------------------------------------------------------
 
-      case "UPDATE":
-        actionLabel = "System record updated";
-        break;
+    applications.forEach((application) => {
+      const dateValue =
+        application.submitted_at ||
+        application.created_at;
 
-      case "APPROVE":
-        actionLabel = "Record approved";
-        break;
+      if (!dateValue) return;
 
-      case "REJECT":
-        actionLabel = "Record rejected";
-        break;
+      const status = String(
+        application.status || ""
+      ).toLowerCase();
 
-      case "UPLOAD":
-        actionLabel = "Document uploaded";
-        break;
+      let action = "Application updated";
 
-      case "DEPLOY":
-        actionLabel = "Intern deployed";
-        break;
+      switch (status) {
+        case "pending":
+          action = "Application pending";
+          break;
 
-      default:
-        break;
-    }
+        case "submitted":
+          action = "Application submitted";
+          break;
 
-    const timestamp = event.timestamp ? new Date(event.timestamp) : null;
+        case "under_review":
+          action = "Application under review";
+          break;
 
-    const time = timestamp
-      ? timestamp.toLocaleString("en-US", {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })
-      : "Unknown time";
+        case "information_requested":
+        case "info_requested":
+          action = "Additional information requested";
+          break;
 
-    return {
-      id: event.id || index,
-      action: actionLabel,
-      user: actorLabel,
-      time,
-      type: event.module || event.targetEntityType || "System",
-    };
-  });
+        case "approved":
+          action = "Application approved";
+          break;
+
+        case "rejected":
+          action = "Application rejected";
+          break;
+
+        case "withdrawn":
+          action = "Application withdrawn";
+          break;
+
+        default:
+          break;
+      }
+
+      activities.push({
+        id: `application-${application.id}`,
+        action,
+        user: "Student application",
+        timeValue: new Date(dateValue),
+        type: "Application",
+      });
+    });
+
+    // -------------------------------------------------------
+    // SORT + LIMIT
+    // -------------------------------------------------------
+
+    return activities
+      .filter(
+        (activity) =>
+          activity.timeValue &&
+          !Number.isNaN(activity.timeValue.getTime())
+      )
+      .sort(
+        (a, b) =>
+          b.timeValue.getTime() -
+          a.timeValue.getTime()
+      )
+      .slice(0, 5)
+      .map((activity) => ({
+        ...activity,
+        time: activity.timeValue.toLocaleString(
+          "en-US",
+          {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          }
+        ),
+      }));
+  }, [users, applications]);
 
   // =========================================================
   // THEME CLASSES
   // =========================================================
 
-  const pageTitleClass = darkMode ? "text-slate-100" : "text-slate-900";
+  const pageTitleClass = darkMode
+    ? "text-slate-100"
+    : "text-slate-900";
 
-  const bodyTextClass = darkMode ? "text-slate-400" : "text-slate-500";
+  const bodyTextClass = darkMode
+    ? "text-slate-400"
+    : "text-slate-500";
 
   const panelClass = darkMode
     ? "bg-slate-900 border-slate-700"
@@ -296,6 +436,7 @@ const Dashboard = () => {
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
       <div className="max-w-[1400px] mx-auto">
+
         {/* =====================================================
             PAGE HEADER
         ===================================================== */}
@@ -303,20 +444,49 @@ const Dashboard = () => {
         <div className="mb-5 sm:mb-6">
           <p
             className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1 ${
-              darkMode ? "text-slate-500" : "text-slate-400"
+              darkMode
+                ? "text-slate-500"
+                : "text-slate-400"
             }`}
           >
             Administrator Portal
           </p>
 
-          <h1 className={`text-xl sm:text-2xl font-black ${pageTitleClass}`}>
+          <h1
+            className={`text-xl sm:text-2xl font-black ${pageTitleClass}`}
+          >
             Admin Dashboard
           </h1>
 
-          <p className={`text-xs sm:text-sm mt-1 ${bodyTextClass}`}>
-            Monitor system activity, users, internships, and reports.
+          <p
+            className={`text-xs sm:text-sm mt-1 ${bodyTextClass}`}
+          >
+            Monitor system users, pending items, and system
+            activity.
           </p>
         </div>
+
+        {/* =====================================================
+            ERROR
+        ===================================================== */}
+
+        {error && (
+          <div
+            className={`border rounded-xl p-4 mb-5 ${
+              darkMode
+                ? "bg-red-950/30 border-red-900 text-red-300"
+                : "bg-red-50 border-red-200 text-red-600"
+            }`}
+          >
+            <p className="text-xs font-semibold">
+              Unable to load dashboard data
+            </p>
+
+            <p className="text-[10px] mt-1 opacity-80">
+              {error}
+            </p>
+          </div>
+        )}
 
         {/* =====================================================
             SYSTEM OVERVIEW
@@ -340,7 +510,9 @@ const Dashboard = () => {
                 System Overview
               </h2>
 
-              <p className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}>
+              <p
+                className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}
+              >
                 Current status of the SIMS platform.
               </p>
             </div>
@@ -350,7 +522,9 @@ const Dashboard = () => {
 
               <span
                 className={`text-[10px] sm:text-xs font-medium ${
-                  darkMode ? "text-emerald-400" : "text-emerald-600"
+                  darkMode
+                    ? "text-emerald-400"
+                    : "text-emerald-600"
                 }`}
               >
                 All Systems Operational
@@ -363,7 +537,7 @@ const Dashboard = () => {
             OVERVIEW CARDS
         ===================================================== */}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
           {overviewCards.map((card) => (
             <div
               key={card.title}
@@ -392,7 +566,7 @@ const Dashboard = () => {
                       ${pageTitleClass}
                     `}
                   >
-                    {card.value}
+                    {loading ? "—" : card.value}
                   </p>
 
                   <p
@@ -411,7 +585,11 @@ const Dashboard = () => {
                     justify-center
                     text-sm
                     flex-shrink-0
-                    ${darkMode ? "bg-slate-700" : "bg-slate-100"}
+                    ${
+                      darkMode
+                        ? "bg-slate-700"
+                        : "bg-slate-100"
+                    }
                   `}
                 >
                   {card.icon}
@@ -422,193 +600,88 @@ const Dashboard = () => {
         </div>
 
         {/* =====================================================
-            CHARTS
+            USER GROWTH
         ===================================================== */}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
-          {/* ===================================================
-              USER GROWTH
-          =================================================== */}
+        <section
+          className={`
+            border
+            rounded-xl
+            p-4
+            sm:p-5
+            mb-5
+            ${panelClass}
+          `}
+        >
+          <div className="mb-4">
+            <h2
+              className={`text-sm sm:text-base font-bold ${pageTitleClass}`}
+            >
+              User Growth
+            </h2>
 
-          <section
-            className={`
-              border
-              rounded-xl
-              p-4
-              sm:p-5
-              ${panelClass}
-            `}
-          >
-            <div className="mb-4">
-              <h2
-                className={`text-sm sm:text-base font-bold ${pageTitleClass}`}
-              >
-                User Growth
-              </h2>
+            <p
+              className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}
+            >
+              Registered users over the past months.
+            </p>
+          </div>
 
-              <p className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}>
-                Registered users over the past months.
-              </p>
+          <div className="h-56 sm:h-64 relative">
+
+            {/* GRID */}
+
+            <div className="absolute inset-0 flex flex-col justify-between">
+              {[1, 2, 3, 4, 5].map((line) => (
+                <div
+                  key={line}
+                  className={`border-t ${
+                    darkMode
+                      ? "border-slate-700"
+                      : "border-slate-100"
+                  }`}
+                />
+              ))}
             </div>
 
-            <div className="h-56 sm:h-64 relative">
-              {/* GRID */}
+            {/* CHART BARS */}
 
-              <div className="absolute inset-0 flex flex-col justify-between">
-                {[1, 2, 3, 4, 5].map((line) => (
+            <div className="absolute inset-x-0 bottom-0 top-3 flex items-end justify-around gap-2 px-2">
+              {userGrowthData.map((item) => (
+                <div
+                  key={`${item.month}-${item.value}`}
+                  className="flex flex-col items-center justify-end h-full flex-1"
+                >
                   <div
-                    key={line}
-                    className={`border-t ${
-                      darkMode ? "border-slate-700" : "border-slate-100"
-                    }`}
-                  />
-                ))}
-              </div>
-
-              {/* CHART BARS */}
-
-              <div className="absolute inset-x-0 bottom-0 top-3 flex items-end justify-around gap-2 px-2">
-                {userGrowthData.map((item) => (
-                  <div
-                    key={item.month}
-                    className="flex flex-col items-center justify-end h-full flex-1"
-                  >
-                    <div
-                      className={`
-                        w-full
-                        max-w-10
-                        rounded-t-lg
-                        transition-all
-                        ${darkMode ? "bg-slate-300" : "bg-slate-800"}
-                      `}
-                      style={{
-                        height: `${(item.value / maxGrowthValue) * 100}%`,
-                      }}
-                    />
-
-                    <span className={`text-[9px] mt-2 ${bodyTextClass}`}>
-                      {item.month}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* ===================================================
-              INTERNSHIP DISTRIBUTION
-          =================================================== */}
-
-          <section
-            className={`
-              border
-              rounded-xl
-              p-4
-              sm:p-5
-              ${panelClass}
-            `}
-          >
-            <div className="mb-4">
-              <h2
-                className={`text-sm sm:text-base font-bold ${pageTitleClass}`}
-              >
-                Internship Distribution
-              </h2>
-
-              <p className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}>
-                Current internship assignment status.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 h-56 sm:h-64">
-              {/* DONUT */}
-
-              <div className="relative w-40 h-40 flex-shrink-0">
-                {totalAssignments > 0 ? (
-                  <div
-                    className="absolute inset-0 rounded-full"
+                    className={`
+                      w-full
+                      max-w-10
+                      rounded-t-lg
+                      transition-all
+                      ${
+                        darkMode
+                          ? "bg-slate-300"
+                          : "bg-slate-800"
+                      }
+                    `}
                     style={{
-                      background: `conic-gradient(
-                        #1e293b 0deg ${activeDegrees}deg,
-                        #64748b ${activeDegrees}deg ${
-                        activeDegrees + pendingDegrees
-                      }deg,
-                        #cbd5e1 ${activeDegrees + pendingDegrees}deg 360deg
-                      )`,
+                      height:
+                        item.value > 0
+                          ? `${(item.value / maxGrowthValue) * 100}%`
+                          : "0%",
                     }}
                   />
-                ) : (
-                  <div
-                    className={`absolute inset-0 rounded-full ${
-                      darkMode ? "bg-slate-700" : "bg-slate-200"
-                    }`}
-                  />
-                )}
 
-                <div
-                  className={`
-                    absolute
-                    inset-7
-                    rounded-full
-                    flex
-                    flex-col
-                    items-center
-                    justify-center
-                    ${darkMode ? "bg-slate-900" : "bg-white"}
-                  `}
-                >
-                  <span className={`text-2xl font-black ${pageTitleClass}`}>
-                    {totalAssignments}
-                  </span>
-
-                  <span className={`text-[9px] ${bodyTextClass}`}>Total</span>
-                </div>
-              </div>
-
-              {/* LEGEND */}
-
-              <div className="space-y-3 w-full max-w-[180px]">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-800" />
-
-                    <span className={`text-xs ${bodyTextClass}`}>Active</span>
-                  </div>
-
-                  <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    {activeCount}
+                  <span
+                    className={`text-[9px] mt-2 ${bodyTextClass}`}
+                  >
+                    {item.month}
                   </span>
                 </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-
-                    <span className={`text-xs ${bodyTextClass}`}>Pending</span>
-                  </div>
-
-                  <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    {pendingCount}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
-
-                    <span className={`text-xs ${bodyTextClass}`}>
-                      Completed
-                    </span>
-                  </div>
-
-                  <span className={`text-xs font-bold ${pageTitleClass}`}>
-                    {completedCount}
-                  </span>
-                </div>
-              </div>
+              ))}
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
 
         {/* =====================================================
             RECENT SYSTEM ACTIVITY
@@ -623,12 +696,16 @@ const Dashboard = () => {
           `}
         >
           <div className="p-4 sm:p-5">
-            <h2 className={`text-sm sm:text-base font-bold ${pageTitleClass}`}>
+            <h2
+              className={`text-sm sm:text-base font-bold ${pageTitleClass}`}
+            >
               Recent System Activity
             </h2>
 
-            <p className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}>
-              Latest activities performed within the system.
+            <p
+              className={`text-[10px] sm:text-xs mt-1 ${bodyTextClass}`}
+            >
+              Latest activities recorded within the system.
             </p>
           </div>
 
@@ -674,7 +751,16 @@ const Dashboard = () => {
               </thead>
 
               <tbody>
-                {recentActivities.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan="4"
+                      className={`px-5 py-8 text-center text-xs ${bodyTextClass}`}
+                    >
+                      Loading system activity...
+                    </td>
+                  </tr>
+                ) : recentActivities.length > 0 ? (
                   recentActivities.map((activity) => (
                     <tr
                       key={activity.id}
@@ -693,7 +779,9 @@ const Dashboard = () => {
                         {activity.action}
                       </td>
 
-                      <td className={`px-5 py-3.5 text-xs ${bodyTextClass}`}>
+                      <td
+                        className={`px-5 py-3.5 text-xs ${bodyTextClass}`}
+                      >
                         {activity.user}
                       </td>
 
@@ -741,23 +829,37 @@ const Dashboard = () => {
           {/* MOBILE ACTIVITY LIST */}
 
           <div className="sm:hidden">
-            {recentActivities.length > 0 ? (
+            {loading ? (
+              <div
+                className={`p-6 text-center text-xs ${bodyTextClass}`}
+              >
+                Loading system activity...
+              </div>
+            ) : recentActivities.length > 0 ? (
               recentActivities.map((activity) => (
                 <div
                   key={activity.id}
                   className={`
                     p-4
                     border-t
-                    ${darkMode ? "border-slate-700" : "border-slate-100"}
+                    ${
+                      darkMode
+                        ? "border-slate-700"
+                        : "border-slate-100"
+                    }
                   `}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className={`text-xs font-bold ${pageTitleClass}`}>
+                      <p
+                        className={`text-xs font-bold ${pageTitleClass}`}
+                      >
                         {activity.action}
                       </p>
 
-                      <p className={`text-[10px] mt-1 ${bodyTextClass}`}>
+                      <p
+                        className={`text-[10px] mt-1 ${bodyTextClass}`}
+                      >
                         {activity.user}
                       </p>
                     </div>
@@ -781,13 +883,17 @@ const Dashboard = () => {
                     </span>
                   </div>
 
-                  <p className={`text-[9px] mt-2 ${bodyTextClass}`}>
+                  <p
+                    className={`text-[9px] mt-2 ${bodyTextClass}`}
+                  >
                     {activity.time}
                   </p>
                 </div>
               ))
             ) : (
-              <div className={`p-6 text-center text-xs ${bodyTextClass}`}>
+              <div
+                className={`p-6 text-center text-xs ${bodyTextClass}`}
+              >
                 No system activity recorded yet.
               </div>
             )}
@@ -799,3 +905,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

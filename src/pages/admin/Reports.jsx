@@ -1,287 +1,544 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  applications: [
-    {
-      id: "APP-001",
-      studentId: "STU-001",
-      opportunityId: "OPP-001",
-      submittedAt: "2026-05-01T09:00:00.000Z",
-      status: "Submitted",
-      coverLetter:
-        "I am excited to contribute to the team and learn through this placement.",
-      reviewerId: "FAC-001",
-      notes: "Awaiting registrar review.",
-    },
-  ],
-  assignments: [],
-  evaluations: [],
-  documents: [],
-  users: [
-    {
-      id: "USR-001",
-      role: "student",
-      email: "student@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "STU-001",
-    },
-    {
-      id: "USR-002",
-      role: "registrar",
-      email: "registrar@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "FAC-001",
-    },
-    {
-      id: "USR-003",
-      role: "company",
-      email: "company@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "SUP-001",
-    },
-    {
-      id: "USR-004",
-      role: "admin",
-      email: "admin@sims.local",
-      password: "password",
-      status: "Active",
-      profileId: "ADM-001",
-    },
-  ],
-  students: [
-    {
-      id: "STU-001",
-      userId: "USR-001",
-      fullName: "John Doe",
-      email: "student@gmail.com",
-      studentId: "STU-001",
-      program: "BS Information Technology",
-      yearLevel: "2nd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 912 345 6789",
-      address: "Limay, Bataan",
-      gwa: "1.75",
-    },
-  ],
-  registrar: [
-    {
-      id: "FAC-001",
-      userId: "USR-002",
-      fullName: "Maria Santos",
-      email: "registrar@gmail.com",
-      facultyId: "FAC-001",
-      department: "College of Information and Communications Technology",
-      position: "Registrar Adviser",
-      phone: "+63 917 123 4567",
-      address: "Balanga, Bataan",
-      specialization: "Information Technology",
-      employeeId: "FAC-2026-001",
-    },
-  ],
-  companies: [
-    {
-      id: "COM-001",
-      name: "ABC Technologies",
-      industry: "Information Technology",
-      status: "Verified",
-      address: "Balanga, Bataan",
-      email: "hr@abctech.com",
-      supervisorIds: ["SUP-001"],
-    },
-  ],
-  opportunities: [
-    {
-      id: "OPP-001",
-      companyId: "COM-001",
-      supervisorId: "SUP-001",
-      title: "Web Developer Intern",
-      description:
-        "Build and improve internal web experiences with the engineering team.",
-      location: "Balanga, Bataan",
-      positionType: "On-site",
-      availability: "June - August 2026",
-      requirements: ["HTML/CSS", "JavaScript", "Git"],
-      status: "Active",
-      openings: 3,
-    },
-  ],
-  documentTypes: [
-    {
-      id: "DT-001",
-      name: "Resume/CV",
-      required: true,
-    },
-    {
-      id: "DT-002",
-      name: "Acceptance Letter",
-      required: true,
-    },
-    {
-      id: "DT-003",
-      name: "Internship Agreement",
-      required: true,
-    },
-    {
-      id: "DT-004",
-      name: "Medical Certificate",
-      required: true,
-    },
-    {
-      id: "DT-005",
-      name: "Parent Consent",
-      required: true,
-    },
-    {
-      id: "DT-006",
-      name: "Insurance Form",
-      required: false,
-    },
-  ],
+// =============================================================
+// ADMIN REPORTS & ANALYTICS
+// =============================================================
+//
+// Admin-level reporting only.
+//
+// INCLUDED:
+// - Users
+// - Companies
+// - Applications (high-level statistics)
+// - Student / Registrar Registration Requests
+// - System Activity
+//
+// NOT INCLUDED:
+// - Internship operations
+// - Assignments / deployment
+// - Student documents
+// - Evaluations
+//
+// DATA SOURCES:
+// - users            -> system accounts
+// - companies        -> company registrations / company records
+// - applications     -> application statistics
+// - create_requests  -> student / registrar registration requests
+//
+// =============================================================
+
+const APPLICATION_STATUS = {
+  DRAFT: "draft",
+  SUBMITTED: "submitted",
+  UNDER_REVIEW: "under_review",
+  INFO_REQUESTED: "info_requested",
+  INFORMATION_REQUESTED: "information_requested",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+  WITHDRAWN: "withdrawn",
 };
-const STATUS = {
-  user: {
-    ACTIVE: "Active",
-    INACTIVE: "Inactive",
-    PENDING: "Pending",
-  },
-  company: {
-    PENDING: "Pending",
-    VERIFIED: "Verified",
-    ACTIVE: "Active",
-    INACTIVE: "Inactive",
-  },
-  opportunity: {
-    DRAFT: "Draft",
-    ACTIVE: "Active",
-    CLOSED: "Closed",
-  },
-  application: {
-    DRAFT: "Draft",
-    SUBMITTED: "Submitted",
-    UNDER_REVIEW: "Under Review",
-    INFO_REQUESTED: "Information Requested",
-    APPROVED: "Approved",
-    REJECTED: "Rejected",
-    WITHDRAWN: "Withdrawn",
-  },
-  assignment: {
-    PENDING: "Pending",
-    ACTIVE: "Active",
-    COMPLETED: "Completed",
-    SUSPENDED: "Suspended",
-    TERMINATED: "Terminated",
-  },
-  document: {
-    NOT_SUBMITTED: "Not Submitted",
-    SUBMITTED: "Submitted",
-    PENDING_REVIEW: "Pending Review",
-    APPROVED: "Approved",
-    NEEDS_REVISION: "Needs Revision",
-  },
-  evaluation: {
-    DRAFT: "Draft",
-    SUBMITTED: "Submitted",
-    RETURNED: "Returned",
-    FINALIZED: "Finalized",
-  },
+
+const USER_STATUS = {
+  ACTIVE: "active",
+  INACTIVE: "inactive",
+  PENDING: "pending",
+};
+
+const ROLE_LABELS = {
+  student: "Student",
+  registrar: "Registrar Adviser",
+  registrar_adviser: "Registrar Adviser",
+  faculty: "Registrar Adviser",
+  company: "Company Supervisor",
+  company_supervisor: "Company Supervisor",
+  admin: "Administrator",
 };
 
 export default function Reports() {
   const { darkMode } = useOutletContext();
-  const state = localState;
+
+  // =========================================================
+  // STATE
+  // =========================================================
 
   const [activeReport, setActiveReport] = useState("overview");
+
+  const [users, setUsers] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [registrationRequests, setRegistrationRequests] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // =========================================================
+  // LOAD DATA
+  // =========================================================
+
+  useEffect(() => {
+    loadReports();
+  }, []);
+
+  const loadReports = async () => {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const [usersResult, companiesResult, applicationsResult, requestsResult] =
+        await Promise.all([
+          // -----------------------------------------------------
+          // USERS
+          // -----------------------------------------------------
+          supabase
+            .from("users")
+            .select(
+              "id, email, role, first_name, middle_name, last_name, status, created_at, updated_at"
+            )
+            .order("created_at", { ascending: false }),
+
+          // -----------------------------------------------------
+          // COMPANIES
+          // Company registration/request data lives here.
+          // -----------------------------------------------------
+          supabase
+            .from("companies")
+            .select(
+              "id, user_id, company_name, company_email, company_phone, company_address, website, industry, designation, status, created_at, updated_at"
+            )
+            .order("created_at", { ascending: false }),
+
+          // -----------------------------------------------------
+          // APPLICATIONS
+          // High-level statistics only.
+          // -----------------------------------------------------
+          supabase
+            .from("applications")
+            .select(
+              "id, student_id, opportunity_id, status, submitted_at, created_at, updated_at"
+            )
+            .order("created_at", { ascending: false }),
+
+          // -----------------------------------------------------
+          // CREATE REQUESTS
+          // Student / Registrar registration requests.
+          // Company requests are NOT counted here.
+          // -----------------------------------------------------
+          supabase
+            .from("create_requests")
+            .select("*")
+            .order("created_at", { ascending: false }),
+        ]);
+
+      if (usersResult.error) {
+        throw new Error(`Failed to load users: ${usersResult.error.message}`);
+      }
+
+      if (companiesResult.error) {
+        throw new Error(
+          `Failed to load companies: ${companiesResult.error.message}`
+        );
+      }
+
+      if (applicationsResult.error) {
+        throw new Error(
+          `Failed to load applications: ${applicationsResult.error.message}`
+        );
+      }
+
+      if (requestsResult.error) {
+        throw new Error(
+          `Failed to load registration requests: ${requestsResult.error.message}`
+        );
+      }
+
+      // -------------------------------------------------------
+      // Admin accounts are excluded from normal user reports.
+      // -------------------------------------------------------
+
+      const nonAdminUsers = (usersResult.data || []).filter(
+        (user) => user.role?.toLowerCase() !== "admin"
+      );
+
+      setUsers(nonAdminUsers);
+      setCompanies(companiesResult.data || []);
+      setApplications(applicationsResult.data || []);
+
+      // Only keep Student / Registrar requests here.
+      // Company registrations are sourced from `companies`.
+      const nonCompanyRequests = (requestsResult.data || []).filter(
+        (request) => {
+          const role = request.role?.toLowerCase();
+
+          return !["company", "company_supervisor"].includes(role);
+        }
+      );
+
+      setRegistrationRequests(nonCompanyRequests);
+    } catch (error) {
+      console.error("Reports loading error:", error);
+
+      setErrorMessage(
+        error instanceof Error ? error.message : "Failed to load reports."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // =========================================================
   // REPORT DATA
   // =========================================================
 
   const reportData = useMemo(() => {
-    const pendingApplications = state.applications.filter((item) =>
-      [
-        STATUS.application.SUBMITTED,
-        STATUS.application.UNDER_REVIEW,
-        STATUS.application.INFO_REQUESTED,
-      ].includes(item.status)
+    // ---------------------------------------------------------
+    // USERS
+    // ---------------------------------------------------------
+
+    const activeUsers = users.filter(
+      (user) => user.status?.toLowerCase() === USER_STATUS.ACTIVE
     );
 
-    const approvedApplications = state.applications.filter(
-      (item) => item.status === STATUS.application.APPROVED
+    const inactiveUsers = users.filter(
+      (user) => user.status?.toLowerCase() === USER_STATUS.INACTIVE
     );
 
-    const rejectedApplications = state.applications.filter(
-      (item) => item.status === STATUS.application.REJECTED
+    const pendingUsers = users.filter(
+      (user) => user.status?.toLowerCase() === USER_STATUS.PENDING
     );
 
-    const activeInternships = state.assignments.filter(
-      (item) => item.status === STATUS.assignment.ACTIVE
+    const students = users.filter(
+      (user) => user.role?.toLowerCase() === "student"
     );
 
-    const completedInternships = state.assignments.filter(
-      (item) => item.status === STATUS.assignment.COMPLETED
+    const registrars = users.filter((user) =>
+      ["registrar", "registrar_adviser", "faculty"].includes(
+        user.role?.toLowerCase()
+      )
     );
 
-    const pendingAssignments = state.assignments.filter(
-      (item) => item.status === STATUS.assignment.PENDING
+    const companyUsers = users.filter((user) =>
+      ["company", "company_supervisor"].includes(user.role?.toLowerCase())
     );
 
-    const submittedEvaluations = state.evaluations.filter(
-      (item) => item.status === STATUS.evaluation.SUBMITTED
+    // ---------------------------------------------------------
+    // COMPANIES
+    // ---------------------------------------------------------
+
+    const activeCompanies = companies.filter((company) =>
+      ["active", "verified"].includes(company.status?.toLowerCase())
     );
 
-    const finalizedEvaluations = state.evaluations.filter(
-      (item) => item.status === STATUS.evaluation.FINALIZED
+    const inactiveCompanies = companies.filter(
+      (company) => company.status?.toLowerCase() === "inactive"
     );
 
-    const companyToStudentEvaluations = state.evaluations.filter(
-      (item) =>
-        item.evaluatorRole === "Company Supervisor" &&
-        item.evaluatedRole === "Student"
+    const pendingCompanies = companies.filter(
+      (company) => company.status?.toLowerCase() === "pending"
     );
 
-    const studentToCompanyEvaluations = state.evaluations.filter(
-      (item) =>
-        item.evaluatorRole === "Student" && item.evaluatedRole === "Company"
+    const rejectedCompanies = companies.filter(
+      (company) => company.status?.toLowerCase() === "rejected"
     );
 
-    const pendingDocuments = state.documents.filter(
-      (item) => item.status === STATUS.document.PENDING_REVIEW
+    // ---------------------------------------------------------
+    // APPLICATIONS
+    // ---------------------------------------------------------
+
+    const submittedApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.SUBMITTED
     );
 
-    const approvedDocuments = state.documents.filter(
-      (item) => item.status === STATUS.document.APPROVED
+    const underReviewApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.UNDER_REVIEW
     );
 
-    const needsRevisionDocuments = state.documents.filter(
-      (item) => item.status === STATUS.document.NEEDS_REVISION
+    const informationRequestedApplications = applications.filter(
+      (application) =>
+        [
+          APPLICATION_STATUS.INFO_REQUESTED,
+          APPLICATION_STATUS.INFORMATION_REQUESTED,
+        ].includes(application.status?.toLowerCase())
     );
+
+    const approvedApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.APPROVED
+    );
+
+    const rejectedApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.REJECTED
+    );
+
+    const withdrawnApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.WITHDRAWN
+    );
+
+    const draftApplications = applications.filter(
+      (application) =>
+        application.status?.toLowerCase() === APPLICATION_STATUS.DRAFT
+    );
+
+    // ---------------------------------------------------------
+    // REGISTRATION REQUESTS
+    //
+    // IMPORTANT:
+    // Company registrations are NOT included here.
+    // They come from the companies table.
+    // ---------------------------------------------------------
+
+    const pendingRequests = registrationRequests.filter(
+      (request) => request.status?.toLowerCase() === "pending"
+    );
+
+    const approvedRequests = registrationRequests.filter(
+      (request) => request.status?.toLowerCase() === "approved"
+    );
+
+    const rejectedRequests = registrationRequests.filter(
+      (request) => request.status?.toLowerCase() === "rejected"
+    );
+
+    const requestsByRole = {
+      student: registrationRequests.filter(
+        (request) => request.role?.toLowerCase() === "student"
+      ).length,
+
+      registrar: registrationRequests.filter((request) =>
+        ["registrar", "registrar_adviser", "faculty"].includes(
+          request.role?.toLowerCase()
+        )
+      ).length,
+    };
+
+    // ---------------------------------------------------------
+    // COMPANY INDUSTRY DISTRIBUTION
+    // ---------------------------------------------------------
+
+    const industryMap = {};
+
+    companies.forEach((company) => {
+      const industry = company.industry?.trim() || "Unspecified";
+
+      industryMap[industry] = (industryMap[industry] || 0) + 1;
+    });
+
+    const industries = Object.entries(industryMap)
+      .map(([name, count]) => ({
+        name,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // ---------------------------------------------------------
+    // USER ROLE DISTRIBUTION
+    // ---------------------------------------------------------
+
+    const roleDistribution = [
+      {
+        label: "Students",
+        role: "student",
+        value: students.length,
+      },
+      {
+        label: "Registrar",
+        role: "registrar",
+        value: registrars.length,
+      },
+      {
+        label: "Company Supervisors",
+        role: "company",
+        value: companyUsers.length,
+      },
+    ];
+
+    // ---------------------------------------------------------
+    // ACCOUNT STATUS
+    // ---------------------------------------------------------
+
+    const accountStatus = [
+      {
+        label: "Active",
+        value: activeUsers.length,
+        accent: "emerald",
+      },
+      {
+        label: "Inactive",
+        value: inactiveUsers.length,
+        accent: "red",
+      },
+      {
+        label: "Pending",
+        value: pendingUsers.length,
+        accent: "amber",
+      },
+    ];
+
+    // ---------------------------------------------------------
+    // APPLICATION STATUS
+    // ---------------------------------------------------------
+
+    const applicationStatus = [
+      {
+        label: "Draft",
+        value: draftApplications.length,
+        accent: "slate",
+      },
+      {
+        label: "Submitted",
+        value: submittedApplications.length,
+        accent: "blue",
+      },
+      {
+        label: "Under Review",
+        value: underReviewApplications.length,
+        accent: "amber",
+      },
+      {
+        label: "Info Requested",
+        value: informationRequestedApplications.length,
+        accent: "violet",
+      },
+      {
+        label: "Approved",
+        value: approvedApplications.length,
+        accent: "emerald",
+      },
+      {
+        label: "Rejected",
+        value: rejectedApplications.length,
+        accent: "red",
+      },
+      {
+        label: "Withdrawn",
+        value: withdrawnApplications.length,
+        accent: "slate",
+      },
+    ];
 
     return {
-      pendingApplications,
+      activeUsers,
+      inactiveUsers,
+      pendingUsers,
+
+      students,
+      registrars,
+      companyUsers,
+
+      activeCompanies,
+      inactiveCompanies,
+      pendingCompanies,
+      rejectedCompanies,
+
+      submittedApplications,
+      underReviewApplications,
+      informationRequestedApplications,
       approvedApplications,
       rejectedApplications,
+      withdrawnApplications,
+      draftApplications,
 
-      activeInternships,
-      completedInternships,
-      pendingAssignments,
+      pendingRequests,
+      approvedRequests,
+      rejectedRequests,
 
-      submittedEvaluations,
-      finalizedEvaluations,
-
-      companyToStudentEvaluations,
-      studentToCompanyEvaluations,
-
-      pendingDocuments,
-      approvedDocuments,
-      needsRevisionDocuments,
+      requestsByRole,
+      industries,
+      roleDistribution,
+      accountStatus,
+      applicationStatus,
     };
-  }, [state]);
+  }, [users, companies, applications, registrationRequests]);
+
+  // =========================================================
+  // SYSTEM ACTIVITY
+  // =========================================================
+
+  const systemActivity = useMemo(() => {
+    const activities = [];
+
+    // ---------------------------------------------------------
+    // USER ACCOUNT ACTIVITY
+    // ---------------------------------------------------------
+
+    users.forEach((user) => {
+      activities.push({
+        id: `user-${user.id}`,
+        type: "user",
+        title: "New user account registered",
+        description: `${getFullName(user)} registered as a ${
+          ROLE_LABELS[user.role?.toLowerCase()] || formatRole(user.role)
+        }.`,
+        date: user.created_at,
+      });
+    });
+
+    // ---------------------------------------------------------
+    // COMPANY REGISTRATION ACTIVITY
+    //
+    // Company records are created in `companies`.
+    // ---------------------------------------------------------
+
+    companies.forEach((company) => {
+      activities.push({
+        id: `company-${company.id}`,
+        type: "company",
+        title: "Company registration recorded",
+        description: `${
+          company.company_name || "A company"
+        } was registered in the system.`,
+        date: company.created_at,
+      });
+    });
+
+    // ---------------------------------------------------------
+    // STUDENT / REGISTRAR REGISTRATION REQUEST ACTIVITY
+    // ---------------------------------------------------------
+
+    registrationRequests.forEach((request) => {
+      const normalizedRole = request.role?.toLowerCase();
+
+      const role = ROLE_LABELS[normalizedRole] || formatRole(request.role);
+
+      const status = request.status?.toLowerCase();
+
+      if (status === "approved") {
+        activities.push({
+          id: `request-approved-${request.id}`,
+          type: "registration",
+          title: "Registration request approved",
+          description: `${role} registration request was approved.`,
+          date: request.reviewed_at || request.updated_at || request.created_at,
+        });
+      } else if (status === "rejected") {
+        activities.push({
+          id: `request-rejected-${request.id}`,
+          type: "registration",
+          title: "Registration request rejected",
+          description: `${role} registration request was rejected.`,
+          date: request.reviewed_at || request.updated_at || request.created_at,
+        });
+      } else if (status === "pending") {
+        activities.push({
+          id: `request-pending-${request.id}`,
+          type: "registration",
+          title: "Registration request submitted",
+          description: `A new ${role} registration request is pending review.`,
+          date: request.created_at,
+        });
+      }
+    });
+
+    return activities
+      .filter((item) => item.date)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 12);
+  }, [users, companies, registrationRequests]);
 
   // =========================================================
   // OVERVIEW CARDS
@@ -289,31 +546,31 @@ export default function Reports() {
 
   const overviewCards = [
     {
-      label: "Pending Applications",
-      value: reportData.pendingApplications.length,
-      description: "Applications requiring review",
-      icon: "📋",
+      label: "Total Users",
+      value: users.length,
+      description: "Registered non-admin accounts",
+      icon: "👥",
       accent: "blue",
     },
     {
-      label: "Active Internships",
-      value: reportData.activeInternships.length,
-      description: "Currently deployed interns",
-      icon: "💼",
+      label: "Active Accounts",
+      value: reportData.activeUsers.length,
+      description: "Currently active user accounts",
+      icon: "✓",
       accent: "emerald",
     },
     {
-      label: "Completed Internships",
-      value: reportData.completedInternships.length,
-      description: "Successfully completed",
-      icon: "🎓",
+      label: "Companies",
+      value: companies.length,
+      description: "Company records registered in the system",
+      icon: "🏢",
       accent: "violet",
     },
     {
-      label: "Submitted Evaluations",
-      value: reportData.submittedEvaluations.length,
-      description: "Evaluation records submitted",
-      icon: "⭐",
+      label: "Pending Registrations",
+      value: reportData.pendingRequests.length,
+      description: "Student / Registrar requests awaiting review",
+      icon: "📝",
       accent: "amber",
     },
   ];
@@ -347,15 +604,15 @@ export default function Reports() {
       amber: darkMode
         ? "bg-amber-950/40 text-amber-400"
         : "bg-amber-50 text-amber-600",
+
+      red: darkMode ? "bg-red-950/40 text-red-400" : "bg-red-50 text-red-600",
+
+      slate: darkMode
+        ? "bg-slate-800 text-slate-300"
+        : "bg-slate-100 text-slate-600",
     };
 
     return classes[accent] || classes.blue;
-  };
-
-  const getPercentage = (value, total) => {
-    if (!total) return 0;
-
-    return Math.round((value / total) * 100);
   };
 
   // =========================================================
@@ -369,26 +626,57 @@ export default function Reports() {
       icon: "📊",
     },
     {
+      id: "users",
+      label: "Users",
+      icon: "👥",
+    },
+    {
+      id: "companies",
+      label: "Companies",
+      icon: "🏢",
+    },
+    {
       id: "applications",
       label: "Applications",
       icon: "📋",
     },
     {
-      id: "internships",
-      label: "Internships",
-      icon: "💼",
+      id: "registrations",
+      label: "Registrations",
+      icon: "📝",
     },
     {
-      id: "evaluations",
-      label: "Evaluations",
-      icon: "⭐",
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      icon: "📁",
+      id: "activity",
+      label: "System Activity",
+      icon: "⚡",
     },
   ];
+
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div
+        className={`min-h-[calc(100vh-5rem)] flex items-center justify-center ${
+          darkMode
+            ? "bg-slate-950 text-slate-100"
+            : "bg-slate-50 text-slate-900"
+        }`}
+      >
+        <div className="text-center">
+          <div className="text-3xl mb-3">📊</div>
+
+          <p className="text-sm font-bold">Loading reports...</p>
+
+          <p className={`text-xs mt-1 ${mutedText}`}>
+            Fetching system data from Supabase.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // =========================================================
   // RENDER
@@ -414,15 +702,57 @@ export default function Reports() {
             Administrator Portal
           </p>
 
-          <h1 className="text-xl sm:text-2xl font-black mt-1">
-            Reports & Analytics
-          </h1>
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black mt-1">
+                Reports & Analytics
+              </h1>
 
-          <p className={`text-xs sm:text-sm mt-1 ${mutedText}`}>
-            Monitor internship activity, applications, evaluations, and document
-            processing across the system.
-          </p>
+              <p className={`text-xs sm:text-sm mt-1 ${mutedText}`}>
+                Monitor system users, companies, registrations, applications,
+                and administrative activity.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadReports}
+              className={`px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold border transition ${
+                darkMode
+                  ? "border-slate-700 bg-slate-900 hover:bg-slate-800"
+                  : "border-slate-200 bg-white hover:bg-slate-50"
+              }`}
+            >
+              ↻ Refresh
+            </button>
+          </div>
         </div>
+
+        {/* ===================================================
+            ERROR
+        =================================================== */}
+
+        {errorMessage && (
+          <div
+            className={`mb-6 border rounded-xl p-4 ${
+              darkMode
+                ? "bg-red-950/30 border-red-900 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            <p className="text-xs font-bold">Unable to load reports</p>
+
+            <p className="text-[10px] mt-1">{errorMessage}</p>
+
+            <button
+              type="button"
+              onClick={loadReports}
+              className="text-[10px] font-bold underline mt-2"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {/* ===================================================
             REPORT NAVIGATION
@@ -458,8 +788,6 @@ export default function Reports() {
 
         {activeReport === "overview" && (
           <>
-            {/* STAT CARDS */}
-
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
               {overviewCards.map((card) => (
                 <div
@@ -493,136 +821,340 @@ export default function Reports() {
               ))}
             </div>
 
-            {/* APPLICATION + INTERNSHIP */}
+            {/* USER + ACCOUNT STATUS */}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-              {/* APPLICATION SUMMARY */}
+              <div className={`border rounded-xl p-5 ${cardClass}`}>
+                <div className="mb-5">
+                  <h2 className="text-sm font-bold">User Distribution</h2>
+
+                  <p className={`text-[10px] mt-1 ${mutedText}`}>
+                    Registered users by system role
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {reportData.roleDistribution.map((item) => (
+                    <ReportProgress
+                      key={item.role}
+                      label={item.label}
+                      value={item.value}
+                      total={users.length}
+                      darkMode={darkMode}
+                      color="blue"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className={`border rounded-xl p-5 ${cardClass}`}>
+                <div className="mb-5">
+                  <h2 className="text-sm font-bold">Account Status</h2>
+
+                  <p className={`text-[10px] mt-1 ${mutedText}`}>
+                    Current status of non-admin accounts
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {reportData.accountStatus.map((item) => (
+                    <ReportProgress
+                      key={item.label}
+                      label={item.label}
+                      value={item.value}
+                      total={users.length}
+                      darkMode={darkMode}
+                      color={item.accent}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* REGISTRATION + APPLICATION */}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+              <div className={`border rounded-xl p-5 ${cardClass}`}>
+                <div className="mb-5">
+                  <h2 className="text-sm font-bold">Registration Requests</h2>
+
+                  <p className={`text-[10px] mt-1 ${mutedText}`}>
+                    Student and Registrar registration requests
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <SummaryItem
+                    label="Pending"
+                    value={reportData.pendingRequests.length}
+                    darkMode={darkMode}
+                  />
+
+                  <SummaryItem
+                    label="Approved"
+                    value={reportData.approvedRequests.length}
+                    darkMode={darkMode}
+                  />
+
+                  <SummaryItem
+                    label="Rejected"
+                    value={reportData.rejectedRequests.length}
+                    darkMode={darkMode}
+                  />
+                </div>
+              </div>
 
               <div className={`border rounded-xl p-5 ${cardClass}`}>
                 <div className="mb-5">
                   <h2 className="text-sm font-bold">Application Summary</h2>
 
                   <p className={`text-[10px] mt-1 ${mutedText}`}>
-                    Current application distribution
+                    High-level application statistics
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <ReportProgress
-                    label="Pending Review"
-                    value={reportData.pendingApplications.length}
-                    total={state.applications.length}
+                <div className="grid grid-cols-3 gap-3">
+                  <SummaryItem
+                    label="Total"
+                    value={applications.length}
                     darkMode={darkMode}
-                    color="blue"
                   />
 
-                  <ReportProgress
+                  <SummaryItem
                     label="Approved"
                     value={reportData.approvedApplications.length}
-                    total={state.applications.length}
                     darkMode={darkMode}
-                    color="emerald"
                   />
 
-                  <ReportProgress
+                  <SummaryItem
                     label="Rejected"
                     value={reportData.rejectedApplications.length}
-                    total={state.applications.length}
                     darkMode={darkMode}
-                    color="red"
                   />
                 </div>
               </div>
+            </div>
 
-              {/* INTERNSHIP SUMMARY */}
+            {/* COMPANY SUMMARY */}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+              <div className={`border rounded-xl p-5 ${cardClass}`}>
+                <div className="mb-5">
+                  <h2 className="text-sm font-bold">Company Summary</h2>
+
+                  <p className={`text-[10px] mt-1 ${mutedText}`}>
+                    Company registration records from the companies table
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <SummaryItem
+                    label="Total"
+                    value={companies.length}
+                    darkMode={darkMode}
+                  />
+
+                  <SummaryItem
+                    label="Active"
+                    value={reportData.activeCompanies.length}
+                    darkMode={darkMode}
+                  />
+
+                  <SummaryItem
+                    label="Pending"
+                    value={reportData.pendingCompanies.length}
+                    darkMode={darkMode}
+                  />
+
+                  <SummaryItem
+                    label="Rejected"
+                    value={reportData.rejectedCompanies.length}
+                    darkMode={darkMode}
+                  />
+                </div>
+              </div>
 
               <div className={`border rounded-xl p-5 ${cardClass}`}>
                 <div className="mb-5">
-                  <h2 className="text-sm font-bold">Internship Summary</h2>
+                  <h2 className="text-sm font-bold">Company Industries</h2>
 
                   <p className={`text-[10px] mt-1 ${mutedText}`}>
-                    Current assignment status
+                    Registered companies grouped by industry
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <ReportProgress
-                    label="Pending Deployment"
-                    value={reportData.pendingAssignments.length}
-                    total={state.assignments.length}
+                {reportData.industries.length === 0 ? (
+                  <EmptyState
+                    message="No company industry data available."
                     darkMode={darkMode}
-                    color="amber"
                   />
-
-                  <ReportProgress
-                    label="Active"
-                    value={reportData.activeInternships.length}
-                    total={state.assignments.length}
-                    darkMode={darkMode}
-                    color="blue"
-                  />
-
-                  <ReportProgress
-                    label="Completed"
-                    value={reportData.completedInternships.length}
-                    total={state.assignments.length}
-                    darkMode={darkMode}
-                    color="emerald"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* SYSTEM SUMMARY */}
-
-            <div className={`border rounded-xl p-5 ${cardClass}`}>
-              <div className="mb-4">
-                <h2 className="text-sm font-bold">Shared System Data</h2>
-
-                <p className={`text-[10px] mt-1 ${mutedText}`}>
-                  Current record counts from the shared mock store.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <SummaryItem
-                  label="Users"
-                  value={state.users.length}
-                  darkMode={darkMode}
-                />
-
-                <SummaryItem
-                  label="Students"
-                  value={state.students.length}
-                  darkMode={darkMode}
-                />
-
-                <SummaryItem
-                  label="Registrar"
-                  value={state.registrar.length}
-                  darkMode={darkMode}
-                />
-
-                <SummaryItem
-                  label="Companies"
-                  value={state.companies.length}
-                  darkMode={darkMode}
-                />
-
-                <SummaryItem
-                  label="Opportunities"
-                  value={state.opportunities.length}
-                  darkMode={darkMode}
-                />
-
-                <SummaryItem
-                  label="Assignments"
-                  value={state.assignments.length}
-                  darkMode={darkMode}
-                />
+                ) : (
+                  <div className="space-y-4">
+                    {reportData.industries.slice(0, 6).map((industry) => (
+                      <ReportProgress
+                        key={industry.name}
+                        label={industry.name}
+                        value={industry.count}
+                        total={companies.length}
+                        darkMode={darkMode}
+                        color="violet"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </>
+        )}
+
+        {/* ===================================================
+            USERS REPORT
+        =================================================== */}
+
+        {activeReport === "users" && (
+          <ReportPanel
+            title="User Report"
+            description="System-wide account statistics excluding administrator accounts."
+            darkMode={darkMode}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricBox
+                label="Total Users"
+                value={users.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Students"
+                value={reportData.students.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Registrar"
+                value={reportData.registrars.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Company Supervisors"
+                value={reportData.companyUsers.length}
+                darkMode={darkMode}
+              />
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {reportData.accountStatus.map((item) => (
+                <MetricBox
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  darkMode={darkMode}
+                />
+              ))}
+            </div>
+
+            <div className="mt-6">
+              <SectionHeading
+                title="User Distribution"
+                description="Breakdown of registered accounts by role."
+                darkMode={darkMode}
+              />
+
+              <div className="space-y-4">
+                {reportData.roleDistribution.map((item) => (
+                  <ReportProgress
+                    key={item.role}
+                    label={item.label}
+                    value={item.value}
+                    total={users.length}
+                    darkMode={darkMode}
+                    color="blue"
+                  />
+                ))}
+              </div>
+            </div>
+          </ReportPanel>
+        )}
+
+        {/* ===================================================
+            COMPANY REPORT
+        =================================================== */}
+
+        {activeReport === "companies" && (
+          <ReportPanel
+            title="Company Report"
+            description="Administrative overview of company registration records."
+            darkMode={darkMode}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricBox
+                label="Total Companies"
+                value={companies.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Active / Verified"
+                value={reportData.activeCompanies.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Pending"
+                value={reportData.pendingCompanies.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Inactive"
+                value={reportData.inactiveCompanies.length}
+                darkMode={darkMode}
+              />
+            </div>
+
+            <div className="mt-6">
+              <SectionHeading
+                title="Companies by Industry"
+                description="Distribution of registered companies across standardized industries."
+                darkMode={darkMode}
+              />
+
+              {reportData.industries.length === 0 ? (
+                <EmptyState
+                  message="No company industry data available."
+                  darkMode={darkMode}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {reportData.industries.map((industry) => (
+                    <ReportProgress
+                      key={industry.name}
+                      label={industry.name}
+                      value={industry.count}
+                      total={companies.length}
+                      darkMode={darkMode}
+                      color="violet"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <MetricBox
+                label="Rejected"
+                value={reportData.rejectedCompanies.length}
+                darkMode={darkMode}
+              />
+
+              <MetricBox
+                label="Unique Industries"
+                value={reportData.industries.length}
+                darkMode={darkMode}
+              />
+            </div>
+          </ReportPanel>
         )}
 
         {/* ===================================================
@@ -632,19 +1164,19 @@ export default function Reports() {
         {activeReport === "applications" && (
           <ReportPanel
             title="Application Report"
-            description="Overview of internship application activity."
+            description="High-level internship application statistics. Operational internship management remains under the Registrar portal."
             darkMode={darkMode}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricBox
                 label="Total Applications"
-                value={state.applications.length}
+                value={applications.length}
                 darkMode={darkMode}
               />
 
               <MetricBox
-                label="Pending"
-                value={reportData.pendingApplications.length}
+                label="Submitted"
+                value={reportData.submittedApplications.length}
                 darkMode={darkMode}
               />
 
@@ -661,310 +1193,209 @@ export default function Reports() {
               />
             </div>
 
-            <div className="mt-6 space-y-3">
-              {state.applications.length === 0 ? (
-                <EmptyState
-                  message="No applications have been recorded yet."
+            <div className="mt-6 space-y-4">
+              {reportData.applicationStatus.map((item) => (
+                <ReportProgress
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  total={applications.length}
                   darkMode={darkMode}
+                  color={item.accent}
                 />
-              ) : (
-                state.applications.map((application) => {
-                  const student = state.students.find(
-                    (item) => item.id === application.studentId
-                  );
-
-                  const opportunity = state.opportunities.find(
-                    (item) => item.id === application.opportunityId
-                  );
-
-                  return (
-                    <div
-                      key={application.id}
-                      className={`border rounded-lg p-4 ${
-                        darkMode
-                          ? "border-slate-700 bg-slate-950"
-                          : "border-slate-200 bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold">{application.id}</p>
-
-                          <p className="text-xs mt-1">
-                            {student?.fullName || "Unknown Student"}
-                          </p>
-
-                          <p className={`text-[10px] mt-1 ${mutedText}`}>
-                            {opportunity?.title || "Unknown Opportunity"}
-                          </p>
-                        </div>
-
-                        <StatusBadge
-                          status={application.status}
-                          darkMode={darkMode}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+              ))}
             </div>
           </ReportPanel>
         )}
 
         {/* ===================================================
-            INTERNSHIP REPORT
+            REGISTRATION REPORT
         =================================================== */}
 
-        {activeReport === "internships" && (
+        {activeReport === "registrations" && (
           <ReportPanel
-            title="Internship Report"
-            description="Overview of student internship assignments."
+            title="Registration Report"
+            description="Student and Registrar registration requests processed through the administrator portal."
             darkMode={darkMode}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricBox
-                label="Total Assignments"
-                value={state.assignments.length}
+                label="Total Requests"
+                value={registrationRequests.length}
                 darkMode={darkMode}
               />
 
               <MetricBox
-                label="Pending Deployment"
-                value={reportData.pendingAssignments.length}
+                label="Pending"
+                value={reportData.pendingRequests.length}
                 darkMode={darkMode}
               />
 
               <MetricBox
-                label="Active"
-                value={reportData.activeInternships.length}
+                label="Approved"
+                value={reportData.approvedRequests.length}
                 darkMode={darkMode}
               />
 
               <MetricBox
-                label="Completed"
-                value={reportData.completedInternships.length}
-                darkMode={darkMode}
-              />
-            </div>
-
-            <div className="mt-6 space-y-3">
-              {state.assignments.length === 0 ? (
-                <EmptyState
-                  message="No internship assignments have been created yet."
-                  darkMode={darkMode}
-                />
-              ) : (
-                state.assignments.map((assignment) => {
-                  const student = state.students.find(
-                    (item) => item.id === assignment.studentId
-                  );
-
-                  const company = state.companies.find(
-                    (item) => item.id === assignment.companyId
-                  );
-
-                  return (
-                    <div
-                      key={assignment.id}
-                      className={`border rounded-lg p-4 ${
-                        darkMode
-                          ? "border-slate-700 bg-slate-950"
-                          : "border-slate-200 bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold">{assignment.id}</p>
-
-                          <p className="text-xs mt-1">
-                            {student?.fullName || "Unknown Student"}
-                          </p>
-
-                          <p className={`text-[10px] mt-1 ${mutedText}`}>
-                            {company?.name || "Unknown Company"}
-                          </p>
-                        </div>
-
-                        <StatusBadge
-                          status={assignment.status}
-                          darkMode={darkMode}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ReportPanel>
-        )}
-
-        {/* ===================================================
-            EVALUATION REPORT
-        =================================================== */}
-
-        {activeReport === "evaluations" && (
-          <ReportPanel
-            title="Evaluation Report"
-            description="Monitor evaluations submitted by students and company supervisors."
-            darkMode={darkMode}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricBox
-                label="Total Evaluations"
-                value={state.evaluations.length}
-                darkMode={darkMode}
-              />
-
-              <MetricBox
-                label="Company → Student"
-                value={reportData.companyToStudentEvaluations.length}
-                darkMode={darkMode}
-              />
-
-              <MetricBox
-                label="Student → Company"
-                value={reportData.studentToCompanyEvaluations.length}
-                darkMode={darkMode}
-              />
-
-              <MetricBox
-                label="Submitted"
-                value={reportData.submittedEvaluations.length}
+                label="Rejected"
+                value={reportData.rejectedRequests.length}
                 darkMode={darkMode}
               />
             </div>
 
             <div className="mt-6">
-              <div
-                className={`border rounded-lg p-4 ${
-                  darkMode
-                    ? "border-slate-700 bg-slate-950"
-                    : "border-slate-200 bg-slate-50"
-                }`}
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <p className={`text-[10px] ${mutedText}`}>
-                      Company Supervisor → Student
-                    </p>
+              <SectionHeading
+                title="Requests by Role"
+                description="Student and Registrar registration requests."
+                darkMode={darkMode}
+              />
 
-                    <p className="text-2xl font-black mt-1">
-                      {reportData.companyToStudentEvaluations.length}
-                    </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <MetricBox
+                  label="Students"
+                  value={reportData.requestsByRole.student}
+                  darkMode={darkMode}
+                />
 
-                    <p className={`text-[9px] mt-1 ${mutedText}`}>
-                      Intern performance evaluations
-                    </p>
-                  </div>
+                <MetricBox
+                  label="Registrar"
+                  value={reportData.requestsByRole.registrar}
+                  darkMode={darkMode}
+                />
+              </div>
+            </div>
 
-                  <div>
-                    <p className={`text-[10px] ${mutedText}`}>
-                      Student → Company
-                    </p>
+            <div className="mt-6">
+              <SectionHeading
+                title="Registration Processing"
+                description="Current distribution of student and registrar registration requests."
+                darkMode={darkMode}
+              />
 
-                    <p className="text-2xl font-black mt-1">
-                      {reportData.studentToCompanyEvaluations.length}
-                    </p>
+              <div className="space-y-4">
+                <ReportProgress
+                  label="Pending"
+                  value={reportData.pendingRequests.length}
+                  total={registrationRequests.length}
+                  darkMode={darkMode}
+                  color="amber"
+                />
 
-                    <p className={`text-[9px] mt-1 ${mutedText}`}>
-                      Company and internship experience evaluations
-                    </p>
-                  </div>
-                </div>
+                <ReportProgress
+                  label="Approved"
+                  value={reportData.approvedRequests.length}
+                  total={registrationRequests.length}
+                  darkMode={darkMode}
+                  color="emerald"
+                />
+
+                <ReportProgress
+                  label="Rejected"
+                  value={reportData.rejectedRequests.length}
+                  total={registrationRequests.length}
+                  darkMode={darkMode}
+                  color="red"
+                />
+              </div>
+            </div>
+
+            {/* COMPANY REGISTRATION IS SEPARATE */}
+
+            <div className="mt-8">
+              <SectionHeading
+                title="Company Registrations"
+                description="Company registration records are managed through the companies table."
+                darkMode={darkMode}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricBox
+                  label="Total Companies"
+                  value={companies.length}
+                  darkMode={darkMode}
+                />
+
+                <MetricBox
+                  label="Active"
+                  value={reportData.activeCompanies.length}
+                  darkMode={darkMode}
+                />
+
+                <MetricBox
+                  label="Pending"
+                  value={reportData.pendingCompanies.length}
+                  darkMode={darkMode}
+                />
+
+                <MetricBox
+                  label="Rejected"
+                  value={reportData.rejectedCompanies.length}
+                  darkMode={darkMode}
+                />
               </div>
             </div>
           </ReportPanel>
         )}
 
         {/* ===================================================
-            DOCUMENT REPORT
+            SYSTEM ACTIVITY
         =================================================== */}
 
-        {activeReport === "documents" && (
+        {activeReport === "activity" && (
           <ReportPanel
-            title="Document Report"
-            description="Monitor student document submissions and review activity."
+            title="System Activity"
+            description="Recent account, company registration, and registration-request activity derived from system records."
             darkMode={darkMode}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricBox
-                label="Total Documents"
-                value={state.documents.length}
+            {systemActivity.length === 0 ? (
+              <EmptyState
+                message="No system activity has been recorded yet."
                 darkMode={darkMode}
               />
-
-              <MetricBox
-                label="Pending Review"
-                value={reportData.pendingDocuments.length}
-                darkMode={darkMode}
-              />
-
-              <MetricBox
-                label="Approved"
-                value={reportData.approvedDocuments.length}
-                darkMode={darkMode}
-              />
-
-              <MetricBox
-                label="Needs Revision"
-                value={reportData.needsRevisionDocuments.length}
-                darkMode={darkMode}
-              />
-            </div>
-
-            <div className="mt-6">
-              {state.documents.length === 0 ? (
-                <EmptyState
-                  message="No student documents have been submitted yet."
-                  darkMode={darkMode}
-                />
-              ) : (
-                <div className="space-y-3">
-                  {state.documents.map((document) => {
-                    const student = state.students.find(
-                      (item) => item.id === document.studentId
-                    );
-
-                    const documentType = state.documentTypes.find(
-                      (item) => item.id === document.documentTypeId
-                    );
-
-                    return (
+            ) : (
+              <div className="space-y-3">
+                {systemActivity.map((activity) => (
+                  <div
+                    key={activity.id}
+                    className={`border rounded-lg p-4 ${
+                      darkMode
+                        ? "border-slate-700 bg-slate-950"
+                        : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex gap-3">
                       <div
-                        key={document.id}
-                        className={`border rounded-lg p-4 ${
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${getActivityIconClass(
+                          activity.type,
                           darkMode
-                            ? "border-slate-700 bg-slate-950"
-                            : "border-slate-200 bg-slate-50"
-                        }`}
+                        )}`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-bold">
-                              {document.fileName}
-                            </p>
-
-                            <p className="text-[10px] mt-1">
-                              {student?.fullName || "Unknown Student"}
-                            </p>
-
-                            <p className={`text-[9px] mt-1 ${mutedText}`}>
-                              {documentType?.name || "Unknown Document Type"}
-                            </p>
-                          </div>
-
-                          <StatusBadge
-                            status={document.status}
-                            darkMode={darkMode}
-                          />
-                        </div>
+                        {activity.type === "user"
+                          ? "👤"
+                          : activity.type === "company"
+                          ? "🏢"
+                          : "📝"}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                          <p className="text-xs font-bold">{activity.title}</p>
+
+                          <p className={`text-[9px] ${mutedText}`}>
+                            {formatDate(activity.date)}
+                          </p>
+                        </div>
+
+                        <p className={`text-[10px] mt-1 ${secondaryText}`}>
+                          {activity.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </ReportPanel>
         )}
       </div>
@@ -998,6 +1429,26 @@ function ReportPanel({ title, description, darkMode, children }) {
       </div>
 
       {children}
+    </div>
+  );
+}
+
+// =============================================================
+// SECTION HEADING
+// =============================================================
+
+function SectionHeading({ title, description, darkMode }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-sm font-bold">{title}</h3>
+
+      <p
+        className={`text-[10px] mt-1 ${
+          darkMode ? "text-slate-400" : "text-slate-500"
+        }`}
+      >
+        {description}
+      </p>
     </div>
   );
 }
@@ -1062,6 +1513,8 @@ function ReportProgress({ label, value, total, darkMode, color = "blue" }) {
     emerald: "bg-emerald-500",
     amber: "bg-amber-500",
     red: "bg-red-500",
+    violet: "bg-violet-500",
+    slate: "bg-slate-500",
   };
 
   return (
@@ -1084,7 +1537,9 @@ function ReportProgress({ label, value, total, darkMode, color = "blue" }) {
         }`}
       >
         <div
-          className={`h-full rounded-full transition-all ${colorClasses[color]}`}
+          className={`h-full rounded-full transition-all ${
+            colorClasses[color] || colorClasses.blue
+          }`}
           style={{
             width: `${percentage}%`,
           }}
@@ -1099,62 +1554,6 @@ function ReportProgress({ label, value, total, darkMode, color = "blue" }) {
         {percentage}% of total
       </p>
     </div>
-  );
-}
-
-// =============================================================
-// STATUS BADGE
-// =============================================================
-
-function StatusBadge({ status, darkMode }) {
-  let classes = "";
-
-  switch (status) {
-    case STATUS.application.APPROVED:
-    case STATUS.assignment.COMPLETED:
-    case STATUS.document.APPROVED:
-    case STATUS.evaluation.FINALIZED:
-      classes = darkMode
-        ? "bg-emerald-950/40 text-emerald-400"
-        : "bg-emerald-50 text-emerald-700";
-      break;
-
-    case STATUS.assignment.ACTIVE:
-    case STATUS.application.SUBMITTED:
-    case STATUS.evaluation.SUBMITTED:
-      classes = darkMode
-        ? "bg-blue-950/40 text-blue-400"
-        : "bg-blue-50 text-blue-700";
-      break;
-
-    case STATUS.document.PENDING_REVIEW:
-    case STATUS.assignment.PENDING:
-    case STATUS.application.UNDER_REVIEW:
-    case STATUS.application.INFO_REQUESTED:
-      classes = darkMode
-        ? "bg-amber-950/40 text-amber-400"
-        : "bg-amber-50 text-amber-700";
-      break;
-
-    case STATUS.application.REJECTED:
-    case STATUS.document.NEEDS_REVISION:
-      classes = darkMode
-        ? "bg-red-950/40 text-red-400"
-        : "bg-red-50 text-red-700";
-      break;
-
-    default:
-      classes = darkMode
-        ? "bg-slate-800 text-slate-300"
-        : "bg-slate-100 text-slate-600";
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[9px] font-bold ${classes}`}
-    >
-      {status}
-    </span>
   );
 }
 
@@ -1180,4 +1579,73 @@ function EmptyState({ message, darkMode }) {
       </p>
     </div>
   );
+}
+
+// =============================================================
+// ACTIVITY ICON
+// =============================================================
+
+function getActivityIconClass(type, darkMode) {
+  if (type === "registration") {
+    return darkMode
+      ? "bg-amber-950/40 text-amber-400"
+      : "bg-amber-50 text-amber-600";
+  }
+
+  if (type === "company") {
+    return darkMode
+      ? "bg-violet-950/40 text-violet-400"
+      : "bg-violet-50 text-violet-600";
+  }
+
+  return darkMode ? "bg-blue-950/40 text-blue-400" : "bg-blue-50 text-blue-600";
+}
+
+// =============================================================
+// NAME
+// =============================================================
+
+function getFullName(user) {
+  return (
+    [user.first_name, user.middle_name, user.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    user.email ||
+    "Unknown User"
+  );
+}
+
+// =============================================================
+// ROLE
+// =============================================================
+
+function formatRole(role) {
+  if (!role) return "Unknown Role";
+
+  return role
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+// =============================================================
+// DATE
+// =============================================================
+
+function formatDate(date) {
+  if (!date) return "Unknown date";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unknown date";
+  }
+
+  return parsed.toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }

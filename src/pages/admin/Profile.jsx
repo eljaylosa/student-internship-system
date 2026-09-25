@@ -1,5 +1,53 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
+
+ // =========================================================
+  // PASSWORD INPUT
+  // =========================================================
+  const PasswordInput = ({
+    label,
+    value,
+    onChange,
+    showPassword,
+    setShowPassword,
+    placeholder,
+    labelClass,
+    inputClass,
+    darkMode,
+    disabled,
+  }) => {
+    return (
+      <div>
+        <label className={labelClass}>{label}</label>
+
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className={`${inputClass} pr-16`}
+            disabled={disabled}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            disabled={disabled}
+            className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-semibold ${
+              darkMode
+                ? "text-slate-400 hover:text-white"
+                : "text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
 
 const Profile = () => {
   const { darkMode } = useOutletContext();
@@ -9,12 +57,21 @@ const Profile = () => {
   // =========================================================
 
   const [profile, setProfile] = useState({
-    firstName: "System",
-    lastName: "Administrator",
-    email: "admin@sims.edu.ph",
-    contactNumber: "09123456789",
-    username: "administrator",
-    position: "System Administrator",
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    email: "",
+    role: "admin",
+    status: "active",
+  });
+
+  const [originalProfile, setOriginalProfile] = useState({
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    email: "",
+    role: "admin",
+    status: "active",
   });
 
   // =========================================================
@@ -35,9 +92,90 @@ const Profile = () => {
   // STATUS
   // =========================================================
 
+  const [loading, setLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+
+  // =========================================================
+  // LOAD PROFILE
+  // =========================================================
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      setProfileError("");
+
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!authUser) {
+        throw new Error("Your administrator session is no longer valid.");
+      }
+
+      const { data: userRecord, error: userError } = await supabase
+        .from("users")
+        .select(
+          `
+          id,
+          email,
+          role,
+          first_name,
+          middle_name,
+          last_name,
+          status
+        `
+        )
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!userRecord) {
+        throw new Error("Administrator profile could not be found.");
+      }
+
+      if (userRecord.role !== "admin") {
+        throw new Error("This account does not have administrator access.");
+      }
+
+      const loadedProfile = {
+        firstName: userRecord.first_name || "",
+        middleName: userRecord.middle_name || "",
+        lastName: userRecord.last_name || "",
+        email: userRecord.email || authUser.email || "",
+        role: userRecord.role || "admin",
+        status: userRecord.status || "active",
+      };
+
+      setProfile(loadedProfile);
+      setOriginalProfile(loadedProfile);
+    } catch (error) {
+      console.error("Load admin profile error:", error);
+      setProfileError(
+        error?.message || "Failed to load administrator profile."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // =========================================================
   // UPDATE PROFILE
@@ -50,6 +188,7 @@ const Profile = () => {
     }));
 
     setProfileSaved(false);
+    setProfileError("");
   };
 
   // =========================================================
@@ -70,19 +209,199 @@ const Profile = () => {
   // SAVE PROFILE
   // =========================================================
 
-  const handleSaveProfile = () => {
-    setProfileSaved(true);
+  const handleSaveProfile = async () => {
+    if (profileSaving) return;
 
-    setTimeout(() => {
+    const firstName = profile.firstName.trim();
+    const middleName = profile.middleName.trim();
+    const lastName = profile.lastName.trim();
+
+    if (!firstName || !lastName) {
+      setProfileError("First Name and Last Name are required.");
       setProfileSaved(false);
-    }, 3000);
+      return;
+    }
+
+    try {
+      setProfileSaving(true);
+      setProfileSaved(false);
+      setProfileError("");
+
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!authUser || authUser.id !== originalProfile.id) {
+        // The profile does not expose the ID to the UI, so this check
+        // is intentionally handled again below using the authenticated user.
+      }
+
+      if (!authUser) {
+        throw new Error("Your administrator session is no longer valid.");
+      }
+
+      const { data: currentUser, error: currentUserError } = await supabase
+        .from("users")
+        .select(
+          `
+          id,
+          email,
+          role,
+          first_name,
+          middle_name,
+          last_name,
+          status
+        `
+        )
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (currentUserError) {
+        throw currentUserError;
+      }
+
+      if (!currentUser) {
+        throw new Error("Administrator profile could not be found.");
+      }
+
+      if (currentUser.role !== "admin") {
+        throw new Error("This account does not have administrator access.");
+      }
+
+      const { data: updatedUser, error: updateError } = await supabase
+        .from("users")
+        .update({
+          first_name: firstName,
+          middle_name: middleName || null,
+          last_name: lastName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", authUser.id)
+        .select(
+          `
+          id,
+          email,
+          role,
+          first_name,
+          middle_name,
+          last_name,
+          status
+        `
+        )
+        .maybeSingle();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      if (!updatedUser) {
+        throw new Error("Unable to retrieve the updated profile.");
+      }
+
+      // -------------------------------------------------------
+      // Create audit log after successful update
+      // -------------------------------------------------------
+
+      const changedFields = [];
+
+      if ((currentUser.first_name || "") !== (updatedUser.first_name || "")) {
+        changedFields.push("first_name");
+      }
+
+      if ((currentUser.middle_name || "") !== (updatedUser.middle_name || "")) {
+        changedFields.push("middle_name");
+      }
+
+      if ((currentUser.last_name || "") !== (updatedUser.last_name || "")) {
+        changedFields.push("last_name");
+      }
+
+      if (changedFields.length > 0) {
+        const { error: auditError } = await supabase.functions.invoke(
+          "create-audit-log",
+          {
+            body: {
+              action: "UPDATE",
+              module: "Administrator Profile",
+              target_entity_type: "User",
+              target_entity_id: authUser.id,
+              details: {
+                name:
+                  [
+                    updatedUser.first_name,
+                    updatedUser.middle_name,
+                    updatedUser.last_name,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim() || "System Administrator",
+
+                role: updatedUser.role,
+
+                email: updatedUser.email || authUser.email || null,
+
+                updated_fields: changedFields,
+
+                previous_values: {
+                  first_name: currentUser.first_name || null,
+                  middle_name: currentUser.middle_name || null,
+                  last_name: currentUser.last_name || null,
+                },
+
+                new_values: {
+                  first_name: updatedUser.first_name || null,
+                  middle_name: updatedUser.middle_name || null,
+                  last_name: updatedUser.last_name || null,
+                },
+              },
+            },
+          }
+        );
+
+        if (auditError) {
+          console.error("Profile update audit log error:", auditError);
+        }
+      }
+
+      const updatedProfile = {
+        firstName: updatedUser.first_name || "",
+        middleName: updatedUser.middle_name || "",
+        lastName: updatedUser.last_name || "",
+        email: updatedUser.email || authUser.email || "",
+        role: updatedUser.role || "admin",
+        status: updatedUser.status || "active",
+      };
+
+      setProfile(updatedProfile);
+      setOriginalProfile(updatedProfile);
+      setProfileSaved(true);
+
+      setTimeout(() => {
+        setProfileSaved(false);
+      }, 3000);
+    } catch (error) {
+      console.error("Update admin profile error:", error);
+
+      setProfileError(
+        error?.message || "Failed to update administrator profile."
+      );
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   // =========================================================
   // CHANGE PASSWORD
   // =========================================================
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    if (passwordSaving) return;
+
     setPasswordMessage("");
     setPasswordError("");
 
@@ -105,13 +424,139 @@ const Profile = () => {
       return;
     }
 
-    setPasswordMessage("Password changed successfully.");
+    if (passwords.currentPassword === passwords.newPassword) {
+      setPasswordError(
+        "New password must be different from your current password."
+      );
+      return;
+    }
 
-    setPasswords({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+    try {
+      setPasswordSaving(true);
+
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!authUser || !authUser.email) {
+        throw new Error("Your administrator session is no longer valid.");
+      }
+
+      const { data: userRecord, error: userRecordError } = await supabase
+        .from("users")
+        .select(
+          `
+          id,
+          email,
+          role,
+          first_name,
+          middle_name,
+          last_name,
+          status
+        `
+        )
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (userRecordError) {
+        throw userRecordError;
+      }
+
+      if (!userRecord) {
+        throw new Error("Administrator profile could not be found.");
+      }
+
+      if (userRecord.role !== "admin") {
+        throw new Error("This account does not have administrator access.");
+      }
+
+      // -------------------------------------------------------
+      // Verify current password
+      // -------------------------------------------------------
+
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: authUser.email,
+        password: passwords.currentPassword,
+      });
+
+      if (verifyError) {
+        throw new Error("Current password is incorrect.");
+      }
+
+      // -------------------------------------------------------
+      // Update password
+      // -------------------------------------------------------
+
+      const { error: passwordUpdateError } = await supabase.auth.updateUser({
+        password: passwords.newPassword,
+      });
+
+      if (passwordUpdateError) {
+        throw passwordUpdateError;
+      }
+
+      // -------------------------------------------------------
+      // Create audit log after successful password change
+      // -------------------------------------------------------
+
+      const { error: auditError } = await supabase.functions.invoke(
+        "create-audit-log",
+        {
+          body: {
+            action: "UPDATE",
+            module: "Authentication",
+            target_entity_type: "User",
+            target_entity_id: authUser.id,
+            details: {
+              name:
+                [
+                  userRecord.first_name,
+                  userRecord.middle_name,
+                  userRecord.last_name,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim() || "System Administrator",
+
+              role: userRecord.role,
+
+              email: userRecord.email || authUser.email || null,
+
+              updated_fields: ["password"],
+            },
+          },
+        }
+      );
+
+      if (auditError) {
+        console.error("Password change audit log error:", auditError);
+      }
+
+      setPasswordMessage("Password changed successfully.");
+
+      setPasswords({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+    } catch (error) {
+      console.error("Change admin password error:", error);
+
+      setPasswordError(
+        error?.message || "Failed to change administrator password."
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   // =========================================================
@@ -120,15 +565,11 @@ const Profile = () => {
 
   const handleResetProfile = () => {
     setProfile({
-      firstName: "System",
-      lastName: "Administrator",
-      email: "admin@sims.edu.ph",
-      contactNumber: "09123456789",
-      username: "administrator",
-      position: "System Administrator",
+      ...originalProfile,
     });
 
     setProfileSaved(false);
+    setProfileError("");
   };
 
   // =========================================================
@@ -154,50 +595,36 @@ const Profile = () => {
     ${darkMode ? "text-slate-300" : "text-slate-700"}
   `;
 
-  // =========================================================
-  // PASSWORD INPUT
-  // =========================================================
-
-  const PasswordInput = ({
-    label,
-    value,
-    onChange,
-    showPassword,
-    setShowPassword,
-    placeholder,
-  }) => {
-    return (
-      <div>
-        <label className={labelClass}>{label}</label>
-
-        <div className="relative">
-          <input
-            type={showPassword ? "text" : "password"}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`${inputClass} pr-16`}
-          />
-
-          <button
-            type="button"
-            onClick={() => setShowPassword((prev) => !prev)}
-            className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-semibold ${
-              darkMode
-                ? "text-slate-400 hover:text-white"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            {showPassword ? "Hide" : "Show"}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
+ 
   // =========================================================
   // RETURN
   // =========================================================
+
+  if (loading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="animate-pulse">
+          <div
+            className={`h-7 w-56 rounded mb-2 ${
+              darkMode ? "bg-slate-800" : "bg-slate-200"
+            }`}
+          />
+
+          <div
+            className={`h-4 w-96 max-w-full rounded mb-6 ${
+              darkMode ? "bg-slate-800" : "bg-slate-200"
+            }`}
+          />
+
+          <div
+            className={`h-48 rounded-lg ${
+              darkMode ? "bg-slate-900" : "bg-slate-100"
+            }`}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -223,24 +650,17 @@ const Profile = () => {
         </p>
       </div>
 
-      {/* =====================================================
-          DEMO NOTICE
-      ===================================================== */}
-
-      <div
-        className={`mb-5 p-3 rounded-lg border text-[10px] leading-relaxed ${
-          darkMode
-            ? "bg-red-950/40 border-red-900 text-red-300"
-            : "bg-red-50 border-red-200 text-red-700"
-        }`}
-      >
-        <p className="font-bold mb-1">⚠️ Demo Project</p>
-
-        <p>
-          Profile changes and password changes are currently simulated. No
-          database is connected yet.
-        </p>
-      </div>
+      {profileError && (
+        <div
+          className={`mb-5 p-3 rounded-lg border text-xs font-semibold ${
+            darkMode
+              ? "bg-red-950/40 border-red-900 text-red-300"
+              : "bg-red-50 border-red-200 text-red-700"
+          }`}
+        >
+          {profileError}
+        </div>
+      )}
 
       {/* =====================================================
           PROFILE CARD
@@ -264,7 +684,7 @@ const Profile = () => {
                 darkMode ? "text-white" : "text-slate-900"
               }`}
             >
-              System Administrator
+              {profile.firstName} {profile.middleName} {profile.lastName}
             </h2>
 
             <p
@@ -276,7 +696,7 @@ const Profile = () => {
             </p>
 
             <span className="inline-flex mt-2 px-2 py-1 rounded text-[9px] font-bold bg-green-100 text-green-700">
-              ACTIVE
+              {profile.status.toUpperCase()}
             </span>
           </div>
         </div>
@@ -307,6 +727,21 @@ const Profile = () => {
                 value={profile.firstName}
                 onChange={(e) => updateProfile("firstName", e.target.value)}
                 className={inputClass}
+                disabled={profileSaving}
+              />
+            </div>
+
+            {/* MIDDLE NAME */}
+
+            <div>
+              <label className={labelClass}>Middle Name</label>
+
+              <input
+                type="text"
+                value={profile.middleName}
+                onChange={(e) => updateProfile("middleName", e.target.value)}
+                className={inputClass}
+                disabled={profileSaving}
               />
             </div>
 
@@ -320,6 +755,7 @@ const Profile = () => {
                 value={profile.lastName}
                 onChange={(e) => updateProfile("lastName", e.target.value)}
                 className={inputClass}
+                disabled={profileSaving}
               />
             </div>
 
@@ -331,34 +767,29 @@ const Profile = () => {
               <input
                 type="email"
                 value={profile.email}
-                onChange={(e) => updateProfile("email", e.target.value)}
-                className={inputClass}
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+                disabled
               />
+
+              <p
+                className={`text-[9px] mt-1 ${
+                  darkMode ? "text-slate-500" : "text-slate-500"
+                }`}
+              >
+                Email is tied to your authenticated administrator account.
+              </p>
             </div>
 
-            {/* CONTACT */}
+            {/* ROLE */}
 
             <div>
-              <label className={labelClass}>Contact Number</label>
+              <label className={labelClass}>Role</label>
 
               <input
                 type="text"
-                value={profile.contactNumber}
-                onChange={(e) => updateProfile("contactNumber", e.target.value)}
-                className={inputClass}
-              />
-            </div>
-
-            {/* USERNAME */}
-
-            <div>
-              <label className={labelClass}>Username</label>
-
-              <input
-                type="text"
-                value={profile.username}
-                onChange={(e) => updateProfile("username", e.target.value)}
-                className={inputClass}
+                value="System Administrator"
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+                disabled
               />
             </div>
 
@@ -369,9 +800,9 @@ const Profile = () => {
 
               <input
                 type="text"
-                value={profile.position}
-                onChange={(e) => updateProfile("position", e.target.value)}
-                className={inputClass}
+                value="System Administrator"
+                className={`${inputClass} cursor-not-allowed opacity-70`}
+                disabled
               />
             </div>
           </div>
@@ -387,19 +818,25 @@ const Profile = () => {
           <button
             type="button"
             onClick={handleSaveProfile}
+            disabled={profileSaving}
             className={`px-5 py-2.5 rounded-md text-xs font-bold transition ${
+              profileSaving ? "opacity-60 cursor-not-allowed" : ""
+            } ${
               darkMode
                 ? "bg-white text-slate-900 hover:bg-slate-200"
                 : "bg-slate-800 text-white hover:bg-slate-700"
             }`}
           >
-            Save Profile
+            {profileSaving ? "Saving..." : "Save Profile"}
           </button>
 
           <button
             type="button"
             onClick={handleResetProfile}
+            disabled={profileSaving}
             className={`px-5 py-2.5 rounded-md text-xs font-bold border transition ${
+              profileSaving ? "opacity-60 cursor-not-allowed" : ""
+            } ${
               darkMode
                 ? "border-slate-700 text-slate-300 hover:bg-slate-800"
                 : "border-slate-300 text-slate-600 hover:bg-slate-100"
@@ -453,6 +890,10 @@ const Profile = () => {
             showPassword={showCurrentPassword}
             setShowPassword={setShowCurrentPassword}
             placeholder="Enter current password"
+            labelClass={labelClass}
+            inputClass={inputClass}
+            darkMode={darkMode}
+            disabled={passwordSaving}
           />
 
           {/* NEW PASSWORD */}
@@ -464,6 +905,10 @@ const Profile = () => {
             showPassword={showNewPassword}
             setShowPassword={setShowNewPassword}
             placeholder="Enter new password"
+            labelClass={labelClass}
+            inputClass={inputClass}
+            darkMode={darkMode}
+            disabled={passwordSaving}
           />
 
           {/* CONFIRM PASSWORD */}
@@ -475,6 +920,10 @@ const Profile = () => {
             showPassword={showConfirmPassword}
             setShowPassword={setShowConfirmPassword}
             placeholder="Confirm new password"
+            labelClass={labelClass}
+            inputClass={inputClass}
+            darkMode={darkMode}
+            disabled={passwordSaving}
           />
         </div>
 
@@ -506,13 +955,16 @@ const Profile = () => {
           <button
             type="button"
             onClick={handleChangePassword}
+            disabled={passwordSaving}
             className={`px-5 py-2.5 rounded-md text-xs font-bold transition ${
+              passwordSaving ? "opacity-60 cursor-not-allowed" : ""
+            } ${
               darkMode
                 ? "bg-white text-slate-900 hover:bg-slate-200"
                 : "bg-slate-800 text-white hover:bg-slate-700"
             }`}
           >
-            Change Password
+            {passwordSaving ? "Changing Password..." : "Change Password"}
           </button>
         </div>
       </section>

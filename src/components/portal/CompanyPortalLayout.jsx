@@ -5,17 +5,13 @@ import { supabaseCompany } from "../../supabaseClient";
 /* =========================================================
    COMPANY THEME
    ========================================================= */
-const COMPANY_PRIMARY =
-  "bg-gradient-to-r from-purple-500 to-purple-700";
+const COMPANY_PRIMARY = "bg-gradient-to-r from-purple-500 to-purple-700";
 
-const COMPANY_TEXT =
-  "text-purple-600 dark:text-purple-400";
+const COMPANY_TEXT = "text-purple-600 dark:text-purple-400";
 
-const COMPANY_ACTIVE_LIGHT =
-  "bg-purple-50 text-purple-700";
+const COMPANY_ACTIVE_LIGHT = "bg-purple-50 text-purple-700";
 
-const COMPANY_ACTIVE_DARK =
-  "bg-purple-500/15 text-purple-400";
+const COMPANY_ACTIVE_DARK = "bg-purple-500/15 text-purple-400";
 
 /* =========================================================
    TEMPORARY NOTIFICATIONS
@@ -66,23 +62,20 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      COMPANY PROFILE
      ========================================================= */
-  const [companyName, setCompanyName] =
-    useState("Company Account");
+  const [companyName, setCompanyName] = useState("Company Account");
 
   /* =========================================================
      SIDEBAR
      ========================================================= */
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
-    useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   /* =========================================================
      DROPDOWNS
      ========================================================= */
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] =
-    useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
@@ -90,12 +83,9 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      NOTIFICATIONS
      ========================================================= */
-  const [notifications, setNotifications] = useState(
-    initialNotifications
-  );
+  const [notifications, setNotifications] = useState(initialNotifications);
 
-  const [selectedNotification, setSelectedNotification] =
-    useState(null);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   const unreadCount = notifications.filter(
     (notification) => !notification.read
@@ -105,10 +95,7 @@ export default function CompanyPortalLayout() {
      DARK MODE
      ========================================================= */
   const [darkMode, setDarkMode] = useState(() => {
-    return (
-      localStorage.getItem("companyPortalDarkMode") ===
-      "true"
-    );
+    return localStorage.getItem("companyPortalDarkMode") === "true";
   });
 
   /* =========================================================
@@ -119,8 +106,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      LOGOUT CONFIRMATION
      ========================================================= */
-  const [showLogoutModal, setShowLogoutModal] =
-    useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   /* =========================================================
      LOAD COMPANY
@@ -158,10 +144,7 @@ export default function CompanyPortalLayout() {
         setCompanyName(data.company_name);
       }
     } catch (error) {
-      console.error(
-        "Failed to load company profile:",
-        error
-      );
+      console.error("Failed to load company profile:", error);
     }
   };
 
@@ -175,10 +158,7 @@ export default function CompanyPortalLayout() {
       document.documentElement.classList.remove("dark");
     }
 
-    localStorage.setItem(
-      "companyPortalDarkMode",
-      darkMode.toString()
-    );
+    localStorage.setItem("companyPortalDarkMode", darkMode.toString());
   }, [darkMode]);
 
   /* =========================================================
@@ -218,16 +198,10 @@ export default function CompanyPortalLayout() {
       setShowLogoutModal(false);
     };
 
-    document.addEventListener(
-      "keydown",
-      handleEscape
-    );
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -236,10 +210,7 @@ export default function CompanyPortalLayout() {
      ========================================================= */
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target)
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setIsProfileOpen(false);
       }
 
@@ -251,16 +222,10 @@ export default function CompanyPortalLayout() {
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+    document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -271,10 +236,7 @@ export default function CompanyPortalLayout() {
     if (!isResizing) return;
 
     const handleMouseMove = (event) => {
-      const newWidth = Math.min(
-        Math.max(event.clientX, 240),
-        360
-      );
+      const newWidth = Math.min(Math.max(event.clientX, 240), 360);
 
       setSidebarWidth(newWidth);
     };
@@ -283,26 +245,14 @@ export default function CompanyPortalLayout() {
       setIsResizing(false);
     };
 
-    document.addEventListener(
-      "mousemove",
-      handleMouseMove
-    );
+    document.addEventListener("mousemove", handleMouseMove);
 
-    document.addEventListener(
-      "mouseup",
-      handleMouseUp
-    );
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener(
-        "mousemove",
-        handleMouseMove
-      );
+      document.removeEventListener("mousemove", handleMouseMove);
 
-      document.removeEventListener(
-        "mouseup",
-        handleMouseUp
-      );
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isResizing]);
 
@@ -386,10 +336,7 @@ export default function CompanyPortalLayout() {
   };
 
   const isChildActive = (children = []) => {
-    return children.some(
-      (child) =>
-        location.pathname === child.path
-    );
+    return children.some((child) => location.pathname === child.path);
   };
 
   /* =========================================================
@@ -397,8 +344,7 @@ export default function CompanyPortalLayout() {
      ========================================================= */
   const getPageTitle = () => {
     const currentItem = sidebarItems.find(
-      (item) =>
-        item.path === location.pathname
+      (item) => item.path === location.pathname
     );
 
     if (currentItem) {
@@ -427,14 +373,45 @@ export default function CompanyPortalLayout() {
   // Performs the actual logout
   const handleLogout = async () => {
     try {
-      const { error } =
-        await supabaseCompany.auth.signOut();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseCompany.auth.getUser();
+
+      if (userError) {
+        console.error(
+          "Failed to get current user for logout audit:",
+          userError
+        );
+      }
+
+      if (user) {
+        const { error: auditError } = await supabaseCompany.functions.invoke(
+          "create-audit-log",
+          {
+            body: {
+              action: "LOGOUT",
+              module: "Authentication",
+              target_entity_type: "User",
+              target_entity_id: user.id,
+              details: {
+                name: companyName || null,
+                email: user.email || null,
+                role: "company",
+              },
+            },
+          }
+        );
+
+        if (auditError) {
+          console.error("Logout audit error:", auditError);
+        }
+      }
+
+      const { error } = await supabaseCompany.auth.signOut();
 
       if (error) {
-        console.error(
-          "Logout error:",
-          error
-        );
+        console.error("Logout error:", error);
         return;
       }
 
@@ -447,10 +424,7 @@ export default function CompanyPortalLayout() {
         replace: true,
       });
     } catch (error) {
-      console.error(
-        "Logout failed:",
-        error
-      );
+      console.error("Logout failed:", error);
     }
   };
 
@@ -460,21 +434,13 @@ export default function CompanyPortalLayout() {
   const getInitials = (name) => {
     if (!name) return "CO";
 
-    const parts = name
-      .trim()
-      .split(" ")
-      .filter(Boolean);
+    const parts = name.trim().split(" ").filter(Boolean);
 
     if (parts.length === 1) {
-      return parts[0]
-        .substring(0, 2)
-        .toUpperCase();
+      return parts[0].substring(0, 2).toUpperCase();
     }
 
-    return (
-      parts[0][0] +
-      parts[parts.length - 1][0]
-    ).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   /* =========================================================
@@ -504,29 +470,18 @@ export default function CompanyPortalLayout() {
 
   const deleteNotification = (id) => {
     setNotifications((previous) =>
-      previous.filter(
-        (notification) =>
-          notification.id !== id
-      )
+      previous.filter((notification) => notification.id !== id)
     );
 
-    if (
-      selectedNotification?.id === id
-    ) {
+    if (selectedNotification?.id === id) {
       setSelectedNotification(null);
     }
   };
 
-  const openNotification = (
-    notification
-  ) => {
-    markNotificationRead(
-      notification.id
-    );
+  const openNotification = (notification) => {
+    markNotificationRead(notification.id);
 
-    setSelectedNotification(
-      notification
-    );
+    setSelectedNotification(notification);
 
     setIsNotificationOpen(false);
   };
@@ -538,24 +493,18 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SIDEBAR CONTENT
      ========================================================= */
-  const renderSidebarContent = (
-    mobile = false
-  ) => {
+  const renderSidebarContent = (mobile = false) => {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-
         {/* ===================================================
             BRAND
             =================================================== */}
         <div
           className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
-            darkMode
-              ? "border-slate-800"
-              : "border-slate-100"
+            darkMode ? "border-slate-800" : "border-slate-100"
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
-
             {/* COMPANY LOGO */}
             <div
               className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white shadow-md ${COMPANY_PRIMARY}`}
@@ -566,9 +515,7 @@ export default function CompanyPortalLayout() {
             <div className="min-w-0">
               <h1
                 className={`truncate text-lg font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 SIMS
@@ -576,9 +523,7 @@ export default function CompanyPortalLayout() {
 
               <p
                 className={`truncate text-xs ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
                 Company Portal
@@ -590,9 +535,7 @@ export default function CompanyPortalLayout() {
           {mobile && (
             <button
               type="button"
-              onClick={() =>
-                setIsMobileSidebarOpen(false)
-              }
+              onClick={() => setIsMobileSidebarOpen(false)}
               className={`ml-auto flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg transition ${
                 darkMode
                   ? "text-slate-300 hover:bg-slate-800"
@@ -611,55 +554,33 @@ export default function CompanyPortalLayout() {
             =================================================== */}
         <div
           className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
-            darkMode
-              ? "scrollbar-thumb-slate-700"
-              : "scrollbar-thumb-slate-300"
+            darkMode ? "scrollbar-thumb-slate-700" : "scrollbar-thumb-slate-300"
           }`}
           style={{
-            WebkitOverflowScrolling:
-              "touch",
+            WebkitOverflowScrolling: "touch",
             touchAction: "pan-y",
           }}
         >
           <div className="space-y-1">
-
             {sidebarItems.map((item) => {
               const hasChildren =
-                Array.isArray(
-                  item.children
-                ) &&
-                item.children.length > 0;
+                Array.isArray(item.children) && item.children.length > 0;
 
               const active =
-                isPathActive(item.path) ||
-                isChildActive(
-                  item.children
-                );
+                isPathActive(item.path) || isChildActive(item.children);
 
               return (
-                <div
-                  key={item.label}
-                >
+                <div key={item.label}>
                   <button
                     type="button"
                     onClick={() => {
                       if (hasChildren) {
-                        toggleSubmenu(
-                          item.label
-                        );
+                        toggleSubmenu(item.label);
                       } else {
-                        navigateTo(
-                          item.path
-                        );
+                        navigateTo(item.path);
                       }
                     }}
-                    aria-current={
-                      isPathActive(
-                        item.path
-                      )
-                        ? "page"
-                        : undefined
-                    }
+                    aria-current={isPathActive(item.path) ? "page" : undefined}
                     className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all ${
                       active
                         ? darkMode
@@ -670,7 +591,6 @@ export default function CompanyPortalLayout() {
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-
                     {/* PURPLE ACTIVE INDICATOR */}
                     {active && (
                       <span
@@ -688,11 +608,7 @@ export default function CompanyPortalLayout() {
 
                     {hasChildren && (
                       <span className="text-xs">
-                        {expandedMenus[
-                          item.label
-                        ]
-                          ? "▲"
-                          : "▼"}
+                        {expandedMenus[item.label] ? "▲" : "▼"}
                       </span>
                     )}
                   </button>
@@ -700,49 +616,32 @@ export default function CompanyPortalLayout() {
                   {/* =================================================
                       SUBMENU
                       ================================================= */}
-                  {hasChildren &&
-                    expandedMenus[
-                      item.label
-                    ] && (
-                      <div
-                        className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
-                          darkMode
-                            ? "border-slate-700"
-                            : "border-slate-200"
-                        }`}
-                      >
-                        {item.children.map(
-                          (child) => (
-                            <button
-                              key={
-                                child.path
-                              }
-                              type="button"
-                              onClick={() =>
-                                navigateTo(
-                                  child.path
-                                )
-                              }
-                              className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition ${
-                                isPathActive(
-                                  child.path
-                                )
-                                  ? darkMode
-                                    ? COMPANY_ACTIVE_DARK
-                                    : COMPANY_ACTIVE_LIGHT
-                                  : darkMode
-                                  ? "text-slate-400 hover:bg-slate-800 hover:text-white"
-                                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                              }`}
-                            >
-                              {
-                                child.label
-                              }
-                            </button>
-                          )
-                        )}
-                      </div>
-                    )}
+                  {hasChildren && expandedMenus[item.label] && (
+                    <div
+                      className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
+                        darkMode ? "border-slate-700" : "border-slate-200"
+                      }`}
+                    >
+                      {item.children.map((child) => (
+                        <button
+                          key={child.path}
+                          type="button"
+                          onClick={() => navigateTo(child.path)}
+                          className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition ${
+                            isPathActive(child.path)
+                              ? darkMode
+                                ? COMPANY_ACTIVE_DARK
+                                : COMPANY_ACTIVE_LIGHT
+                              : darkMode
+                              ? "text-slate-400 hover:bg-slate-800 hover:text-white"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                          }`}
+                        >
+                          {child.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -785,9 +684,7 @@ export default function CompanyPortalLayout() {
   return (
     <div
       className={`min-h-screen w-full ${
-        darkMode
-          ? "bg-slate-950 text-white"
-          : "bg-slate-50 text-slate-900"
+        darkMode ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"
       }`}
       style={{
         touchAction: "pan-y",
@@ -797,7 +694,6 @@ export default function CompanyPortalLayout() {
           DESKTOP LAYOUT
           ===================================================== */}
       <div className="flex min-h-screen w-full">
-
         {/* ===================================================
             FIXED DESKTOP SIDEBAR
             =================================================== */}
@@ -815,9 +711,7 @@ export default function CompanyPortalLayout() {
 
           {/* RESIZE HANDLE */}
           <div
-            onMouseDown={() =>
-              setIsResizing(true)
-            }
+            onMouseDown={() => setIsResizing(true)}
             className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition ${
               isResizing
                 ? "bg-purple-500"
@@ -843,7 +737,6 @@ export default function CompanyPortalLayout() {
             MAIN AREA
             =================================================== */}
         <div className="flex min-w-0 flex-1 flex-col">
-
           {/* =================================================
               HEADER
               ================================================= */}
@@ -854,18 +747,12 @@ export default function CompanyPortalLayout() {
                 : "border-slate-100 bg-white/95"
             } backdrop-blur`}
           >
-
             {/* LEFT */}
             <div className="flex min-w-0 items-center gap-3">
-
               {/* MOBILE MENU */}
               <button
                 type="button"
-                onClick={() =>
-                  setIsMobileSidebarOpen(
-                    true
-                  )
-                }
+                onClick={() => setIsMobileSidebarOpen(true)}
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl lg:hidden ${
                   darkMode
                     ? "text-slate-300 hover:bg-slate-800"
@@ -879,9 +766,7 @@ export default function CompanyPortalLayout() {
               <div className="min-w-0">
                 <h2
                   className={`truncate text-lg font-bold sm:text-xl ${
-                    darkMode
-                      ? "text-white"
-                      : "text-slate-900"
+                    darkMode ? "text-white" : "text-slate-900"
                   }`}
                 >
                   {getPageTitle()}
@@ -889,9 +774,7 @@ export default function CompanyPortalLayout() {
 
                 <p
                   className={`hidden text-xs sm:block ${
-                    darkMode
-                      ? "text-slate-400"
-                      : "text-slate-500"
+                    darkMode ? "text-slate-400" : "text-slate-500"
                   }`}
                 >
                   Company Portal
@@ -901,33 +784,21 @@ export default function CompanyPortalLayout() {
 
             {/* RIGHT */}
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-
               {/* =================================================
                   DARK MODE TOGGLE
                   ================================================= */}
               <button
                 type="button"
-                onClick={() =>
-                  setDarkMode(
-                    (previous) =>
-                      !previous
-                  )
-                }
+                onClick={() => setDarkMode((previous) => !previous)}
                 className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg transition ${
                   darkMode
                     ? "text-yellow-300 hover:bg-slate-800"
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
                 aria-label={
-                  darkMode
-                    ? "Switch to light mode"
-                    : "Switch to dark mode"
+                  darkMode ? "Switch to light mode" : "Switch to dark mode"
                 }
-                title={
-                  darkMode
-                    ? "Light mode"
-                    : "Dark mode"
-                }
+                title={darkMode ? "Light mode" : "Dark mode"}
               >
                 {darkMode ? "☀️" : "🌙"}
               </button>
@@ -935,17 +806,11 @@ export default function CompanyPortalLayout() {
               {/* =================================================
                   NOTIFICATIONS
                   ================================================= */}
-              <div
-                ref={notificationRef}
-                className="relative"
-              >
+              <div ref={notificationRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsNotificationOpen(
-                      (previous) =>
-                        !previous
-                    );
+                    setIsNotificationOpen((previous) => !previous);
 
                     setIsProfileOpen(false);
                   }}
@@ -957,12 +822,9 @@ export default function CompanyPortalLayout() {
                   aria-label="Notifications"
                 >
                   🔔
-
                   {unreadCount > 0 && (
                     <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                      {unreadCount > 9
-                        ? "9+"
-                        : unreadCount}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
@@ -986,21 +848,16 @@ export default function CompanyPortalLayout() {
                       }
                     `}
                   >
-
                     {/* HEADER */}
                     <div
                       className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="min-w-0">
                         <h3
                           className={`font-bold ${
-                            darkMode
-                              ? "text-white"
-                              : "text-slate-900"
+                            darkMode ? "text-white" : "text-slate-900"
                           }`}
                         >
                           Notifications
@@ -1008,9 +865,7 @@ export default function CompanyPortalLayout() {
 
                         <p
                           className={`text-xs ${
-                            darkMode
-                              ? "text-slate-400"
-                              : "text-slate-500"
+                            darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
                           {unreadCount} unread
@@ -1020,9 +875,7 @@ export default function CompanyPortalLayout() {
                       {unreadCount > 0 && (
                         <button
                           type="button"
-                          onClick={
-                            markAllNotificationsRead
-                          }
+                          onClick={markAllNotificationsRead}
                           className="flex-shrink-0 text-xs font-semibold text-purple-600 hover:underline dark:text-purple-400"
                         >
                           Mark all read
@@ -1034,133 +887,103 @@ export default function CompanyPortalLayout() {
                     <div
                       className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
                       style={{
-                        WebkitOverflowScrolling:
-                          "touch",
-                        touchAction:
-                          "pan-y",
+                        WebkitOverflowScrolling: "touch",
+                        touchAction: "pan-y",
                       }}
                     >
-                      {notifications.length ===
-                      0 ? (
+                      {notifications.length === 0 ? (
                         <div className="px-5 py-8 text-center">
-                          <div className="mb-2 text-3xl">
-                            🔔
-                          </div>
+                          <div className="mb-2 text-3xl">🔔</div>
 
                           <p
                             className={`text-sm ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
                             No notifications
                           </p>
                         </div>
                       ) : (
-                        notifications.map(
-                          (
-                            notification
-                          ) => (
-                            <div
-                              key={
-                                notification.id
-                              }
-                              className={`group relative border-b px-4 py-3 transition ${
-                                darkMode
-                                  ? "border-slate-800 hover:bg-slate-800/70"
-                                  : "border-slate-100 hover:bg-slate-50"
-                              } ${
-                                !notification.read
-                                  ? darkMode
-                                    ? "bg-purple-500/5"
-                                    : "bg-purple-50/50"
-                                  : ""
-                              }`}
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`group relative border-b px-4 py-3 transition ${
+                              darkMode
+                                ? "border-slate-800 hover:bg-slate-800/70"
+                                : "border-slate-100 hover:bg-slate-50"
+                            } ${
+                              !notification.read
+                                ? darkMode
+                                  ? "bg-purple-500/5"
+                                  : "bg-purple-50/50"
+                                : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openNotification(notification)}
+                              className="w-full pr-8 text-left"
                             >
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openNotification(
-                                    notification
-                                  )
-                                }
-                                className="w-full pr-8 text-left"
-                              >
-                                <div className="flex gap-3">
-
-                                  <div className="mt-0.5 flex-shrink-0">
-                                    <span className="text-lg">
-                                      {notification.type ===
-                                      "application"
-                                        ? "📝"
-                                        : notification.type ===
-                                          "document"
-                                        ? "📄"
-                                        : notification.type ===
-                                          "information"
-                                        ? "ℹ️"
-                                        : "🔔"}
-                                    </span>
-                                  </div>
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-start gap-2">
-
-                                      <h4
-                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
-                                          darkMode
-                                            ? "text-white"
-                                            : "text-slate-800"
-                                        }`}
-                                      >
-                                        {
-                                          notification.title
-                                        }
-                                      </h4>
-
-                                      {!notification.read && (
-                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" />
-                                      )}
-                                    </div>
-
-                                    <p
-                                      className={`mt-1 break-words text-xs leading-5 ${
-                                        darkMode
-                                          ? "text-slate-400"
-                                          : "text-slate-500"
-                                      }`}
-                                    >
-                                      {
-                                        notification.message
-                                      }
-                                    </p>
-
-                                    <p
-                                      className={`mt-1.5 text-[10px] ${
-                                        darkMode
-                                          ? "text-slate-500"
-                                          : "text-slate-400"
-                                      }`}
-                                    >
-                                      {
-                                        notification.time
-                                      }
-                                    </p>
-                                  </div>
+                              <div className="flex gap-3">
+                                <div className="mt-0.5 flex-shrink-0">
+                                  <span className="text-lg">
+                                    {notification.type === "application"
+                                      ? "📝"
+                                      : notification.type === "document"
+                                      ? "📄"
+                                      : notification.type === "information"
+                                      ? "ℹ️"
+                                      : "🔔"}
+                                  </span>
                                 </div>
-                              </button>
 
-                              {/* DELETE */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  deleteNotification(
-                                    notification.id
-                                  )
-                                }
-                                className={`
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start gap-2">
+                                    <h4
+                                      className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                        darkMode
+                                          ? "text-white"
+                                          : "text-slate-800"
+                                      }`}
+                                    >
+                                      {notification.title}
+                                    </h4>
+
+                                    {!notification.read && (
+                                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" />
+                                    )}
+                                  </div>
+
+                                  <p
+                                    className={`mt-1 break-words text-xs leading-5 ${
+                                      darkMode
+                                        ? "text-slate-400"
+                                        : "text-slate-500"
+                                    }`}
+                                  >
+                                    {notification.message}
+                                  </p>
+
+                                  <p
+                                    className={`mt-1.5 text-[10px] ${
+                                      darkMode
+                                        ? "text-slate-500"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {notification.time}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+
+                            {/* DELETE */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteNotification(notification.id)
+                              }
+                              className={`
                                   absolute right-3 top-3
                                   flex h-7 w-7
                                   items-center justify-center
@@ -1174,31 +997,24 @@ export default function CompanyPortalLayout() {
                                       : "text-slate-400 hover:bg-red-50 hover:text-red-600"
                                   }
                                 `}
-                                aria-label="Delete notification"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )
-                        )
+                              aria-label="Delete notification"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))
                       )}
                     </div>
 
                     {/* VIEW ALL */}
                     <div
                       className={`border-t p-2 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/company/notifications"
-                          )
-                        }
+                        onClick={() => navigateTo("/company/notifications")}
                         className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
                           darkMode
                             ? "text-purple-400 hover:bg-slate-800"
@@ -1215,44 +1031,29 @@ export default function CompanyPortalLayout() {
               {/* =================================================
                   PROFILE
                   ================================================= */}
-              <div
-                ref={profileRef}
-                className="relative"
-              >
+              <div ref={profileRef} className="relative">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsProfileOpen(
-                      (previous) =>
-                        !previous
-                    );
+                    setIsProfileOpen((previous) => !previous);
 
-                    setIsNotificationOpen(
-                      false
-                    );
+                    setIsNotificationOpen(false);
                   }}
                   className={`flex items-center gap-2 rounded-xl p-1.5 transition ${
-                    darkMode
-                      ? "hover:bg-slate-800"
-                      : "hover:bg-slate-100"
+                    darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
-
                   {/* PURPLE AVATAR */}
                   <div
                     className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm ${COMPANY_PRIMARY}`}
                   >
-                    {getInitials(
-                      companyName
-                    )}
+                    {getInitials(companyName)}
                   </div>
 
                   <div className="hidden text-left sm:block">
                     <p
                       className={`max-w-[180px] truncate text-sm font-semibold ${
-                        darkMode
-                          ? "text-white"
-                          : "text-slate-800"
+                        darkMode ? "text-white" : "text-slate-800"
                       }`}
                     >
                       {companyName}
@@ -1260,20 +1061,16 @@ export default function CompanyPortalLayout() {
 
                     <p
                       className={`max-w-[180px] truncate text-[10px] ${
-                        darkMode
-                          ? "text-slate-400"
-                          : "text-slate-500"
+                        darkMode ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      Company Supervisor
+                      Company
                     </p>
                   </div>
 
                   <span
                     className={`hidden text-xs sm:block ${
-                      darkMode
-                        ? "text-slate-400"
-                        : "text-slate-500"
+                      darkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
                     ▼
@@ -1289,31 +1086,23 @@ export default function CompanyPortalLayout() {
                         : "border-slate-200 bg-white"
                     }`}
                   >
-
                     {/* PROFILE HEADER */}
                     <div
                       className={`border-b px-4 py-4 ${
-                        darkMode
-                          ? "border-slate-800"
-                          : "border-slate-100"
+                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-
                         <div
                           className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm ${COMPANY_PRIMARY}`}
                         >
-                          {getInitials(
-                            companyName
-                          )}
+                          {getInitials(companyName)}
                         </div>
 
                         <div className="min-w-0">
                           <p
                             className={`truncate text-sm font-semibold ${
-                              darkMode
-                                ? "text-white"
-                                : "text-slate-800"
+                              darkMode ? "text-white" : "text-slate-800"
                             }`}
                           >
                             {companyName}
@@ -1321,27 +1110,20 @@ export default function CompanyPortalLayout() {
 
                           <p
                             className={`truncate text-xs ${
-                              darkMode
-                                ? "text-slate-400"
-                                : "text-slate-500"
+                              darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
-                            Company Supervisor
+                            Company
                           </p>
                         </div>
                       </div>
                     </div>
 
                     <div className="p-2">
-
                       {/* PROFILE */}
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/company/profile"
-                          )
-                        }
+                        onClick={() => navigateTo("/company/profile")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1349,19 +1131,13 @@ export default function CompanyPortalLayout() {
                         }`}
                       >
                         👤
-                        <span>
-                          My Profile
-                        </span>
+                        <span>My Profile</span>
                       </button>
 
                       {/* SETTINGS */}
                       <button
                         type="button"
-                        onClick={() =>
-                          navigateTo(
-                            "/company/settings"
-                          )
-                        }
+                        onClick={() => navigateTo("/company/settings")}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
                           darkMode
                             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
@@ -1369,35 +1145,26 @@ export default function CompanyPortalLayout() {
                         }`}
                       >
                         ⚙️
-                        <span>
-                          Settings
-                        </span>
+                        <span>Settings</span>
                       </button>
 
                       <div
                         className={`my-1 border-t ${
-                          darkMode
-                            ? "border-slate-800"
-                            : "border-slate-100"
+                          darkMode ? "border-slate-800" : "border-slate-100"
                         }`}
                       />
 
                       {/* LOGOUT */}
                       <button
                         type="button"
-                        onClick={
-                          requestLogout
-                        }
+                        onClick={requestLogout}
                         className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
                           darkMode
                             ? "text-red-400 hover:bg-red-500/10"
                             : "text-red-600 hover:bg-red-50"
                         }`}
                       >
-                        ↪
-                        <span>
-                          Logout
-                        </span>
+                        ↪<span>Logout</span>
                       </button>
                     </div>
                   </div>
@@ -1411,9 +1178,7 @@ export default function CompanyPortalLayout() {
               =================================================== */}
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 ${
-              darkMode
-                ? "bg-slate-950"
-                : "bg-slate-50"
+              darkMode ? "bg-slate-950" : "bg-slate-50"
             }`}
             style={{
               touchAction: "pan-y",
@@ -1443,11 +1208,7 @@ export default function CompanyPortalLayout() {
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
-          onClick={() =>
-            setIsMobileSidebarOpen(
-              false
-            )
-          }
+          onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
@@ -1456,14 +1217,8 @@ export default function CompanyPortalLayout() {
           ===================================================== */}
       <aside
         className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
-          isMobileSidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        } ${
-          darkMode
-            ? "bg-slate-900"
-            : "bg-white"
-        }`}
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } ${darkMode ? "bg-slate-900" : "bg-white"}`}
       >
         {renderSidebarContent(true)}
       </aside>
@@ -1474,34 +1229,25 @@ export default function CompanyPortalLayout() {
       {selectedNotification && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
-          onClick={
-            closeNotificationModal
-          }
+          onClick={closeNotificationModal}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
                 : "border-slate-200 bg-white"
             }`}
           >
-
             {/* HEADER */}
             <div
               className={`flex items-center justify-between border-b px-5 py-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <h3
                 className={`font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Notification
@@ -1509,9 +1255,7 @@ export default function CompanyPortalLayout() {
 
               <button
                 type="button"
-                onClick={
-                  closeNotificationModal
-                }
+                onClick={closeNotificationModal}
                 className={`flex h-8 w-8 items-center justify-center rounded-lg ${
                   darkMode
                     ? "text-slate-400 hover:bg-slate-800"
@@ -1525,18 +1269,14 @@ export default function CompanyPortalLayout() {
             {/* CONTENT */}
             <div className="px-5 py-6">
               <div className="mb-4 flex items-start gap-3">
-
                 <div
                   className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl text-white shadow-sm ${COMPANY_PRIMARY}`}
                 >
-                  {selectedNotification.type ===
-                  "application"
+                  {selectedNotification.type === "application"
                     ? "📝"
-                    : selectedNotification.type ===
-                      "document"
+                    : selectedNotification.type === "document"
                     ? "📄"
-                    : selectedNotification.type ===
-                      "information"
+                    : selectedNotification.type === "information"
                     ? "ℹ️"
                     : "🔔"}
                 </div>
@@ -1544,56 +1284,40 @@ export default function CompanyPortalLayout() {
                 <div className="min-w-0">
                   <h4
                     className={`font-bold ${
-                      darkMode
-                        ? "text-white"
-                        : "text-slate-900"
+                      darkMode ? "text-white" : "text-slate-900"
                     }`}
                   >
-                    {
-                      selectedNotification.title
-                    }
+                    {selectedNotification.title}
                   </h4>
 
                   <p
                     className={`mt-1 text-xs ${
-                      darkMode
-                        ? "text-slate-500"
-                        : "text-slate-400"
+                      darkMode ? "text-slate-500" : "text-slate-400"
                     }`}
                   >
-                    {
-                      selectedNotification.time
-                    }
+                    {selectedNotification.time}
                   </p>
                 </div>
               </div>
 
               <p
                 className={`text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-300"
-                    : "text-slate-600"
+                  darkMode ? "text-slate-300" : "text-slate-600"
                 }`}
               >
-                {
-                  selectedNotification.message
-                }
+                {selectedNotification.message}
               </p>
             </div>
 
             {/* FOOTER */}
             <div
               className={`border-t px-5 py-3 text-right ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               <button
                 type="button"
-                onClick={
-                  closeNotificationModal
-                }
+                onClick={closeNotificationModal}
                 className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 ${COMPANY_PRIMARY}`}
               >
                 Close
@@ -1612,9 +1336,7 @@ export default function CompanyPortalLayout() {
           onClick={cancelLogout}
         >
           <div
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            onClick={(event) => event.stopPropagation()}
             className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${
               darkMode
                 ? "border-slate-700 bg-slate-900"
@@ -1623,25 +1345,18 @@ export default function CompanyPortalLayout() {
           >
             {/* MODAL CONTENT */}
             <div className="px-6 pb-5 pt-6 text-center">
-
               {/* ICON */}
               <div
                 className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${
-                  darkMode
-                    ? "bg-red-500/10"
-                    : "bg-red-50"
+                  darkMode ? "bg-red-500/10" : "bg-red-50"
                 }`}
               >
-                <span className="text-2xl">
-                  ↪
-                </span>
+                <span className="text-2xl">↪</span>
               </div>
 
               <h3
                 className={`text-lg font-bold ${
-                  darkMode
-                    ? "text-white"
-                    : "text-slate-900"
+                  darkMode ? "text-white" : "text-slate-900"
                 }`}
               >
                 Are you sure?
@@ -1649,23 +1364,17 @@ export default function CompanyPortalLayout() {
 
               <p
                 className={`mt-2 text-sm leading-6 ${
-                  darkMode
-                    ? "text-slate-400"
-                    : "text-slate-500"
+                  darkMode ? "text-slate-400" : "text-slate-500"
                 }`}
               >
-                Are you sure you want to
-                logout from your company
-                account?
+                Are you sure you want to logout from your company account?
               </p>
             </div>
 
             {/* MODAL FOOTER */}
             <div
               className={`flex gap-3 border-t px-5 py-4 ${
-                darkMode
-                  ? "border-slate-800"
-                  : "border-slate-100"
+                darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
               {/* CANCEL */}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { supabaseStudent } from "../../supabaseClient";
+import { INDUSTRIES } from "../../constants/industries";
 
 const STATUS = {
   opportunity: {
@@ -684,24 +685,14 @@ export default function Application() {
   // REQUIRED DOCUMENT TYPES
   // =========================================================
 
-  const requiredDocumentTypes = useMemo(() => {
-    const systemRequired = documentTypes.filter(
-      (documentType) => documentType.required
-    );
+  // =========================================================
+  // REQUIRED DOCUMENT TYPES
+  // =========================================================
 
-    const optional = getRequirementIds(selectedOpportunity?.requirements)
+  const requiredDocumentTypes = useMemo(() => {
+    return getRequirementIds(selectedOpportunity?.requirements)
       .map((id) => documentTypes.find((documentType) => documentType.id === id))
       .filter(Boolean);
-
-    return [
-      ...systemRequired,
-      ...optional.filter(
-        (documentType) =>
-          !systemRequired.some(
-            (systemDocument) => systemDocument.id === documentType.id
-          )
-      ),
-    ];
   }, [documentTypes, selectedOpportunity]);
 
   // =========================================================
@@ -2374,20 +2365,20 @@ export default function Application() {
   // OPPORTUNITY SEARCH + INDUSTRY FILTER + SORT
   // =========================================================
 
-  const industryOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        opportunities
-          .filter(
-            (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
-          )
-          .map((opportunity) => opportunity.companies?.industry)
-          .filter(Boolean)
-          .map((industry) => String(industry).trim())
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-  }, [opportunities]);
+  // const industryOptions = useMemo(() => {
+  //   return Array.from(
+  //     new Set(
+  //       opportunities
+  //         .filter(
+  //           (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+  //         )
+  //         .map((opportunity) => opportunity.companies?.industry)
+  //         .filter(Boolean)
+  //         .map((industry) => String(industry).trim())
+  //         .filter(Boolean)
+  //     )
+  //   ).sort((a, b) => a.localeCompare(b));
+  // }, [opportunities]);
 
   const filteredActiveOpportunities = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -2484,10 +2475,10 @@ export default function Application() {
   // Reset stale industry filter if the selected industry
   // no longer exists in the currently loaded opportunities.
   useEffect(() => {
-    if (industryFilter !== "all" && !industryOptions.includes(industryFilter)) {
+    if (industryFilter !== "all" && !INDUSTRIES.includes(industryFilter)) {
       setIndustryFilter("all");
     }
-  }, [industryFilter, industryOptions]);
+  }, [industryFilter]);
 
   const hasOpportunityFilters =
     searchQuery.trim().length > 0 || industryFilter !== "all";
@@ -2749,7 +2740,7 @@ export default function Application() {
                         >
                           <option value="all">All Industries</option>
 
-                          {industryOptions.map((industry) => (
+                          {INDUSTRIES.map((industry) => (
                             <option key={industry} value={industry}>
                               {industry}
                             </option>
@@ -3166,11 +3157,7 @@ export default function Application() {
                   {/* REQUIREMENTS */}
 
                   {(() => {
-                    const systemRequirements = documentTypes.filter(
-                      (documentType) => documentType.required
-                    );
-
-                    const optionalRequirements = getRequirementIds(
+                    const allRequirements = getRequirementIds(
                       detailsOpportunity.requirements
                     )
                       .map((id) =>
@@ -3178,20 +3165,7 @@ export default function Application() {
                           (documentType) => documentType.id === id
                         )
                       )
-                      .filter(Boolean)
-                      .filter(
-                        (documentType) =>
-                          !systemRequirements.some(
-                            (systemDocument) =>
-                              systemDocument.id === documentType.id
-                          )
-                      );
-
-                    const allRequirements = [
-                      ...systemRequirements,
-                      ...optionalRequirements,
-                    ];
-
+                      .filter(Boolean);
                     return (
                       allRequirements.length > 0 && (
                         <div className="mt-7">

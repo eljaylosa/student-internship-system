@@ -1,105 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
-// Temporary page-local demo data. This page intentionally has no mockStore dependency.
-const localState = {
-  users: [
-    {
-      id: "USR-001",
-      role: "student",
-      email: "student@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "STU-001",
-    },
-    {
-      id: "USR-002",
-      role: "registrar",
-      email: "registrar@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "FAC-001",
-    },
-    {
-      id: "USR-003",
-      role: "company_supervisor",
-      email: "company@gmail.com",
-      password: "password",
-      status: "Active",
-      profileId: "SUP-001",
-    },
-    {
-      id: "USR-004",
-      role: "admin",
-      email: "admin@sims.local",
-      password: "password",
-      status: "Active",
-      profileId: "ADM-001",
-    },
-  ],
-
-  students: [
-    {
-      id: "STU-001",
-      userId: "USR-001",
-      fullName: "John Doe",
-      email: "student@gmail.com",
-      studentId: "STU-001",
-      program: "BS Information Technology",
-      yearLevel: "2nd Year",
-      department: "College of Information and Communications Technology",
-      facultyId: "FAC-001",
-      phone: "+63 912 345 6789",
-      address: "Limay, Bataan",
-      gwa: "1.75",
-    },
-  ],
-
-  registrar: [
-    {
-      id: "FAC-001",
-      userId: "USR-002",
-      fullName: "Maria Santos",
-      email: "registrar@gmail.com",
-      facultyId: "FAC-001",
-      department: "College of Information and Communications Technology",
-      position: "Registrar Adviser",
-      phone: "+63 917 123 4567",
-      address: "Balanga, Bataan",
-      specialization: "Information Technology",
-      employeeId: "FAC-2026-001",
-    },
-  ],
-
-  supervisors: [
-    {
-      id: "SUP-001",
-      userId: "USR-003",
-      companyId: "COM-001",
-      fullName: "Mark Cruz",
-      email: "company@gmail.com",
-      position: "Company Supervisor",
-    },
-  ],
-
-  auditEvents: [
-    {
-      id: "AUD-001",
-      actorUserId: "USR-004",
-      actorRole: "admin",
-      action: "LOGIN",
-      module: "Authentication",
-      targetEntityType: "User",
-      targetEntityId: "USR-004",
-      timestamp: "2026-08-17T09:42:18.000Z",
-      details: "Administrator logged into the mock system.",
-    },
-  ],
-};
+import { supabase } from "../../supabaseClient";
 
 export default function AuditLogs() {
   const { darkMode } = useOutletContext();
-  const state = localState;
+
+  // =========================================================
+  // DATABASE STATE
+  // =========================================================
+
+  const [auditEvents, setAuditEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // =========================================================
   // FILTER STATE
@@ -110,22 +22,157 @@ export default function AuditLogs() {
   const [moduleFilter, setModuleFilter] = useState("ALL");
 
   // =========================================================
+  // PAGINATION STATE
+  // =========================================================
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 20;
+
+  // =========================================================
+  // LOAD AUDIT LOGS
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAuditLogs = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const { data: logs, error: logsError } = await supabase
+          .from("audit_logs")
+          .select(
+            `
+              id,
+              actor_user_id,
+              actor_role,
+              action,
+              module,
+              target_entity_type,
+              target_entity_id,
+              details,
+              created_at
+            `
+          )
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (logsError) {
+          throw new Error(logsError.message);
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        // -----------------------------------------------------
+        // GET ACTOR USERS
+        // -----------------------------------------------------
+
+        const actorIds = [
+          ...new Set(
+            (logs || []).map((event) => event.actor_user_id).filter(Boolean)
+          ),
+        ];
+
+        let users = [];
+
+        if (actorIds.length > 0) {
+          const { data: userData, error: usersError } = await supabase
+            .from("users")
+            .select("id, email, first_name, middle_name, last_name, role")
+            .in("id", actorIds);
+
+          if (usersError) {
+            console.warn(
+              "⚠️ Could not load audit log actors:",
+              usersError.message
+            );
+          } else {
+            users = userData || [];
+          }
+        }
+
+        // -----------------------------------------------------
+        // MAP DATABASE FORMAT TO EXISTING UI FORMAT
+        // -----------------------------------------------------
+
+        const mappedLogs = (logs || []).map((event) => {
+          const actor = users.find((user) => user.id === event.actor_user_id);
+
+          return {
+            id: event.id,
+
+            actorUserId: event.actor_user_id || "System",
+
+            actorRole: event.actor_role || actor?.role || "system",
+
+            actorName: actor
+              ? [actor.first_name, actor.middle_name, actor.last_name]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim()
+              : null,
+
+            actorEmail: actor?.email || null,
+
+            action: event.action,
+
+            module: event.module,
+
+            targetEntityType: event.target_entity_type || "—",
+
+            targetEntityId: event.target_entity_id || "—",
+
+            timestamp: event.created_at,
+
+            details: event.details,
+          };
+        });
+
+        setAuditEvents(mappedLogs);
+        setCurrentPage(1);
+      } catch (err) {
+        console.error("💥 Failed to load audit logs:", err);
+
+        if (mounted) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load audit logs."
+          );
+
+          setAuditEvents([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadAuditLogs();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
   // HELPERS
   // =========================================================
 
   const getActorName = (event) => {
-    const user = state.users?.find((item) => item.id === event.actorUserId);
-
-    if (!user) {
-      return event.actorUserId || "System";
+    if (event.actorName) {
+      return event.actorName;
     }
 
-    const profile =
-      state.students?.find((item) => item.id === user.profileId) ||
-      state.registrar?.find((item) => item.id === user.profileId) ||
-      state.supervisors?.find((item) => item.id === user.profileId);
+    if (event.actorEmail) {
+      return event.actorEmail;
+    }
 
-    return profile?.fullName || user.email || user.id;
+    return event.actorUserId || "System";
   };
 
   const getRoleLabel = (role) => {
@@ -139,7 +186,7 @@ export default function AuditLogs() {
       case "company_supervisor":
         return "Company Supervisor";
 
-      // Compatibility with older mock records.
+      // Compatibility with older records.
       case "company":
         return "Company Supervisor";
 
@@ -213,9 +260,37 @@ export default function AuditLogs() {
     }
   };
 
+  const formatDetailLabel = (key) => {
+    return key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .replace(/^./, (char) => char.toUpperCase());
+  };
+
+  const formatValue = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "—";
+    }
+
+    if (typeof value === "boolean") {
+      return value ? "Enabled" : "Disabled";
+    }
+
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+
+    return String(value);
+  };
+
   const formatDetailValue = (key, value) => {
     const formattedKey = key
       .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
       .replace(/^./, (char) => char.toUpperCase());
 
     if (typeof value === "boolean") {
@@ -237,9 +312,75 @@ export default function AuditLogs() {
     return `${formattedKey}: ${value}`;
   };
 
-  const formatDetails = (details) => {
+  const formatUpdateDetails = (details) => {
+    if (!details || typeof details !== "object") {
+      return null;
+    }
+
+    const previousValues =
+      details.previous_values &&
+      typeof details.previous_values === "object" &&
+      !Array.isArray(details.previous_values)
+        ? details.previous_values
+        : {};
+
+    const newValues =
+      details.new_values &&
+      typeof details.new_values === "object" &&
+      !Array.isArray(details.new_values)
+        ? details.new_values
+        : {};
+
+    const changedFields = Array.from(
+      new Set([
+        ...Object.keys(previousValues),
+        ...Object.keys(newValues),
+      ])
+    ).filter((field) => {
+      return (
+        JSON.stringify(previousValues[field]) !==
+        JSON.stringify(newValues[field])
+      );
+    });
+
+    const parts = [];
+
+    Object.entries(details).forEach(([key, value]) => {
+      if (
+        key === "previous_values" ||
+        key === "new_values" ||
+        key === "updated_fields"
+      ) {
+        return;
+      }
+
+      parts.push(formatDetailValue(key, value));
+    });
+
+    if (changedFields.length > 0) {
+      const changes = changedFields
+        .map((field) => {
+          const label = formatDetailLabel(field);
+          const previousValue = formatValue(previousValues[field]);
+          const newValue = formatValue(newValues[field]);
+
+          return `${label}: ${previousValue} → ${newValue}`;
+        })
+        .join(" • ");
+
+      parts.push(`Changes: ${changes}`);
+    }
+
+    return parts.length > 0 ? parts.join(" • ") : "No additional details.";
+  };
+
+  const formatDetails = (details, action) => {
     if (!details) {
       return "No additional details.";
+    }
+
+    if (action === "UPDATE" && typeof details === "object") {
+      return formatUpdateDetails(details);
     }
 
     if (typeof details === "string") {
@@ -262,20 +403,16 @@ export default function AuditLogs() {
   const actionOptions = useMemo(() => {
     return [
       "ALL",
-      ...Array.from(
-        new Set(state.auditEvents.map((event) => event.action))
-      ).sort(),
+      ...Array.from(new Set(auditEvents.map((event) => event.action))).sort(),
     ];
-  }, [state.auditEvents]);
+  }, [auditEvents]);
 
   const moduleOptions = useMemo(() => {
     return [
       "ALL",
-      ...Array.from(
-        new Set(state.auditEvents.map((event) => event.module))
-      ).sort(),
+      ...Array.from(new Set(auditEvents.map((event) => event.module))).sort(),
     ];
-  }, [state.auditEvents]);
+  }, [auditEvents]);
 
   // =========================================================
   // FILTERED LOGS
@@ -284,7 +421,7 @@ export default function AuditLogs() {
   const logs = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return state.auditEvents.filter((event) => {
+    return auditEvents.filter((event) => {
       const matchesSearch =
         !query ||
         JSON.stringify(event).toLowerCase().includes(query) ||
@@ -298,7 +435,48 @@ export default function AuditLogs() {
 
       return matchesSearch && matchesAction && matchesModule;
     });
-  }, [state.auditEvents, search, actionFilter, moduleFilter]);
+  }, [auditEvents, search, actionFilter, moduleFilter]);
+
+  // =========================================================
+  // PAGINATED LOGS
+  // =========================================================
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(logs.length / ITEMS_PER_PAGE)
+  );
+
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+
+    return logs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [logs, currentPage]);
+
+  const startItem =
+    logs.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+
+  const endItem =
+    logs.length === 0
+      ? 0
+      : Math.min(currentPage * ITEMS_PER_PAGE, logs.length);
+
+  // =========================================================
+  // PAGINATION SAFETY
+  // =========================================================
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  // =========================================================
+  // RESET PAGE WHEN FILTERS CHANGE
+  // =========================================================
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, actionFilter, moduleFilter]);
 
   // =========================================================
   // EXPORT CSV
@@ -356,6 +534,7 @@ export default function AuditLogs() {
     setSearch("");
     setActionFilter("ALL");
     setModuleFilter("ALL");
+    setCurrentPage(1);
   };
 
   // =========================================================
@@ -405,6 +584,24 @@ export default function AuditLogs() {
         </div>
 
         {/* ===================================================
+            ERROR
+        =================================================== */}
+
+        {error && (
+          <div
+            className={`border rounded-lg p-4 mb-5 ${
+              darkMode
+                ? "bg-red-950/40 border-red-800 text-red-300"
+                : "bg-red-50 border-red-200 text-red-700"
+            }`}
+          >
+            <p className="text-xs font-bold">Failed to load audit logs</p>
+
+            <p className="text-[10px] mt-1">{error}</p>
+          </div>
+        )}
+
+        {/* ===================================================
             SUMMARY
         =================================================== */}
 
@@ -427,7 +624,7 @@ export default function AuditLogs() {
             </p>
 
             <p className="text-xl font-black mt-1">
-              {state.auditEvents.length}
+              {loading ? "…" : auditEvents.length}
             </p>
           </div>
 
@@ -448,7 +645,9 @@ export default function AuditLogs() {
               Displayed
             </p>
 
-            <p className="text-xl font-black mt-1">{logs.length}</p>
+            <p className="text-xl font-black mt-1">
+              {loading ? "…" : logs.length}
+            </p>
           </div>
 
           {/* LATEST */}
@@ -469,8 +668,10 @@ export default function AuditLogs() {
             </p>
 
             <p className="text-xs font-bold mt-2">
-              {state.auditEvents.length > 0
-                ? new Date(state.auditEvents[0].timestamp).toLocaleString()
+              {loading
+                ? "Loading..."
+                : auditEvents.length > 0
+                ? new Date(auditEvents[0].timestamp).toLocaleString()
                 : "No events"}
             </p>
           </div>
@@ -565,7 +766,11 @@ export default function AuditLogs() {
                 darkMode ? "text-slate-500" : "text-slate-400"
               }`}
             >
-              Showing {logs.length} of {state.auditEvents.length} events
+              {loading
+                ? "Loading audit events..."
+                : logs.length === 0
+                ? "Showing 0 of 0 events"
+                : `Showing ${startItem}–${endItem} of ${logs.length} events`}
             </p>
 
             <div className="flex items-center gap-2">
@@ -643,8 +848,28 @@ export default function AuditLogs() {
               {/* BODY */}
 
               <tbody>
-                {logs.length > 0 ? (
-                  logs.map((event) => (
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-12 text-center">
+                      <div
+                        className={`text-sm font-bold ${
+                          darkMode ? "text-slate-300" : "text-slate-600"
+                        }`}
+                      >
+                        Loading audit events...
+                      </div>
+
+                      <p
+                        className={`text-[10px] mt-1 ${
+                          darkMode ? "text-slate-500" : "text-slate-400"
+                        }`}
+                      >
+                        Retrieving activity from the database.
+                      </p>
+                    </td>
+                  </tr>
+                ) : paginatedLogs.length > 0 ? (
+                  paginatedLogs.map((event) => (
                     <tr
                       key={event.id}
                       className={`border-t transition ${
@@ -733,7 +958,7 @@ export default function AuditLogs() {
                             darkMode ? "text-slate-400" : "text-slate-500"
                           }`}
                         >
-                          {formatDetails(event.details)}
+                          {formatDetails(event.details, event.action)}
                         </div>
                       </td>
                     </tr>
@@ -765,6 +990,118 @@ export default function AuditLogs() {
         </div>
 
         {/* ===================================================
+            PAGINATION
+        =================================================== */}
+
+        {!loading && logs.length > 0 && (
+          <div
+            className={`flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 px-1`}
+          >
+            <p
+              className={`text-[10px] ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Page {currentPage} of {totalPages}
+            </p>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((page) => Math.max(1, page - 1))
+                }
+                disabled={currentPage === 1}
+                className={`h-8 px-3 border rounded-sm text-[10px] font-semibold transition ${
+                  currentPage === 1
+                    ? darkMode
+                      ? "bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed"
+                      : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                    : darkMode
+                    ? "bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                ← Previous
+              </button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, index) => {
+                  const page = index + 1;
+
+                  if (
+                    totalPages > 7 &&
+                    page !== 1 &&
+                    page !== totalPages &&
+                    Math.abs(page - currentPage) > 1
+                  ) {
+                    if (
+                      page === 2 ||
+                      page === totalPages - 1
+                    ) {
+                      return (
+                        <span
+                          key={page}
+                          className={`px-1 text-[10px] ${
+                            darkMode
+                              ? "text-slate-600"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          …
+                        </span>
+                      );
+                    }
+
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`h-8 min-w-8 px-2 border rounded-sm text-[10px] font-bold transition ${
+                        currentPage === page
+                          ? darkMode
+                            ? "bg-slate-700 border-slate-500 text-white"
+                            : "bg-slate-700 border-slate-800 text-white"
+                          : darkMode
+                          ? "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                          : "bg-white border-slate-300 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((page) =>
+                    Math.min(totalPages, page + 1)
+                  )
+                }
+                disabled={currentPage === totalPages}
+                className={`h-8 px-3 border rounded-sm text-[10px] font-semibold transition ${
+                  currentPage === totalPages
+                    ? darkMode
+                      ? "bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed"
+                      : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                    : darkMode
+                    ? "bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================
             FOOTER INFO
         =================================================== */}
 
@@ -781,3 +1118,4 @@ export default function AuditLogs() {
     </div>
   );
 }
+
