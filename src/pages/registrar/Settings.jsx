@@ -12,13 +12,22 @@ const Settings = () => {
   // =========================================================
 
   const [profile, setProfile] = useState({
-    name: "Prof. Smith",
-    email: "prof.smith@university.edu",
-    phone: "+63 912 345 6789",
-    department: "Information Technology",
+    email: "",
+    employeeId: "",
+    phone: "",
+    address: "",
+    department: "",
+    position: "",
+    specialization: "",
   });
 
-  const [profileMessage, setProfileMessage] = useState("");
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const [profileMessage, setProfileMessage] = useState({
+    type: "",
+    text: "",
+  });
 
   // =========================================================
   // SCHOOL INFORMATION
@@ -41,16 +50,22 @@ const Settings = () => {
 
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
-    systemUpdates: true,
+    portalNotifications: true,
     studentSubmissions: true,
   });
+
+  const [notificationMessage, setNotificationMessage] = useState("");
 
   // =========================================================
   // SECURITY
   // =========================================================
 
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityMessage, setSecurityMessage] = useState({
+    type: "",
+    text: "",
+  });
+
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // =========================================================
   // CHANGE PASSWORD
@@ -63,6 +78,14 @@ const Settings = () => {
     newPassword: "",
     confirmPassword: "",
   });
+
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
+
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [passwordMessage, setPasswordMessage] = useState({
     type: "",
@@ -96,20 +119,31 @@ const Settings = () => {
   const dividerClass = darkMode ? "border-slate-700" : "border-slate-200";
 
   // =========================================================
-  // LOAD REGISTRAR SCHOOL
+  // LOAD ACCOUNT + REGISTRAR + SCHOOL
   // =========================================================
 
   useEffect(() => {
-    loadRegistrarSchool();
+    loadSettingsData();
   }, []);
 
-  const loadRegistrarSchool = async () => {
+  const loadSettingsData = async () => {
     try {
+      setProfileLoading(true);
       setSchoolLoading(true);
+
+      setProfileMessage({
+        type: "",
+        text: "",
+      });
+
       setSchoolMessage({
         type: "",
         text: "",
       });
+
+      // -------------------------------------------------------
+      // AUTH USER
+      // -------------------------------------------------------
 
       const {
         data: { user },
@@ -125,12 +159,27 @@ const Settings = () => {
       }
 
       // -------------------------------------------------------
-      // Get registrar's school
+      // REGISTRAR
+      //
+      // IMPORTANT:
+      // registrars.id = users.id
+      // There is NO user_id column.
       // -------------------------------------------------------
 
       const { data: registrar, error: registrarError } = await supabaseRegistrar
         .from("registrars")
-        .select("school_id")
+        .select(
+          `
+              id,
+              employee_id,
+              department,
+              position,
+              specialization,
+              phone,
+              address,
+              school_id
+            `
+        )
         .eq("id", user.id)
         .single();
 
@@ -138,25 +187,52 @@ const Settings = () => {
         throw registrarError;
       }
 
-      if (!registrar?.school_id) {
-        throw new Error("Your registrar account is not assigned to a school.");
+      // -------------------------------------------------------
+      // PROFILE
+      //
+      // Full Name is intentionally NOT loaded here.
+      // It is already managed/displayed in the Registrar Profile.
+      //
+      // Email comes directly from Supabase Auth.
+      // -------------------------------------------------------
+
+      setProfile({
+        email: user.email || "",
+        employeeId: registrar.employee_id || "",
+        phone: registrar.phone || "",
+        address: registrar.address || "",
+        department: registrar.department || "",
+        position: registrar.position || "",
+        specialization: registrar.specialization || "",
+      });
+
+      // -------------------------------------------------------
+      // SCHOOL
+      // -------------------------------------------------------
+
+      if (!registrar.school_id) {
+        setSchoolId(null);
+        setSchool(null);
+
+        setSchoolMessage({
+          type: "error",
+          text: "Your registrar account is not assigned to a school.",
+        });
+
+        return;
       }
 
       setSchoolId(registrar.school_id);
-
-      // -------------------------------------------------------
-      // Get school information
-      // -------------------------------------------------------
 
       const { data: schoolData, error: schoolError } = await supabaseRegistrar
         .from("schools")
         .select(
           `
-            id,
-            name,
-            code,
-            logo_url
-          `
+              id,
+              name,
+              code,
+              logo_url
+            `
         )
         .eq("id", registrar.school_id)
         .single();
@@ -167,13 +243,19 @@ const Settings = () => {
 
       setSchool(schoolData);
     } catch (error) {
-      console.error("Failed to load registrar school:", error);
+      console.error("Failed to load registrar settings:", error);
+
+      setProfileMessage({
+        type: "error",
+        text: error?.message || "Failed to load your account information.",
+      });
 
       setSchoolMessage({
         type: "error",
-        text: error.message || "Failed to load your school information.",
+        text: error?.message || "Failed to load your school information.",
       });
     } finally {
+      setProfileLoading(false);
       setSchoolLoading(false);
     }
   };
@@ -188,17 +270,116 @@ const Settings = () => {
       [field]: value,
     }));
 
-    setProfileMessage("");
+    setProfileMessage({
+      type: "",
+      text: "",
+    });
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
 
-    setProfileMessage("Profile settings saved successfully.");
+    setProfileMessage({
+      type: "",
+      text: "",
+    });
 
-    setTimeout(() => {
-      setProfileMessage("");
-    }, 3000);
+    if (!profile.department.trim()) {
+      setProfileMessage({
+        type: "error",
+        text: "Department is required.",
+      });
+
+      return;
+    }
+
+    if (!profile.position.trim()) {
+      setProfileMessage({
+        type: "error",
+        text: "Position is required.",
+      });
+
+      return;
+    }
+
+    setProfileSaving(true);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user) {
+        throw new Error("You are not authenticated.");
+      }
+
+      // -------------------------------------------------------
+      // UPDATE REGISTRAR TABLE
+      // -------------------------------------------------------
+
+      const { data: updatedRegistrar, error } = await supabaseRegistrar
+        .from("registrars")
+        .update({
+          phone: profile.phone.trim() || null,
+          address: profile.address.trim() || null,
+          department: profile.department.trim(),
+          position: profile.position.trim(),
+          specialization: profile.specialization.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+        .select(
+          `
+            id,
+            employee_id,
+            department,
+            position,
+            specialization,
+            phone,
+            address,
+            school_id
+          `
+        )
+        .single();
+
+      if (error) {
+        console.error("Registrar profile update failed:", error);
+
+        throw error;
+      }
+
+      // -------------------------------------------------------
+      // UPDATE LOCAL STATE
+      // -------------------------------------------------------
+
+      setProfile((prev) => ({
+        ...prev,
+        phone: updatedRegistrar.phone || "",
+        address: updatedRegistrar.address || "",
+        department: updatedRegistrar.department || "",
+        position: updatedRegistrar.position || "",
+        specialization: updatedRegistrar.specialization || "",
+      }));
+
+      setProfileMessage({
+        type: "success",
+        text: "Profile settings saved successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to save registrar profile:", error);
+
+      setProfileMessage({
+        type: "error",
+        text: error?.message || "Failed to save your profile settings.",
+      });
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   // =========================================================
@@ -222,7 +403,7 @@ const Settings = () => {
     };
 
     // -------------------------------------------------------
-    // Validate file type
+    // VALIDATE TYPE
     // -------------------------------------------------------
 
     const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
@@ -238,7 +419,7 @@ const Settings = () => {
     }
 
     // -------------------------------------------------------
-    // Validate file size
+    // VALIDATE SIZE
     // -------------------------------------------------------
 
     const maxSize = 5 * 1024 * 1024;
@@ -267,7 +448,7 @@ const Settings = () => {
       setUploadingLogo(true);
 
       // -----------------------------------------------------
-      // Get authenticated user
+      // GET AUTH USER
       // -----------------------------------------------------
 
       const {
@@ -284,7 +465,7 @@ const Settings = () => {
       }
 
       // -----------------------------------------------------
-      // Verify registrar is actually assigned to this school
+      // VERIFY REGISTRAR SCHOOL
       // -----------------------------------------------------
 
       const { data: registrar, error: registrarError } = await supabaseRegistrar
@@ -308,13 +489,13 @@ const Settings = () => {
       }
 
       // -----------------------------------------------------
-      // Get extension
+      // FILE EXTENSION
       // -----------------------------------------------------
 
       const extension = file.name.split(".").pop()?.toLowerCase() || "png";
 
       // -----------------------------------------------------
-      // Unique file path
+      // UNIQUE PATH
       // -----------------------------------------------------
 
       const filePath = `school-logos/${schoolId}/${crypto.randomUUID()}.${extension}`;
@@ -328,7 +509,7 @@ const Settings = () => {
       });
 
       // -----------------------------------------------------
-      // Upload to Storage
+      // UPLOAD
       // -----------------------------------------------------
 
       const { data: uploadedFile, error: uploadError } =
@@ -342,13 +523,14 @@ const Settings = () => {
 
       if (uploadError) {
         console.error("Storage upload failed:", uploadError);
+
         throw new Error(`Failed to upload school logo: ${uploadError.message}`);
       }
 
       console.log("School logo uploaded:", uploadedFile);
 
       // -----------------------------------------------------
-      // Generate public URL
+      // PUBLIC URL
       // -----------------------------------------------------
 
       const { data: publicUrlData } = supabaseRegistrar.storage
@@ -363,10 +545,8 @@ const Settings = () => {
         );
       }
 
-      console.log("Generated public logo URL:", publicUrl);
-
       // -----------------------------------------------------
-      // Save URL to schools.logo_url
+      // SAVE TO SCHOOL
       // -----------------------------------------------------
 
       const { data: updatedSchool, error: schoolUpdateError } =
@@ -393,10 +573,8 @@ const Settings = () => {
         );
       }
 
-      console.log("Updated school record:", updatedSchool);
-
       // -----------------------------------------------------
-      // Update UI
+      // UPDATE UI
       // -----------------------------------------------------
 
       setSchool(updatedSchool);
@@ -427,26 +605,14 @@ const Settings = () => {
       ...prev,
       [type]: !prev[type],
     }));
-  };
 
-  // =========================================================
-  // 2FA HANDLER
-  // =========================================================
-
-  const handleToggle2FA = () => {
-    const newValue = !twoFactorEnabled;
-
-    setTwoFactorEnabled(newValue);
-
-    setSecurityMessage(
-      newValue
-        ? "Two-factor authentication has been enabled."
-        : "Two-factor authentication has been disabled."
+    setNotificationMessage(
+      "Notification preferences are currently stored for this session. They will be connected to the SIMS Notifications system when that module is implemented."
     );
 
-    setTimeout(() => {
-      setSecurityMessage("");
-    }, 3000);
+    window.setTimeout(() => {
+      setNotificationMessage("");
+    }, 5000);
   };
 
   // =========================================================
@@ -465,10 +631,22 @@ const Settings = () => {
     });
   };
 
-  const handleChangePassword = (e) => {
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
+  };
+
+  const handleChangePassword = async (e) => {
     e.preventDefault();
 
     const { current, newPassword, confirmPassword } = passwords;
+
+    setPasswordMessage({
+      type: "",
+      text: "",
+    });
 
     if (!current || !newPassword || !confirmPassword) {
       setPasswordMessage({
@@ -497,25 +675,211 @@ const Settings = () => {
       return;
     }
 
-    setPasswordMessage({
-      type: "success",
-      text: "Password changed successfully.",
-    });
+    if (current === newPassword) {
+      setPasswordMessage({
+        type: "error",
+        text: "Your new password must be different from your current password.",
+      });
 
-    setPasswords({
-      current: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+      return;
+    }
 
-    setTimeout(() => {
-      setShowPasswordForm(false);
+    setPasswordLoading(true);
+
+    try {
+      // -----------------------------------------------------
+      // GET USER
+      // -----------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user?.email) {
+        throw new Error("Unable to verify your account. Please sign in again.");
+      }
+
+      // -----------------------------------------------------
+      // VERIFY CURRENT PASSWORD
+      // -----------------------------------------------------
+
+      const { error: verifyError } =
+        await supabaseRegistrar.auth.signInWithPassword({
+          email: user.email,
+          password: current,
+        });
+
+      if (verifyError) {
+        console.error("Current password verification failed:", verifyError);
+
+        setPasswordMessage({
+          type: "error",
+          text: "Your current password is incorrect.",
+        });
+
+        return;
+      }
+
+      // -----------------------------------------------------
+      // UPDATE PASSWORD
+      // -----------------------------------------------------
+
+      const { error: updateError } = await supabaseRegistrar.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        console.error("Password update failed:", updateError);
+
+        throw updateError;
+      }
 
       setPasswordMessage({
-        type: "",
-        text: "",
+        type: "success",
+        text: "Password updated successfully.",
       });
-    }, 1500);
+
+      setPasswords({
+        current: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setShowPasswords({
+        current: false,
+        newPassword: false,
+        confirmPassword: false,
+      });
+    } catch (error) {
+      console.error("Password update error:", error);
+
+      setPasswordMessage({
+        type: "error",
+        text:
+          error?.message || "Unable to update your password. Please try again.",
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  // =========================================================
+  // SIGN OUT OTHER SESSIONS
+  // =========================================================
+
+  const handleLogoutOtherSessions = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to sign out of all other SIMS sessions? Your current session will remain active."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setLogoutLoading(true);
+
+    setSecurityMessage({
+      type: "",
+      text: "",
+    });
+
+    try {
+      const { error } = await supabaseRegistrar.auth.signOut({
+        scope: "others",
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSecurityMessage({
+        type: "success",
+        text: "All other sessions have been signed out.",
+      });
+    } catch (error) {
+      console.error("Failed to sign out other sessions:", error);
+
+      setSecurityMessage({
+        type: "error",
+        text: error?.message || "Unable to sign out other sessions.",
+      });
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
+  // =========================================================
+  // PASSWORD FIELD
+  // =========================================================
+
+  const renderPasswordField = (field, label, placeholder) => {
+    return (
+      <div>
+        <label
+          className={`
+            block
+            text-xs
+            font-bold
+            mb-1.5
+            ${labelClass}
+          `}
+        >
+          {label}
+        </label>
+
+        <div className="relative">
+          <input
+            type={showPasswords[field] ? "text" : "password"}
+            value={passwords[field]}
+            onChange={(e) => handlePasswordChange(field, e.target.value)}
+            placeholder={placeholder}
+            autoComplete={
+              field === "current" ? "current-password" : "new-password"
+            }
+            disabled={passwordLoading}
+            className={`
+              w-full
+              h-10
+              px-3
+              pr-14
+              rounded-lg
+              border
+              text-sm
+              outline-none
+              transition
+              disabled:opacity-60
+              ${inputClass}
+            `}
+          />
+
+          <button
+            type="button"
+            onClick={() => togglePasswordVisibility(field)}
+            disabled={passwordLoading}
+            className={`
+              absolute
+              right-3
+              top-1/2
+              -translate-y-1/2
+              text-[11px]
+              font-semibold
+              ${
+                darkMode
+                  ? "text-slate-500 hover:text-slate-200"
+                  : "text-slate-400 hover:text-slate-700"
+              }
+            `}
+          >
+            {showPasswords[field] ? "Hide" : "Show"}
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // =========================================================
@@ -527,6 +891,7 @@ const Settings = () => {
       type="button"
       onClick={onClick}
       aria-label={`Toggle ${label}`}
+      aria-pressed={enabled}
       className={`
         relative
         flex-shrink-0
@@ -535,6 +900,7 @@ const Settings = () => {
         rounded-full
         transition-colors
         duration-200
+        focus:outline-none
         ${
           enabled
             ? darkMode
@@ -612,13 +978,13 @@ const Settings = () => {
               ${bodyTextClass}
             `}
           >
-            Manage your profile, school information, notifications, and account
-            security.
+            Manage your registrar profile, school information, notifications,
+            and account security.
           </p>
         </div>
 
         {/* =====================================================
-            SETTINGS CONTAINER
+            SETTINGS PANEL
         ===================================================== */}
 
         <section
@@ -631,9 +997,18 @@ const Settings = () => {
             ${panelClass}
           `}
         >
-          <div className="p-4 sm:p-6 md:p-7 lg:p-8 space-y-8 sm:space-y-10">
+          <div
+            className="
+              p-4
+              sm:p-6
+              md:p-7
+              lg:p-8
+              space-y-8
+              sm:space-y-10
+            "
+          >
             {/* =================================================
-                PROFILE SETTINGS
+                PROFILE
             ================================================= */}
 
             <section>
@@ -657,186 +1032,350 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Update your registrar account information.
+                  Manage the information associated with your registrar account.
                 </p>
               </div>
 
-              <form onSubmit={handleSaveProfile} className="max-w-[650px]">
-                <div className="space-y-4">
-                  {/* NAME */}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
-                      Name
-                    </label>
-
-                    <input
-                      type="text"
-                      value={profile.name}
-                      onChange={(e) =>
-                        handleProfileChange("name", e.target.value)
-                      }
-                      className={`
-                        w-full
-                        h-10
-                        px-3
-                        rounded-lg
-                        border
-                        text-sm
-                        outline-none
-                        transition
-                        ${inputClass}
-                      `}
-                    />
-                  </div>
-
-                  {/* EMAIL */}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
-                      Email
-                    </label>
-
-                    <input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) =>
-                        handleProfileChange("email", e.target.value)
-                      }
-                      className={`
-                        w-full
-                        h-10
-                        px-3
-                        rounded-lg
-                        border
-                        text-sm
-                        outline-none
-                        transition
-                        ${inputClass}
-                      `}
-                    />
-                  </div>
-
-                  {/* PHONE */}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
-                      Phone
-                    </label>
-
-                    <input
-                      type="text"
-                      value={profile.phone}
-                      onChange={(e) =>
-                        handleProfileChange("phone", e.target.value)
-                      }
-                      className={`
-                        w-full
-                        h-10
-                        px-3
-                        rounded-lg
-                        border
-                        text-sm
-                        outline-none
-                        transition
-                        ${inputClass}
-                      `}
-                    />
-                  </div>
-
-                  {/* DEPARTMENT */}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
-                      Department
-                    </label>
-
-                    <input
-                      type="text"
-                      value={profile.department}
-                      onChange={(e) =>
-                        handleProfileChange("department", e.target.value)
-                      }
-                      className={`
-                        w-full
-                        h-10
-                        px-3
-                        rounded-lg
-                        border
-                        text-sm
-                        outline-none
-                        transition
-                        ${inputClass}
-                      `}
-                    />
-                  </div>
-                </div>
-
-                {/* PROFILE MESSAGE */}
-
-                {profileMessage && (
-                  <div
+              {profileLoading ? (
+                <div
+                  className={`
+                    max-w-[700px]
+                    border
+                    rounded-xl
+                    p-5
+                    ${sectionCardClass}
+                  `}
+                >
+                  <p
                     className={`
-                      mt-4
-                      px-4
-                      py-3
-                      rounded-lg
-                      border
-                      text-xs
-                      font-medium
-                      ${
-                        darkMode
-                          ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }
+                      text-sm
+                      font-semibold
+                      ${headingClass}
                     `}
                   >
-                    {profileMessage}
-                  </div>
-                )}
+                    Loading profile...
+                  </p>
 
-                <button
-                  type="submit"
-                  className="
-                    mt-5
-                    px-6
-                    py-2.5
-                    rounded-lg
-                    bg-slate-800
-                    text-white
-                    text-xs
-                    font-bold
-                    hover:bg-slate-700
-                    transition
-                  "
-                >
-                  Save Changes
-                </button>
-              </form>
+                  <p
+                    className={`
+                      text-xs
+                      mt-1
+                      ${bodyTextClass}
+                    `}
+                  >
+                    Please wait while we load your registrar information.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleSaveProfile} className="max-w-[700px]">
+                  <div className="space-y-4">
+                    {/* EMAIL */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Email
+                      </label>
+
+                      <input
+                        type="email"
+                        value={profile.email}
+                        disabled
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          opacity-70
+                          cursor-not-allowed
+                          ${inputClass}
+                        `}
+                      />
+
+                      <p
+                        className={`
+                          text-[10px]
+                          mt-1
+                          ${bodyTextClass}
+                        `}
+                      >
+                        Your registered authentication email.
+                      </p>
+                    </div>
+
+                    {/* EMPLOYEE ID */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Employee ID
+                      </label>
+
+                      <input
+                        type="text"
+                        value={profile.employeeId}
+                        disabled
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          opacity-70
+                          cursor-not-allowed
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+
+                    {/* PHONE */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Phone
+                      </label>
+
+                      <input
+                        type="text"
+                        value={profile.phone}
+                        onChange={(e) =>
+                          handleProfileChange("phone", e.target.value)
+                        }
+                        placeholder="Enter phone number"
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          outline-none
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+
+                    {/* ADDRESS */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Address
+                      </label>
+
+                      <textarea
+                        value={profile.address}
+                        onChange={(e) =>
+                          handleProfileChange("address", e.target.value)
+                        }
+                        placeholder="Enter address"
+                        rows={3}
+                        className={`
+                          w-full
+                          px-3
+                          py-2.5
+                          rounded-lg
+                          border
+                          text-sm
+                          outline-none
+                          resize-y
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+
+                    {/* DEPARTMENT */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Department
+                      </label>
+
+                      <input
+                        type="text"
+                        value={profile.department}
+                        onChange={(e) =>
+                          handleProfileChange("department", e.target.value)
+                        }
+                        placeholder="Enter department"
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          outline-none
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+
+                    {/* POSITION */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Position
+                      </label>
+
+                      <input
+                        type="text"
+                        value={profile.position}
+                        onChange={(e) =>
+                          handleProfileChange("position", e.target.value)
+                        }
+                        placeholder="Enter position"
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          outline-none
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+
+                    {/* SPECIALIZATION */}
+
+                    <div>
+                      <label
+                        className={`
+                          block
+                          text-xs
+                          font-semibold
+                          mb-1.5
+                          ${labelClass}
+                        `}
+                      >
+                        Specialization
+                      </label>
+
+                      <input
+                        type="text"
+                        value={profile.specialization}
+                        onChange={(e) =>
+                          handleProfileChange("specialization", e.target.value)
+                        }
+                        placeholder="Enter specialization (optional)"
+                        className={`
+                          w-full
+                          h-10
+                          px-3
+                          rounded-lg
+                          border
+                          text-sm
+                          outline-none
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+                    </div>
+                  </div>
+
+                  {/* MESSAGE */}
+
+                  {profileMessage.text && (
+                    <div
+                      className={`
+                        mt-4
+                        px-4
+                        py-3
+                        rounded-lg
+                        border
+                        text-xs
+                        font-medium
+                        ${
+                          profileMessage.type === "success"
+                            ? darkMode
+                              ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : darkMode
+                            ? "bg-red-950/40 text-red-300 border-red-800"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        }
+                      `}
+                    >
+                      {profileMessage.text}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="
+                      mt-5
+                      px-6
+                      py-2.5
+                      rounded-lg
+                      bg-slate-800
+                      text-white
+                      text-xs
+                      font-bold
+                      hover:bg-slate-700
+                      disabled:opacity-60
+                      disabled:cursor-not-allowed
+                      transition
+                    "
+                  >
+                    {profileSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </form>
+              )}
             </section>
 
             {/* DIVIDER */}
@@ -868,14 +1407,12 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Manage your school's information and official logo used for
-                  internship completion certificates.
+                  Manage your assigned school's official information and
+                  certificate logo.
                 </p>
               </div>
 
               <div className="max-w-[700px]">
-                {/* SCHOOL DETAILS */}
-
                 <div
                   className={`
                     border
@@ -909,7 +1446,18 @@ const Settings = () => {
                     </div>
                   ) : school ? (
                     <>
-                      <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 mb-6">
+                      {/* SCHOOL DETAILS */}
+
+                      <div
+                        className="
+                          grid
+                          grid-cols-1
+                          sm:grid-cols-[140px_minmax(0,1fr)]
+                          gap-1.5
+                          sm:gap-4
+                          mb-6
+                        "
+                      >
                         <span
                           className={`
                             text-xs
@@ -945,7 +1493,7 @@ const Settings = () => {
                         </div>
                       </div>
 
-                      {/* LOGO AREA */}
+                      {/* LOGO */}
 
                       <div
                         className={`
@@ -973,14 +1521,13 @@ const Settings = () => {
                               ${bodyTextClass}
                             `}
                           >
-                            This logo will automatically appear on internship
-                            completion certificates issued to students from your
-                            school.
+                            This logo is used on internship completion
+                            certificates for students from your school.
                           </p>
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-5 sm:items-center">
-                          {/* LOGO PREVIEW */}
+                          {/* PREVIEW */}
 
                           <div
                             className={`
@@ -1005,7 +1552,12 @@ const Settings = () => {
                               <img
                                 src={school.logo_url}
                                 alt={`${school.name} logo`}
-                                className="w-full h-full object-contain p-4"
+                                className="
+                                  w-full
+                                  h-full
+                                  object-contain
+                                  p-4
+                                "
                               />
                             ) : (
                               <div className="text-center px-4">
@@ -1067,17 +1619,6 @@ const Settings = () => {
                             >
                               PNG, JPG, or WebP · Maximum 5MB
                             </p>
-
-                            <p
-                              className={`
-                                text-[10px]
-                                mt-1
-                                ${bodyTextClass}
-                              `}
-                            >
-                              Upload your official school logo before deploying
-                              students.
-                            </p>
                           </div>
                         </div>
 
@@ -1108,89 +1649,87 @@ const Settings = () => {
                           </div>
                         )}
 
-                        {/* READY STATUS */}
+                        {/* STATUS */}
 
-                        {!schoolLoading && (
+                        <div
+                          className={`
+                            mt-5
+                            flex
+                            items-start
+                            gap-3
+                            rounded-lg
+                            border
+                            px-4
+                            py-3
+                            ${
+                              school.logo_url
+                                ? darkMode
+                                  ? "bg-emerald-950/30 border-emerald-900"
+                                  : "bg-emerald-50 border-emerald-200"
+                                : darkMode
+                                ? "bg-amber-950/30 border-amber-900"
+                                : "bg-amber-50 border-amber-200"
+                            }
+                          `}
+                        >
                           <div
                             className={`
-                              mt-5
-                              flex
-                              items-start
-                              gap-3
-                              rounded-lg
-                              border
-                              px-4
-                              py-3
+                              mt-1
+                              w-2
+                              h-2
+                              rounded-full
+                              flex-shrink-0
                               ${
                                 school.logo_url
-                                  ? darkMode
-                                    ? "bg-emerald-950/30 border-emerald-900"
-                                    : "bg-emerald-50 border-emerald-200"
-                                  : darkMode
-                                  ? "bg-amber-950/30 border-amber-900"
-                                  : "bg-amber-50 border-amber-200"
+                                  ? "bg-emerald-500"
+                                  : "bg-amber-500"
                               }
                             `}
-                          >
-                            <div
+                          />
+
+                          <div>
+                            <p
                               className={`
-                                mt-0.5
-                                w-2
-                                h-2
-                                rounded-full
-                                flex-shrink-0
+                                text-xs
+                                font-bold
                                 ${
                                   school.logo_url
-                                    ? "bg-emerald-500"
-                                    : "bg-amber-500"
+                                    ? darkMode
+                                      ? "text-emerald-300"
+                                      : "text-emerald-700"
+                                    : darkMode
+                                    ? "text-amber-300"
+                                    : "text-amber-700"
                                 }
                               `}
-                            />
+                            >
+                              {school.logo_url
+                                ? "School Logo Ready"
+                                : "School Logo Required"}
+                            </p>
 
-                            <div>
-                              <p
-                                className={`
-                                  text-xs
-                                  font-bold
-                                  ${
-                                    school.logo_url
-                                      ? darkMode
-                                        ? "text-emerald-300"
-                                        : "text-emerald-700"
-                                      : darkMode
-                                      ? "text-amber-300"
-                                      : "text-amber-700"
-                                  }
-                                `}
-                              >
-                                {school.logo_url
-                                  ? "School Logo Ready"
-                                  : "School Logo Required"}
-                              </p>
-
-                              <p
-                                className={`
-                                  text-[10px]
-                                  sm:text-xs
-                                  mt-0.5
-                                  ${
-                                    school.logo_url
-                                      ? darkMode
-                                        ? "text-emerald-400"
-                                        : "text-emerald-600"
-                                      : darkMode
-                                      ? "text-amber-400"
-                                      : "text-amber-600"
-                                  }
-                                `}
-                              >
-                                {school.logo_url
-                                  ? "Your school logo is configured and ready to be used on internship certificates."
-                                  : "Please upload your school's official logo before deploying students."}
-                              </p>
-                            </div>
+                            <p
+                              className={`
+                                text-[10px]
+                                sm:text-xs
+                                mt-0.5
+                                ${
+                                  school.logo_url
+                                    ? darkMode
+                                      ? "text-emerald-400"
+                                      : "text-emerald-600"
+                                    : darkMode
+                                    ? "text-amber-400"
+                                    : "text-amber-600"
+                                }
+                              `}
+                            >
+                              {school.logo_url
+                                ? "Your school's official logo is configured for internship completion certificates."
+                                : "Upload the official school logo before certificates are generated."}
+                            </p>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -1225,7 +1764,7 @@ const Settings = () => {
             <div className={`border-t ${dividerClass}`} />
 
             {/* =================================================
-                NOTIFICATION PREFERENCES
+                NOTIFICATIONS
             ================================================= */}
 
             <section>
@@ -1249,7 +1788,7 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Choose which notifications you want to receive.
+                  Choose which SIMS notifications you want to receive.
                 </p>
               </div>
 
@@ -1262,7 +1801,7 @@ const Settings = () => {
                   ${darkMode ? "border-slate-700" : "border-slate-200"}
                 `}
               >
-                {/* EMAIL ALERTS */}
+                {/* EMAIL */}
 
                 <div
                   className={`
@@ -1285,7 +1824,7 @@ const Settings = () => {
                         ${darkMode ? "text-slate-200" : "text-slate-800"}
                       `}
                     >
-                      Email Alerts
+                      Email Notifications
                     </p>
 
                     <p
@@ -1296,18 +1835,19 @@ const Settings = () => {
                         ${bodyTextClass}
                       `}
                     >
-                      Receive important updates through email.
+                      Receive important SIMS updates through your registered
+                      email.
                     </p>
                   </div>
 
                   <NotificationSwitch
                     enabled={notifications.emailAlerts}
                     onClick={() => toggleNotification("emailAlerts")}
-                    label="email alerts"
+                    label="email notifications"
                   />
                 </div>
 
-                {/* SYSTEM UPDATES */}
+                {/* PORTAL */}
 
                 <div
                   className={`
@@ -1330,7 +1870,7 @@ const Settings = () => {
                         ${darkMode ? "text-slate-200" : "text-slate-800"}
                       `}
                     >
-                      System Updates
+                      Portal Notifications
                     </p>
 
                     <p
@@ -1341,14 +1881,14 @@ const Settings = () => {
                         ${bodyTextClass}
                       `}
                     >
-                      Receive updates about portal activity.
+                      Receive alerts and updates inside the SIMS portal.
                     </p>
                   </div>
 
                   <NotificationSwitch
-                    enabled={notifications.systemUpdates}
-                    onClick={() => toggleNotification("systemUpdates")}
-                    label="system updates"
+                    enabled={notifications.portalNotifications}
+                    onClick={() => toggleNotification("portalNotifications")}
+                    label="portal notifications"
                   />
                 </div>
 
@@ -1385,17 +1925,38 @@ const Settings = () => {
                       `}
                     >
                       Get notified when students submit applications or
-                      documents.
+                      documents for review.
                     </p>
                   </div>
 
                   <NotificationSwitch
                     enabled={notifications.studentSubmissions}
                     onClick={() => toggleNotification("studentSubmissions")}
-                    label="student submissions"
+                    label="student submission notifications"
                   />
                 </div>
               </div>
+
+              {notificationMessage && (
+                <div
+                  className={`
+                    max-w-[700px]
+                    mt-3
+                    px-4
+                    py-3
+                    rounded-lg
+                    border
+                    text-xs
+                    ${
+                      darkMode
+                        ? "bg-slate-900 border-slate-700 text-slate-400"
+                        : "bg-slate-50 border-slate-200 text-slate-600"
+                    }
+                  `}
+                >
+                  {notificationMessage}
+                </div>
+              )}
             </section>
 
             {/* DIVIDER */}
@@ -1427,72 +1988,11 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Manage additional security options for your account.
+                  Manage your password and active account sessions.
                 </p>
               </div>
 
               <div className="max-w-[700px] space-y-3">
-                {/* 2FA */}
-
-                <div
-                  className={`
-                    flex
-                    flex-col
-                    sm:flex-row
-                    sm:items-center
-                    justify-between
-                    gap-4
-                    border
-                    rounded-xl
-                    p-4
-                    sm:p-5
-                    ${sectionCardClass}
-                  `}
-                >
-                  <div>
-                    <p
-                      className={`
-                        text-sm
-                        font-semibold
-                        ${darkMode ? "text-slate-200" : "text-slate-800"}
-                      `}
-                    >
-                      Two-Factor Authentication
-                    </p>
-
-                    <p
-                      className={`
-                        text-[10px]
-                        sm:text-xs
-                        mt-1
-                        ${bodyTextClass}
-                      `}
-                    >
-                      Add an extra layer of protection to your account.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleToggle2FA}
-                    className={`
-                      px-5
-                      py-2.5
-                      rounded-lg
-                      text-xs
-                      font-bold
-                      transition
-                      ${
-                        twoFactorEnabled
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                          : "bg-slate-800 text-white hover:bg-slate-700"
-                      }
-                    `}
-                  >
-                    {twoFactorEnabled ? "2FA Enabled" : "Enable 2FA"}
-                  </button>
-                </div>
-
                 {/* CHANGE PASSWORD */}
 
                 <div
@@ -1529,15 +2029,14 @@ const Settings = () => {
                         ${bodyTextClass}
                       `}
                     >
-                      Update your account password regularly for better
-                      security.
+                      Change your SIMS account password.
                     </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setShowPasswordForm(!showPasswordForm);
+                      setShowPasswordForm((prev) => !prev);
 
                       setPasswordMessage({
                         type: "",
@@ -1556,7 +2055,7 @@ const Settings = () => {
                       transition
                     "
                   >
-                    Change Password
+                    {showPasswordForm ? "Close" : "Change Password"}
                   </button>
                 </div>
 
@@ -1573,128 +2072,33 @@ const Settings = () => {
                     `}
                   >
                     <form onSubmit={handleChangePassword} className="space-y-4">
-                      {/* CURRENT PASSWORD */}
+                      {renderPasswordField(
+                        "current",
+                        "Current Password",
+                        "Enter current password"
+                      )}
 
-                      <div>
-                        <label
-                          className={`
-                            block
-                            text-xs
-                            font-bold
-                            mb-1.5
-                            ${labelClass}
-                          `}
-                        >
-                          Current Password
-                        </label>
+                      {renderPasswordField(
+                        "newPassword",
+                        "New Password",
+                        "Enter new password"
+                      )}
 
-                        <input
-                          type="password"
-                          value={passwords.current}
-                          onChange={(e) =>
-                            handlePasswordChange("current", e.target.value)
-                          }
-                          placeholder="Enter current password"
-                          className={`
-                            w-full
-                            h-10
-                            px-3
-                            rounded-lg
-                            border
-                            text-sm
-                            outline-none
-                            transition
-                            ${inputClass}
-                          `}
-                        />
-                      </div>
+                      <p
+                        className={`
+                          text-[10px]
+                          -mt-2
+                          ${bodyTextClass}
+                        `}
+                      >
+                        New password must contain at least 8 characters.
+                      </p>
 
-                      {/* NEW PASSWORD */}
-
-                      <div>
-                        <label
-                          className={`
-                            block
-                            text-xs
-                            font-bold
-                            mb-1.5
-                            ${labelClass}
-                          `}
-                        >
-                          New Password
-                        </label>
-
-                        <input
-                          type="password"
-                          value={passwords.newPassword}
-                          onChange={(e) =>
-                            handlePasswordChange("newPassword", e.target.value)
-                          }
-                          placeholder="Enter new password"
-                          className={`
-                            w-full
-                            h-10
-                            px-3
-                            rounded-lg
-                            border
-                            text-sm
-                            outline-none
-                            transition
-                            ${inputClass}
-                          `}
-                        />
-
-                        <p
-                          className={`
-                            text-[10px]
-                            mt-1.5
-                            ${bodyTextClass}
-                          `}
-                        >
-                          Use at least 8 characters.
-                        </p>
-                      </div>
-
-                      {/* CONFIRM PASSWORD */}
-
-                      <div>
-                        <label
-                          className={`
-                            block
-                            text-xs
-                            font-bold
-                            mb-1.5
-                            ${labelClass}
-                          `}
-                        >
-                          Confirm New Password
-                        </label>
-
-                        <input
-                          type="password"
-                          value={passwords.confirmPassword}
-                          onChange={(e) =>
-                            handlePasswordChange(
-                              "confirmPassword",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Confirm new password"
-                          className={`
-                            w-full
-                            h-10
-                            px-3
-                            rounded-lg
-                            border
-                            text-sm
-                            outline-none
-                            transition
-                            ${inputClass}
-                          `}
-                        />
-                      </div>
-
-                      {/* PASSWORD MESSAGE */}
+                      {renderPasswordField(
+                        "confirmPassword",
+                        "Confirm New Password",
+                        "Confirm new password"
+                      )}
 
                       {passwordMessage.text && (
                         <div
@@ -1723,6 +2127,7 @@ const Settings = () => {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="submit"
+                          disabled={passwordLoading}
                           className="
                             px-5
                             py-2.5
@@ -1732,16 +2137,24 @@ const Settings = () => {
                             text-xs
                             font-bold
                             hover:bg-slate-700
+                            disabled:opacity-60
+                            disabled:cursor-not-allowed
                             transition
                           "
                         >
-                          Update Password
+                          {passwordLoading ? "Updating..." : "Update Password"}
                         </button>
 
                         <button
                           type="button"
                           onClick={() => {
                             setShowPasswordForm(false);
+
+                            setPasswords({
+                              current: "",
+                              newPassword: "",
+                              confirmPassword: "",
+                            });
 
                             setPasswordMessage({
                               type: "",
@@ -1770,9 +2183,75 @@ const Settings = () => {
                   </div>
                 )}
 
+                {/* OTHER SESSIONS */}
+
+                <div
+                  className={`
+                    flex
+                    flex-col
+                    sm:flex-row
+                    sm:items-center
+                    justify-between
+                    gap-4
+                    border
+                    rounded-xl
+                    p-4
+                    sm:p-5
+                    ${sectionCardClass}
+                  `}
+                >
+                  <div>
+                    <p
+                      className={`
+                        text-sm
+                        font-semibold
+                        ${darkMode ? "text-slate-200" : "text-slate-800"}
+                      `}
+                    >
+                      Account Sessions
+                    </p>
+
+                    <p
+                      className={`
+                        text-[10px]
+                        sm:text-xs
+                        mt-1
+                        ${bodyTextClass}
+                      `}
+                    >
+                      Sign out of SIMS sessions on other devices while keeping
+                      this session active.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLogoutOtherSessions}
+                    disabled={logoutLoading}
+                    className="
+                      flex-shrink-0
+                      px-5
+                      py-2.5
+                      rounded-lg
+                      bg-slate-800
+                      text-white
+                      text-xs
+                      font-bold
+                      hover:bg-slate-700
+                      disabled:opacity-60
+                      disabled:cursor-not-allowed
+                      transition
+                    "
+                  >
+                    {logoutLoading
+                      ? "Signing Out..."
+                      : "Sign Out Other Sessions"}
+                  </button>
+                </div>
+
                 {/* SECURITY MESSAGE */}
 
-                {securityMessage && (
+                {securityMessage.text && (
                   <div
                     className={`
                       px-4
@@ -1782,15 +2261,72 @@ const Settings = () => {
                       text-xs
                       font-medium
                       ${
-                        darkMode
-                          ? "bg-slate-800 border-slate-700 text-slate-300"
-                          : "bg-slate-100 border-slate-200 text-slate-600"
+                        securityMessage.type === "success"
+                          ? darkMode
+                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : darkMode
+                          ? "bg-red-950/40 text-red-300 border-red-800"
+                          : "bg-red-50 text-red-700 border-red-200"
                       }
                     `}
                   >
-                    {securityMessage}
+                    {securityMessage.text}
                   </div>
                 )}
+              </div>
+            </section>
+
+            {/* DIVIDER */}
+
+            <div className={`border-t ${dividerClass}`} />
+
+            {/* =================================================
+                SECURITY NOTE
+            ================================================= */}
+
+            <section>
+              <div
+                className={`
+                  max-w-[700px]
+                  rounded-xl
+                  border
+                  p-5
+                  ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-900/50"
+                      : "border-slate-200 bg-slate-50"
+                  }
+                `}
+              >
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 text-sm">🔒</div>
+
+                  <div>
+                    <p
+                      className={`
+                        text-sm
+                        font-semibold
+                        ${headingClass}
+                      `}
+                    >
+                      Keep your account secure
+                    </p>
+
+                    <p
+                      className={`
+                        text-xs
+                        mt-1
+                        leading-5
+                        ${bodyTextClass}
+                      `}
+                    >
+                      Never share your SIMS password with anyone. If you believe
+                      your account has been compromised, change your password
+                      and sign out of other sessions.
+                    </p>
+                  </div>
+                </div>
               </div>
             </section>
           </div>

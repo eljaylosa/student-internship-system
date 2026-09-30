@@ -751,8 +751,19 @@ const RegistrarPortalLayout = () => {
           darkMode ? "border-slate-700" : "border-slate-100"
         }`}
       >
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md flex-shrink-0">
-          R
+        <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md flex-shrink-0">
+          {profilePhotoUrl ? (
+            <img
+              src={profilePhotoUrl}
+              alt={`${registrarFullName} profile`}
+              className="w-full h-full object-cover"
+              onError={() => {
+                setProfilePhotoUrl("");
+              }}
+            />
+          ) : (
+            <span>{profileLoading ? "..." : registrarInitials}</span>
+          )}
         </div>
 
         <div className="ml-3 min-w-0">

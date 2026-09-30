@@ -168,6 +168,14 @@ export default function StudentPortalLayout() {
     try {
       let cleanPath = photoPath;
 
+      /*
+       * Handles cases where profile_photo_url contains:
+       *
+       * profile-photos/user-id/file.jpg
+       * /storage/v1/object/public/profile-photos/file.jpg
+       * /storage/v1/object/sign/profile-photos/file.jpg
+       * /storage/v1/object/authenticated/profile-photos/file.jpg
+       */
       if (cleanPath.includes("/storage/v1/object/")) {
         const marker = `/storage/v1/object/`;
         const markerIndex = cleanPath.indexOf(marker);
@@ -191,6 +199,14 @@ export default function StudentPortalLayout() {
       }
 
       cleanPath = cleanPath.replace(/^\/+/, "");
+
+      /*
+       * If the database somehow contains a full URL,
+       * return it directly.
+       */
+      if (/^https?:\/\//i.test(cleanPath)) {
+        return cleanPath;
+      }
 
       const { data, error } = await supabaseStudent.storage
         .from(STORAGE_BUCKET)
@@ -283,6 +299,8 @@ export default function StudentPortalLayout() {
           );
 
           setProfilePhoto(signedUrl);
+        } else {
+          setProfilePhoto(null);
         }
       }
     } catch (error) {
@@ -649,7 +667,38 @@ export default function StudentPortalLayout() {
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-xl font-bold text-white shadow-md">
+            {/* =================================================
+                STUDENT PROFILE PHOTO
+                ================================================= */}
+            {profilePhoto ? (
+              <img
+                src={profilePhoto}
+                alt={fullName}
+                className="h-11 w-11 flex-shrink-0 rounded-xl object-cover shadow-md"
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+
+                  const fallback =
+                    event.currentTarget.parentElement?.querySelector(
+                      "[data-student-brand-fallback]"
+                    );
+
+                  if (fallback) {
+                    fallback.classList.remove("hidden");
+                  }
+                }}
+              />
+            ) : null}
+
+            {/* =================================================
+                FALLBACK BRAND ICON
+                ================================================= */}
+            <div
+              data-student-brand-fallback
+              className={`${
+                profilePhoto ? "hidden" : "flex"
+              } h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-xl font-bold text-white shadow-md`}
+            >
               S
             </div>
 
@@ -924,7 +973,6 @@ export default function StudentPortalLayout() {
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
               {/* =================================================
                   DARK MODE
-                  NOW IN NAVBAR
                   ================================================= */}
               <button
                 type="button"
@@ -1190,12 +1238,29 @@ export default function StudentPortalLayout() {
                       src={profilePhoto}
                       alt={fullName}
                       className="h-9 w-9 rounded-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+
+                        const fallback =
+                          event.currentTarget.parentElement?.querySelector(
+                            "[data-header-profile-fallback]"
+                          );
+
+                        if (fallback) {
+                          fallback.classList.remove("hidden");
+                        }
+                      }}
                     />
-                  ) : (
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                      {getInitials(fullName)}
-                    </div>
-                  )}
+                  ) : null}
+
+                  <div
+                    data-header-profile-fallback
+                    className={`${
+                      profilePhoto ? "hidden" : "flex"
+                    } h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white`}
+                  >
+                    {getInitials(fullName)}
+                  </div>
 
                   <div className="hidden text-left sm:block">
                     <p
@@ -1226,7 +1291,6 @@ export default function StudentPortalLayout() {
 
                 {/* =================================================
                     PROFILE DROPDOWN
-                    DARK MODE REMOVED FROM HERE
                     ================================================= */}
                 {isProfileOpen && (
                   <div
@@ -1248,12 +1312,29 @@ export default function StudentPortalLayout() {
                             src={profilePhoto}
                             alt={fullName}
                             className="h-10 w-10 rounded-full object-cover"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+
+                              const fallback =
+                                event.currentTarget.parentElement?.querySelector(
+                                  "[data-dropdown-profile-fallback]"
+                                );
+
+                              if (fallback) {
+                                fallback.classList.remove("hidden");
+                              }
+                            }}
                           />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                            {getInitials(fullName)}
-                          </div>
-                        )}
+                        ) : null}
+
+                        <div
+                          data-dropdown-profile-fallback
+                          className={`${
+                            profilePhoto ? "hidden" : "flex"
+                          } h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white`}
+                        >
+                          {getInitials(fullName)}
+                        </div>
 
                         <div className="min-w-0">
                           <p
@@ -1329,9 +1410,9 @@ export default function StudentPortalLayout() {
             </div>
           </header>
 
-          {/* ===================================================
+          {/* =================================================
               PAGE CONTENT
-              =================================================== */}
+              ================================================= */}
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 ${
               darkMode ? "bg-slate-950" : "bg-slate-50"

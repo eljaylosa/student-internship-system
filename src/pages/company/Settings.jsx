@@ -1,26 +1,63 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseCompany } from "../../supabaseClient";
+import { INDUSTRIES } from "../../constants/industries";
+
+const COMPANY_LOGO_BUCKET = "company-logos";
 
 const Settings = () => {
-  const { darkMode } = useOutletContext();
+  const outletContext = useOutletContext();
+  const darkMode = outletContext?.darkMode ?? false;
+
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // =========================================================
   // PROFILE
   // =========================================================
 
   const [profile, setProfile] = useState({
-    companyName: "ABC Corp",
-    supervisorName: "Company Supervisor",
-    email: "supervisor@abccorp.com",
-    phone: "+63 912 345 6789",
-    position: "Company Supervisor",
+    companyName: "",
+    supervisorName: "",
+    email: "",
+    companyEmail: "",
+    phone: "",
+    address: "",
+    website: "",
+    industry: "",
+    position: "",
+    status: "",
   });
 
-  const [profileMessage, setProfileMessage] = useState("");
+  const [profileMessage, setProfileMessage] = useState({
+    type: "",
+    text: "",
+  });
+
+  // =========================================================
+  // COMPANY LOGO
+  // =========================================================
+
+  const [logoPath, setLogoPath] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [logoFile, setLogoFile] = useState(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoMessage, setLogoMessage] = useState({
+    type: "",
+    text: "",
+  });
 
   // =========================================================
   // NOTIFICATIONS
   // =========================================================
+  //
+  // These are UI preferences for now.
+  // The actual Notifications system will be implemented later.
+  //
 
   const [notifications, setNotifications] = useState({
     applicationUpdates: true,
@@ -34,7 +71,6 @@ const Settings = () => {
   // SECURITY
   // =========================================================
 
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [securityMessage, setSecurityMessage] = useState("");
 
   // =========================================================
@@ -81,6 +117,172 @@ const Settings = () => {
   const dividerClass = darkMode ? "border-slate-700" : "border-slate-200";
 
   // =========================================================
+  // HELPERS
+  // =========================================================
+
+  const getSupervisorName = (user) => {
+    if (!user) return "";
+
+    const firstName = user.first_name?.trim() || "";
+    const middleName = user.middle_name?.trim() || "";
+    const lastName = user.last_name?.trim() || "";
+
+    return [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
+  };
+
+  const getLogoUrl = async (path) => {
+    if (!path) return null;
+
+    const rawPath = String(path).trim();
+
+    if (!rawPath) return null;
+
+    if (/^https?:\/\//i.test(rawPath)) {
+      return rawPath;
+    }
+
+    const cleanPath = rawPath.replace(/^\/+/, "");
+
+    const { data, error } = await supabaseCompany.storage
+      .from(COMPANY_LOGO_BUCKET)
+      .createSignedUrl(cleanPath, 60 * 60);
+
+    if (error) {
+      console.error("Error creating company logo URL:", error);
+      return null;
+    }
+
+    return data?.signedUrl || null;
+  };
+
+  // =========================================================
+  // LOAD COMPANY SETTINGS
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSettings = async () => {
+      setLoading(true);
+
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseCompany.auth.getUser();
+
+        if (authError) {
+          throw authError;
+        }
+
+        if (!user) {
+          throw new Error("No authenticated company account found.");
+        }
+
+        // -----------------------------------------------------
+        // LOAD USER PROFILE
+        // -----------------------------------------------------
+
+        const { data: userProfile, error: userError } = await supabaseCompany
+          .from("users")
+          .select("id, email, first_name, middle_name, last_name, status")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (userError) {
+          throw userError;
+        }
+
+        // -----------------------------------------------------
+        // LOAD COMPANY PROFILE
+        // -----------------------------------------------------
+
+        const { data: company, error: companyError } = await supabaseCompany
+          .from("companies")
+          .select(
+            `
+                id,
+                user_id,
+                company_name,
+                company_email,
+                company_phone,
+                company_address,
+                website,
+                industry,
+                designation,
+                status
+              `
+          )
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (companyError) {
+          throw companyError;
+        }
+
+        if (!company) {
+          throw new Error(
+            "No company profile is associated with this account."
+          );
+        }
+
+        if (!mounted) return;
+
+        setProfile({
+          companyName: company.company_name || "",
+          supervisorName: getSupervisorName(userProfile),
+          email: userProfile?.email || user.email || "",
+          companyEmail: company.company_email || "",
+          phone: company.company_phone || "",
+          address: company.company_address || "",
+          website: company.website || "",
+          industry: company.industry || "",
+          position: company.designation || "",
+          status: company.status || userProfile?.status || "",
+        });
+
+        // -----------------------------------------------------
+        // LOAD COMPANY LOGO
+        // -----------------------------------------------------
+
+        const storedLogoPath =
+          user?.user_metadata?.company_logo_url ||
+          user?.user_metadata?.companyLogoUrl ||
+          "";
+
+        setLogoPath(storedLogoPath);
+
+        if (storedLogoPath) {
+          const signedUrl = await getLogoUrl(storedLogoPath);
+
+          if (mounted) {
+            setLogoUrl(signedUrl || "");
+          }
+        }
+      } catch (error) {
+        console.error("Error loading company settings:", error);
+
+        if (mounted) {
+          setProfileMessage({
+            type: "error",
+            text: error?.message || "Unable to load company settings.",
+          });
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSettings();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
   // PROFILE HANDLERS
   // =========================================================
 
@@ -90,17 +292,210 @@ const Settings = () => {
       [field]: value,
     }));
 
-    setProfileMessage("");
+    setProfileMessage({
+      type: "",
+      text: "",
+    });
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
 
-    setProfileMessage("Company profile settings saved successfully.");
+    setSavingProfile(true);
 
-    setTimeout(() => {
-      setProfileMessage("");
-    }, 3000);
+    setProfileMessage({
+      type: "",
+      text: "",
+    });
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseCompany.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("No authenticated company account found.");
+      }
+
+      const { error } = await supabaseCompany
+        .from("companies")
+        .update({
+          company_name: profile.companyName.trim(),
+          company_email: profile.companyEmail.trim(),
+          company_phone: profile.phone.trim(),
+          company_address: profile.address.trim(),
+          website: profile.website.trim(),
+          industry: profile.industry,
+          designation: profile.position.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setProfileMessage({
+        type: "success",
+        text: "Company profile settings saved successfully.",
+      });
+
+      setTimeout(() => {
+        setProfileMessage({
+          type: "",
+          text: "",
+        });
+      }, 3000);
+    } catch (error) {
+      console.error("Error saving company profile:", error);
+
+      setProfileMessage({
+        type: "error",
+        text: error?.message || "Unable to save company profile settings.",
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // =========================================================
+  // LOGO HANDLERS
+  // =========================================================
+
+  const handleLogoFileChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      setLogoFile(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setLogoMessage({
+        type: "error",
+        text: "Please select a valid image file.",
+      });
+
+      e.target.value = "";
+      setLogoFile(null);
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      setLogoMessage({
+        type: "error",
+        text: "Company logo must be 5 MB or smaller.",
+      });
+
+      e.target.value = "";
+      setLogoFile(null);
+      return;
+    }
+
+    setLogoFile(file);
+
+    setLogoMessage({
+      type: "",
+      text: "",
+    });
+  };
+
+  const handleUploadLogo = async () => {
+    if (!logoFile) {
+      setLogoMessage({
+        type: "error",
+        text: "Please select a company logo first.",
+      });
+
+      return;
+    }
+
+    setUploadingLogo(true);
+
+    setLogoMessage({
+      type: "",
+      text: "",
+    });
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseCompany.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("No authenticated company account found.");
+      }
+
+      const extension = logoFile.name.split(".").pop()?.toLowerCase() || "png";
+
+      const filePath = `${user.id}/company-logo-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabaseCompany.storage
+        .from(COMPANY_LOGO_BUCKET)
+        .upload(filePath, logoFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: logoFile.type,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { error: metadataError } = await supabaseCompany.auth.updateUser({
+        data: {
+          company_logo_url: filePath,
+        },
+      });
+
+      if (metadataError) {
+        // Clean up the uploaded file if metadata update fails.
+        await supabaseCompany.storage
+          .from(COMPANY_LOGO_BUCKET)
+          .remove([filePath]);
+
+        throw metadataError;
+      }
+
+      const signedUrl = await getLogoUrl(filePath);
+
+      setLogoPath(filePath);
+      setLogoUrl(signedUrl || "");
+      setLogoFile(null);
+
+      setLogoMessage({
+        type: "success",
+        text: "Company logo updated successfully.",
+      });
+
+      setTimeout(() => {
+        setLogoMessage({
+          type: "",
+          text: "",
+        });
+      }, 3000);
+    } catch (error) {
+      console.error("Error uploading company logo:", error);
+
+      setLogoMessage({
+        type: "error",
+        text: error?.message || "Unable to update company logo.",
+      });
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   // =========================================================
@@ -112,26 +507,6 @@ const Settings = () => {
       ...prev,
       [type]: !prev[type],
     }));
-  };
-
-  // =========================================================
-  // 2FA HANDLER
-  // =========================================================
-
-  const handleToggle2FA = () => {
-    const newValue = !twoFactorEnabled;
-
-    setTwoFactorEnabled(newValue);
-
-    setSecurityMessage(
-      newValue
-        ? "Two-factor authentication has been enabled."
-        : "Two-factor authentication has been disabled."
-    );
-
-    setTimeout(() => {
-      setSecurityMessage("");
-    }, 3000);
   };
 
   // =========================================================
@@ -150,7 +525,7 @@ const Settings = () => {
     });
   };
 
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
 
     const { current, newPassword, confirmPassword } = passwords;
@@ -182,24 +557,104 @@ const Settings = () => {
       return;
     }
 
-    setPasswordMessage({
-      type: "success",
-      text: "Password changed successfully.",
-    });
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseCompany.auth.getUser();
 
-    setPasswords({
-      current: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+      if (authError) {
+        throw authError;
+      }
 
-    setTimeout(() => {
-      setShowPasswordForm(false);
-      setPasswordMessage({
-        type: "",
-        text: "",
+      if (!user?.email) {
+        throw new Error("Unable to determine the current account email.");
+      }
+
+      // -----------------------------------------------------
+      // VERIFY CURRENT PASSWORD
+      // -----------------------------------------------------
+
+      const { error: verificationError } =
+        await supabaseCompany.auth.signInWithPassword({
+          email: user.email,
+          password: current,
+        });
+
+      if (verificationError) {
+        throw new Error("Current password is incorrect.");
+      }
+
+      // -----------------------------------------------------
+      // UPDATE PASSWORD
+      // -----------------------------------------------------
+
+      const { error: updateError } = await supabaseCompany.auth.updateUser({
+        password: newPassword,
       });
-    }, 1500);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setPasswordMessage({
+        type: "success",
+        text: "Password changed successfully.",
+      });
+
+      setPasswords({
+        current: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setTimeout(() => {
+        setShowPasswordForm(false);
+        setPasswordMessage({
+          type: "",
+          text: "",
+        });
+      }, 1500);
+    } catch (error) {
+      console.error("Error changing password:", error);
+
+      setPasswordMessage({
+        type: "error",
+        text: error?.message || "Unable to change password.",
+      });
+    }
+  };
+
+  // =========================================================
+  // SIGN OUT OTHER SESSIONS
+  // =========================================================
+
+  const handleSignOutOtherSessions = async () => {
+    setSecurityMessage("");
+
+    try {
+      const { error } = await supabaseCompany.auth.signOut({
+        scope: "others",
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSecurityMessage(
+        "Other active sessions have been signed out successfully."
+      );
+
+      setTimeout(() => {
+        setSecurityMessage("");
+      }, 3000);
+    } catch (error) {
+      console.error("Error signing out other sessions:", error);
+
+      setSecurityMessage(
+        error?.message || "Unable to sign out other sessions."
+      );
+    }
   };
 
   // =========================================================
@@ -252,6 +707,53 @@ const Settings = () => {
   );
 
   // =========================================================
+  // LOADING STATE
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="mb-5 sm:mb-6">
+            <p
+              className={`text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1 ${
+                darkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            >
+              Company Portal
+            </p>
+
+            <h1 className={`text-xl sm:text-2xl font-black ${pageTitleClass}`}>
+              Account Settings
+            </h1>
+
+            <p className={`text-xs sm:text-sm mt-1 ${bodyTextClass}`}>
+              Loading your company settings...
+            </p>
+          </div>
+
+          <div
+            className={`
+              max-w-[1000px]
+              border
+              rounded-xl
+              shadow-sm
+              p-8
+              ${panelClass}
+            `}
+          >
+            <div
+              className={`animate-pulse h-4 w-48 rounded ${
+                darkMode ? "bg-slate-700" : "bg-slate-200"
+              }`}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
   // RETURN
   // =========================================================
 
@@ -296,7 +798,8 @@ const Settings = () => {
               ${bodyTextClass}
             `}
           >
-            Manage your company profile, notifications, and account security.
+            Manage your company information, notifications, and account
+            security.
           </p>
         </div>
 
@@ -329,7 +832,7 @@ const Settings = () => {
                     ${headingClass}
                   `}
                 >
-                  Profile Settings
+                  Company Settings
                 </h2>
 
                 <p
@@ -340,22 +843,205 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Update your company and supervisor account information.
+                  Update your company information and supervisor account
+                  details.
                 </p>
               </div>
 
-              <form onSubmit={handleSaveProfile} className="max-w-[650px]">
+              <form onSubmit={handleSaveProfile} className="max-w-[700px]">
                 <div className="space-y-4">
-                  {/* COMPANY NAME */}
+                  {/* COMPANY LOGO */}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-start
+                    "
+                  >
                     <label
                       className={`
                         text-xs
                         font-semibold
+                        sm:pt-2
                         ${labelClass}
                       `}
                     >
+                      Company Logo
+                    </label>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`
+                            w-20
+                            h-20
+                            rounded-xl
+                            border
+                            overflow-hidden
+                            flex
+                            items-center
+                            justify-center
+                            flex-shrink-0
+                            ${
+                              darkMode
+                                ? "bg-slate-900 border-slate-700"
+                                : "bg-slate-50 border-slate-200"
+                            }
+                          `}
+                        >
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl}
+                              alt="Company logo"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span
+                              className={`
+                                text-2xl
+                                font-black
+                                ${
+                                  darkMode ? "text-slate-500" : "text-slate-400"
+                                }
+                              `}
+                            >
+                              {profile.companyName
+                                ?.trim()
+                                ?.charAt(0)
+                                ?.toUpperCase() || "C"}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p
+                            className={`
+                              text-sm
+                              font-semibold
+                              ${darkMode ? "text-slate-200" : "text-slate-800"}
+                            `}
+                          >
+                            Upload company logo
+                          </p>
+
+                          <p
+                            className={`
+                              text-[10px]
+                              sm:text-xs
+                              mt-1
+                              ${bodyTextClass}
+                            `}
+                          >
+                            PNG, JPG, JPEG, or other image formats up to 5 MB.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label
+                          className="
+                            inline-flex
+                            items-center
+                            px-4
+                            py-2.5
+                            rounded-lg
+                            border
+                            border-slate-300
+                            text-xs
+                            font-bold
+                            cursor-pointer
+                            transition
+                            hover:bg-slate-100
+                          "
+                        >
+                          Choose Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoFileChange}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {logoFile && (
+                          <button
+                            type="button"
+                            onClick={handleUploadLogo}
+                            disabled={uploadingLogo}
+                            className="
+                              px-4
+                              py-2.5
+                              rounded-lg
+                              bg-purple-600
+                              text-white
+                              text-xs
+                              font-bold
+                              hover:bg-purple-700
+                              disabled:opacity-60
+                              disabled:cursor-not-allowed
+                              transition
+                            "
+                          >
+                            {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                          </button>
+                        )}
+                      </div>
+
+                      {logoFile && (
+                        <p
+                          className={`
+                            text-[10px]
+                            sm:text-xs
+                            ${bodyTextClass}
+                          `}
+                        >
+                          Selected: {logoFile.name}
+                        </p>
+                      )}
+
+                      {logoMessage.text && (
+                        <div
+                          className={`
+                            px-4
+                            py-3
+                            rounded-lg
+                            border
+                            text-xs
+                            font-medium
+                            ${
+                              logoMessage.type === "success"
+                                ? darkMode
+                                  ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : darkMode
+                                ? "bg-red-950/40 text-red-300 border-red-800"
+                                : "bg-red-50 text-red-700 border-red-200"
+                            }
+                          `}
+                        >
+                          {logoMessage.text}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* COMPANY NAME */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
                       Company Name
                     </label>
 
@@ -381,23 +1067,24 @@ const Settings = () => {
 
                   {/* SUPERVISOR NAME */}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
                       Supervisor Name
                     </label>
 
                     <input
                       type="text"
                       value={profile.supervisorName}
-                      onChange={(e) =>
-                        handleProfileChange("supervisorName", e.target.value)
-                      }
+                      readOnly
                       className={`
                         w-full
                         h-10
@@ -406,30 +1093,85 @@ const Settings = () => {
                         border
                         text-sm
                         outline-none
-                        transition
-                        ${inputClass}
+                        ${
+                          darkMode
+                            ? "bg-slate-900/60 border-slate-700 text-slate-400"
+                            : "bg-slate-100 border-slate-300 text-slate-500"
+                        }
                       `}
                     />
-                  </div>
 
-                  {/* EMAIL */}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
+                    <p
                       className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
+                        sm:col-start-2
+                        text-[10px]
+                        -mt-1
+                        ${bodyTextClass}
                       `}
                     >
-                      Email
+                      Your supervisor name is managed through your account
+                      profile.
+                    </p>
+                  </div>
+
+                  {/* ACCOUNT EMAIL */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Account Email
                     </label>
 
                     <input
                       type="email"
                       value={profile.email}
+                      readOnly
+                      className={`
+                        w-full
+                        h-10
+                        px-3
+                        rounded-lg
+                        border
+                        text-sm
+                        outline-none
+                        ${
+                          darkMode
+                            ? "bg-slate-900/60 border-slate-700 text-slate-400"
+                            : "bg-slate-100 border-slate-300 text-slate-500"
+                        }
+                      `}
+                    />
+                  </div>
+
+                  {/* COMPANY EMAIL */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Company Email
+                    </label>
+
+                    <input
+                      type="email"
+                      value={profile.companyEmail}
                       onChange={(e) =>
-                        handleProfileChange("email", e.target.value)
+                        handleProfileChange("companyEmail", e.target.value)
                       }
                       className={`
                         w-full
@@ -447,14 +1189,17 @@ const Settings = () => {
 
                   {/* PHONE */}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
-                    <label
-                      className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
-                      `}
-                    >
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
                       Phone
                     </label>
 
@@ -478,17 +1223,139 @@ const Settings = () => {
                     />
                   </div>
 
-                  {/* POSITION */}
+                  {/* ADDRESS */}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-[140px_minmax(0,1fr)] gap-1.5 sm:gap-4 sm:items-center">
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-start
+                    "
+                  >
                     <label
+                      className={`text-xs font-semibold sm:pt-2 ${labelClass}`}
+                    >
+                      Address
+                    </label>
+
+                    <textarea
+                      value={profile.address}
+                      onChange={(e) =>
+                        handleProfileChange("address", e.target.value)
+                      }
+                      rows={3}
                       className={`
-                        text-xs
-                        font-semibold
-                        ${labelClass}
+                        w-full
+                        px-3
+                        py-2.5
+                        rounded-lg
+                        border
+                        text-sm
+                        outline-none
+                        transition
+                        resize-y
+                        ${inputClass}
+                      `}
+                    />
+                  </div>
+
+                  {/* WEBSITE */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Website
+                    </label>
+
+                    <input
+                      type="url"
+                      value={profile.website}
+                      onChange={(e) =>
+                        handleProfileChange("website", e.target.value)
+                      }
+                      placeholder="https://example.com"
+                      className={`
+                        w-full
+                        h-10
+                        px-3
+                        rounded-lg
+                        border
+                        text-sm
+                        outline-none
+                        transition
+                        ${inputClass}
+                      `}
+                    />
+                  </div>
+
+                  {/* INDUSTRY */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Industry
+                    </label>
+
+                    <select
+                      value={profile.industry}
+                      onChange={(e) =>
+                        handleProfileChange("industry", e.target.value)
+                      }
+                      className={`
+                        w-full
+                        h-10
+                        px-3
+                        rounded-lg
+                        border
+                        text-sm
+                        outline-none
+                        transition
+                        ${inputClass}
                       `}
                     >
-                      Position
+                      <option value="">Select industry</option>
+
+                      {INDUSTRIES.map((industry) => (
+                        <option key={industry} value={industry}>
+                          {industry}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* DESIGNATION */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Designation
                     </label>
 
                     <input
@@ -510,11 +1377,48 @@ const Settings = () => {
                       `}
                     />
                   </div>
+
+                  {/* STATUS */}
+
+                  <div
+                    className="
+                      grid
+                      grid-cols-1
+                      sm:grid-cols-[140px_minmax(0,1fr)]
+                      gap-1.5
+                      sm:gap-4
+                      sm:items-center
+                    "
+                  >
+                    <label className={`text-xs font-semibold ${labelClass}`}>
+                      Account Status
+                    </label>
+
+                    <input
+                      type="text"
+                      value={profile.status || "Active"}
+                      readOnly
+                      className={`
+                        w-full
+                        h-10
+                        px-3
+                        rounded-lg
+                        border
+                        text-sm
+                        outline-none
+                        ${
+                          darkMode
+                            ? "bg-slate-900/60 border-slate-700 text-slate-400"
+                            : "bg-slate-100 border-slate-300 text-slate-500"
+                        }
+                      `}
+                    />
+                  </div>
                 </div>
 
                 {/* PROFILE MESSAGE */}
 
-                {profileMessage && (
+                {profileMessage.text && (
                   <div
                     className={`
                       mt-4
@@ -525,18 +1429,23 @@ const Settings = () => {
                       text-xs
                       font-medium
                       ${
-                        darkMode
-                          ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        profileMessage.type === "success"
+                          ? darkMode
+                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : darkMode
+                          ? "bg-red-950/40 text-red-300 border-red-800"
+                          : "bg-red-50 text-red-700 border-red-200"
                       }
                     `}
                   >
-                    {profileMessage}
+                    {profileMessage.text}
                   </div>
                 )}
 
                 <button
                   type="submit"
+                  disabled={savingProfile}
                   className="
                     mt-5
                     px-6
@@ -547,10 +1456,12 @@ const Settings = () => {
                     text-xs
                     font-bold
                     hover:bg-slate-700
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
                     transition
                   "
                 >
-                  Save Changes
+                  {savingProfile ? "Saving..." : "Save Changes"}
                 </button>
               </form>
             </section>
@@ -854,74 +1765,11 @@ const Settings = () => {
                     ${bodyTextClass}
                   `}
                 >
-                  Manage additional security options for your company supervisor
-                  account.
+                  Manage your company supervisor account security.
                 </p>
               </div>
 
               <div className="max-w-[700px] space-y-3">
-                {/* 2FA */}
-
-                <div
-                  className={`
-                    flex
-                    flex-col
-                    sm:flex-row
-                    sm:items-center
-                    justify-between
-                    gap-4
-                    border
-                    rounded-xl
-                    p-4
-                    sm:p-5
-                    ${sectionCardClass}
-                  `}
-                >
-                  <div>
-                    <p
-                      className={`
-                        text-sm
-                        font-semibold
-                        ${darkMode ? "text-slate-200" : "text-slate-800"}
-                      `}
-                    >
-                      Two-Factor Authentication
-                    </p>
-
-                    <p
-                      className={`
-                        text-[10px]
-                        sm:text-xs
-                        mt-1
-                        ${bodyTextClass}
-                      `}
-                    >
-                      Add an extra layer of protection to your company
-                      supervisor account.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleToggle2FA}
-                    className={`
-                      px-5
-                      py-2.5
-                      rounded-lg
-                      text-xs
-                      font-bold
-                      transition
-                      ${
-                        twoFactorEnabled
-                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                          : "bg-slate-800 text-white hover:bg-slate-700"
-                      }
-                    `}
-                  >
-                    {twoFactorEnabled ? "2FA Enabled" : "Enable 2FA"}
-                  </button>
-                </div>
-
                 {/* CHANGE PASSWORD */}
 
                 <div
@@ -958,8 +1806,7 @@ const Settings = () => {
                         ${bodyTextClass}
                       `}
                     >
-                      Update your company supervisor account password regularly
-                      for better security.
+                      Update your company supervisor account password.
                     </p>
                   </div>
 
@@ -967,6 +1814,7 @@ const Settings = () => {
                     type="button"
                     onClick={() => {
                       setShowPasswordForm(!showPasswordForm);
+
                       setPasswordMessage({
                         type: "",
                         text: "",
@@ -1172,9 +2020,16 @@ const Settings = () => {
                           type="button"
                           onClick={() => {
                             setShowPasswordForm(false);
+
                             setPasswordMessage({
                               type: "",
                               text: "",
+                            });
+
+                            setPasswords({
+                              current: "",
+                              newPassword: "",
+                              confirmPassword: "",
                             });
                           }}
                           className={`
@@ -1199,6 +2054,66 @@ const Settings = () => {
                   </div>
                 )}
 
+                {/* SIGN OUT OTHER SESSIONS */}
+
+                <div
+                  className={`
+                    flex
+                    flex-col
+                    sm:flex-row
+                    sm:items-center
+                    justify-between
+                    gap-4
+                    border
+                    rounded-xl
+                    p-4
+                    sm:p-5
+                    ${sectionCardClass}
+                  `}
+                >
+                  <div>
+                    <p
+                      className={`
+                        text-sm
+                        font-semibold
+                        ${darkMode ? "text-slate-200" : "text-slate-800"}
+                      `}
+                    >
+                      Active Sessions
+                    </p>
+
+                    <p
+                      className={`
+                        text-[10px]
+                        sm:text-xs
+                        mt-1
+                        ${bodyTextClass}
+                      `}
+                    >
+                      Sign out your company account from other active devices.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSignOutOtherSessions}
+                    className="
+                      px-5
+                      py-2.5
+                      rounded-lg
+                      border
+                      border-red-300
+                      text-red-600
+                      text-xs
+                      font-bold
+                      hover:bg-red-50
+                      transition
+                    "
+                  >
+                    Sign Out Other Sessions
+                  </button>
+                </div>
+
                 {/* SECURITY MESSAGE */}
 
                 {securityMessage && (
@@ -1211,9 +2126,13 @@ const Settings = () => {
                       text-xs
                       font-medium
                       ${
-                        darkMode
-                          ? "bg-slate-800 border-slate-700 text-slate-300"
-                          : "bg-slate-100 border-slate-200 text-slate-600"
+                        securityMessage.toLowerCase().includes("successfully")
+                          ? darkMode
+                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-800"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : darkMode
+                          ? "bg-red-950/40 text-red-300 border-red-800"
+                          : "bg-red-50 text-red-700 border-red-200"
                       }
                     `}
                   >

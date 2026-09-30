@@ -14,23 +14,22 @@ import { supabase } from "../../supabaseClient";
 // - registrars
 // - companies
 //
-// Notes:
-// - Admin accounts are excluded from the management tabs.
-// - Student ID comes from students.student_id.
-// - Registrar ID comes from registrars.employee_id.
-// - Company account ID uses the user's UUID because there is
-//   no separate supervisor/profile ID in the current schema.
-// - Email is displayed as the Login / Personal Email.
-// - Auth email changes are intentionally read-only here because
-//   changing public.users.email alone does NOT change Supabase Auth.
+// Profile Images:
+// - Students     -> profile-photos bucket
+// - Registrars   -> profile-photos bucket
+// - Companies    -> company-logos bucket
+//
+// IMPORTANT DATABASE RELATIONSHIP:
+//
+// students.id === users.id
+// registrars.id === users.id
+// companies.user_id === users.id
+//
+// There is NO students.user_id or registrars.user_id.
 //
 // Account actions:
-// - Activate: changes users.status to "active"
-// - Deactivate: SOFT DELETE.
-//   Requires the current administrator's password.
-// - Deactivation does NOT delete any database records.
-// - Internship history, applications, assignments, documents,
-//   evaluations, certificates, and company records are preserved.
+// - Activate: users.status = "active"
+// - Deactivate: soft delete -> users.status = "inactive"
 // =========================================================
 
 const STATUS = {
@@ -41,22 +40,33 @@ const STATUS = {
 
 const PAGE_SIZE = 6;
 
+const PROFILE_PHOTO_BUCKET = "profile-photos";
+const COMPANY_LOGO_BUCKET = "company-logos";
+
 const roleMap = {
   students: "student",
   registrar: "registrar",
   company: "company",
 };
 
+// =========================================================
+// LABEL HELPERS
+// =========================================================
+
 const getRoleLabel = (role) => {
   switch (role) {
     case "student":
       return "Student";
+
     case "registrar":
       return "Registrar";
+
     case "company":
       return "Company Representative";
+
     case "admin":
       return "Administrator";
+
     default:
       return role || "Unknown";
   }
@@ -66,10 +76,13 @@ const getStatusLabel = (status) => {
   switch (String(status || "").toLowerCase()) {
     case "active":
       return "Active";
+
     case "inactive":
       return "Inactive";
+
     case "pending":
       return "Pending";
+
     default:
       return status || "Unknown";
   }
@@ -85,7 +98,7 @@ const getStatusClass = (status, darkMode) => {
     case "inactive":
       return darkMode
         ? "bg-red-900/30 text-red-300 border-red-800"
-        : "bg-red-50 text-red-700 border-red-200";
+        : "bg-red-50 text-red-600 border-red-200";
 
     case "pending":
       return darkMode
@@ -115,6 +128,293 @@ const getInitials = (user) => {
   return initials || "U";
 };
 
+const getCompanyInitials = (companyName) => {
+  if (!companyName) return "CO";
+
+  const words = String(companyName).trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => word.charAt(0))
+    .join("")
+    .toUpperCase();
+};
+
+// =========================================================
+// STORAGE PATH CANDIDATES
+// =========================================================
+//
+// IMPORTANT:
+//
+// Supabase bucket names are NOT always part of the object path.
+//
+// Your database currently contains values like:
+//
+// profile-photos/<user-id>/profile-photo.png
+//
+// That may mean the actual object path is literally:
+//
+// profile-photos/<user-id>/profile-photo.png
+//
+// OR:
+//
+// <user-id>/profile-photo.png
+//
+// We therefore try BOTH.
+//
+// This prevents UserManagement from assuming the wrong storage
+// path format.
+//
+
+const getStoragePathCandidates = (bucket, value, role = null) => {
+  if (!value) return [];
+
+  const raw = String(value).trim();
+
+  if (!raw) return [];
+
+  const candidates = [];
+
+  const addCandidate = (path) => {
+    if (!path) return;
+
+    let clean = String(path).trim();
+
+    if (!clean) return;
+
+    clean = clean.replace(/^\/+/, "");
+
+    if (!clean) return;
+
+    if (!candidates.includes(clean)) {
+      candidates.push(clean);
+    }
+  };
+
+  // =========================================================
+  // 1. ORIGINAL DATABASE VALUE
+  // =========================================================
+  //
+  // This is VERY IMPORTANT.
+  //
+  // If the DB says:
+  //
+  // profile-photos/UUID/profile-photo.png
+  //
+  // we try that exact object path first.
+  //
+
+  if (!/^https?:\/\//i.test(raw)) {
+    addCandidate(raw);
+  }
+
+  // =========================================================
+  // 2. FULL SUPABASE URL
+  // =========================================================
+  //
+  // Extract the actual object path from URLs such as:
+  //
+  // /storage/v1/object/public/profile-photos/...
+  // /storage/v1/object/sign/profile-photos/...
+  // /storage/v1/object/authenticated/profile-photos/...
+  //
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+
+      let pathname = url.pathname.replace(/^\/+/, "");
+
+      const storageMarker = "storage/v1/object/";
+
+      const markerIndex = pathname.indexOf(storageMarker);
+
+      if (markerIndex !== -1) {
+        const afterObject = pathname.slice(markerIndex + storageMarker.length);
+
+        const parts = afterObject.split("/").filter(Boolean);
+
+        const bucketIndex = parts.indexOf(bucket);
+
+        if (bucketIndex !== -1) {
+          addCandidate(parts.slice(bucketIndex + 1).join("/"));
+        } else {
+          addCandidate(afterObject);
+        }
+      } else {
+        addCandidate(pathname);
+      }
+    } catch (error) {
+      console.warn("[UserManagement] Unable to parse storage URL:", raw, error);
+    }
+  }
+
+  // =========================================================
+  // 3. REMOVE BUCKET PREFIX
+  // =========================================================
+  //
+  // If the DB value is:
+  //
+  // profile-photos/UUID/profile-photo.png
+  //
+  // ALSO try:
+  //
+  // UUID/profile-photo.png
+  //
+
+  const bucketPrefix = `${bucket}/`;
+
+  for (const existingPath of [...candidates]) {
+    if (existingPath.startsWith(bucketPrefix)) {
+      addCandidate(existingPath.slice(bucketPrefix.length));
+    }
+  }
+
+  // =========================================================
+  // 4. STUDENT / REGISTRAR LEGACY FOLDER FORMAT
+  // =========================================================
+  //
+  // Try:
+  //
+  // students/<uuid>/<filename>
+  // registrars/<uuid>/<filename>
+  //
+  // This handles older uploads.
+  //
+
+  if (
+    bucket === PROFILE_PHOTO_BUCKET &&
+    (role === "student" || role === "registrar")
+  ) {
+    for (const existingPath of [...candidates]) {
+      const parts = existingPath.split("/").filter(Boolean);
+
+      if (parts.length >= 2) {
+        const fileName = parts[parts.length - 1];
+
+        // Find UUID-like path component.
+        const uuidPart = parts.find((part) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            part
+          )
+        );
+
+        if (uuidPart) {
+          const folder = role === "student" ? "students" : "registrars";
+
+          addCandidate(`${folder}/${uuidPart}/${fileName}`);
+          addCandidate(`${uuidPart}/${fileName}`);
+        }
+      }
+    }
+  }
+
+  return [...new Set(candidates)];
+};
+
+// =========================================================
+// STORAGE IMAGE URL
+// =========================================================
+//
+// Tries every valid representation of the stored path.
+//
+// IMPORTANT:
+// We do NOT assume that "profile-photos/" in the database
+// should automatically be removed.
+//
+
+const getStorageImageUrl = async (bucket, value, role = null) => {
+  if (!value) {
+    console.warn("[UserManagement] No image path:", {
+      bucket,
+      role,
+      value,
+    });
+    return null;
+  }
+
+  const rawPath = String(value).trim();
+
+  if (!rawPath) {
+    return null;
+  }
+
+  // Already a normal URL
+  if (/^https?:\/\//i.test(rawPath)) {
+    return rawPath;
+  }
+
+  // IMPORTANT:
+  // profile_photo_url currently stores paths like:
+  //
+  // profile-photos/<uuid>/profile-photo.png
+  //
+  // and storage.objects.name confirms that this is the
+  // actual object name inside the profile-photos bucket.
+  //
+  // Therefore DO NOT remove "profile-photos/" here.
+
+  const path = rawPath.replace(/^\/+/, "");
+
+  console.log("[UserManagement] Creating signed URL:", {
+    bucket,
+    role,
+    path,
+  });
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, 60 * 60);
+
+    if (error) {
+      console.error("[UserManagement] Signed URL failed:", {
+        bucket,
+        role,
+        path,
+        error,
+      });
+
+      return null;
+    }
+
+    if (!data?.signedUrl) {
+      console.error("[UserManagement] No signed URL returned:", {
+        bucket,
+        role,
+        path,
+        data,
+      });
+
+      return null;
+    }
+
+    console.log("[UserManagement] Signed URL created:", {
+      bucket,
+      role,
+      path,
+    });
+
+    return data.signedUrl;
+  } catch (error) {
+    console.error("[UserManagement] Storage exception:", {
+      bucket,
+      role,
+      path,
+      error,
+    });
+
+    return null;
+  }
+};
+// =========================================================
+// COMPONENT
+// =========================================================
+
 export default function UserManagement() {
   const { darkMode } = useOutletContext();
 
@@ -126,6 +426,26 @@ export default function UserManagement() {
   const [students, setStudents] = useState([]);
   const [registrars, setRegistrars] = useState([]);
   const [companies, setCompanies] = useState([]);
+
+  // =========================================================
+  // PROFILE IMAGES
+  // =========================================================
+  //
+  // Student:
+  // students.id === users.id
+  //
+  // Registrar:
+  // registrars.id === users.id
+  //
+  // Company:
+  // companies.user_id === users.id
+  //
+  // Both student and registrar photo maps are therefore
+  // keyed directly by users.id.
+  // =========================================================
+
+  const [profilePhotoUrls, setProfilePhotoUrls] = useState({});
+  const [companyLogoUrls, setCompanyLogoUrls] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -183,8 +503,11 @@ export default function UserManagement() {
       setLoading(true);
       setErrorMessage("");
 
+      setProfilePhotoUrls({});
+      setCompanyLogoUrls({});
+
       // -------------------------------------------------------
-      // Check currently authenticated user
+      // AUTHENTICATED USER
       // -------------------------------------------------------
 
       const {
@@ -201,7 +524,7 @@ export default function UserManagement() {
       }
 
       // -------------------------------------------------------
-      // Load current user's public profile
+      // CURRENT ADMIN PROFILE
       // -------------------------------------------------------
 
       const { data: adminProfile, error: adminError } = await supabase
@@ -221,7 +544,7 @@ export default function UserManagement() {
       setCurrentAdmin(adminProfile);
 
       // -------------------------------------------------------
-      // Load all users
+      // ALL USERS
       // -------------------------------------------------------
 
       const { data: userRows, error: usersError } = await supabase
@@ -246,47 +569,237 @@ export default function UserManagement() {
       }
 
       // -------------------------------------------------------
-      // Load student profiles
+      // STUDENTS
+      // -------------------------------------------------------
+      //
+      // IMPORTANT:
+      //
+      // students.id is the FK to users.id.
+      //
+      // DO NOT use students.user_id.
       // -------------------------------------------------------
 
       const { data: studentRows, error: studentsError } = await supabase
         .from("students")
-        .select("id, student_id");
+        .select("id, student_id, profile_photo_url");
 
       if (studentsError) {
         throw studentsError;
       }
 
       // -------------------------------------------------------
-      // Load registrar profiles
+      // REGISTRARS
+      // -------------------------------------------------------
+      //
+      // IMPORTANT:
+      //
+      // registrars.id is the FK to users.id.
+      //
+      // DO NOT use registrars.user_id.
       // -------------------------------------------------------
 
       const { data: registrarRows, error: registrarsError } = await supabase
         .from("registrars")
-        .select("id, employee_id");
+        .select("id, employee_id, profile_photo_url");
 
       if (registrarsError) {
         throw registrarsError;
       }
 
       // -------------------------------------------------------
-      // Load company profiles
+      // COMPANIES
       // -------------------------------------------------------
 
       const { data: companyRows, error: companiesError } = await supabase
         .from("companies")
-        .select("user_id, company_name, company_email");
+        .select("id, user_id, company_name, company_email");
 
       if (companiesError) {
         throw companiesError;
       }
 
+      // -------------------------------------------------------
+      // SAVE DATABASE DATA
+      // -------------------------------------------------------
+
       setUsers(userRows || []);
       setStudents(studentRows || []);
       setRegistrars(registrarRows || []);
       setCompanies(companyRows || []);
+
+      // =======================================================
+      // STUDENT + REGISTRAR PROFILE PHOTOS
+      // =======================================================
+      //
+      // We intentionally use:
+      //
+      // student.id
+      // registrar.id
+      //
+      // because both are the same UUID as users.id.
+      // =======================================================
+
+      const profilePhotoEntries = [
+        ...(studentRows || [])
+          .filter(
+            (student) =>
+              Boolean(student?.id) && Boolean(student?.profile_photo_url)
+          )
+          .map((student) => ({
+            userId: student.id,
+            path: student.profile_photo_url,
+            role: "student",
+          })),
+
+        ...(registrarRows || [])
+          .filter(
+            (registrar) =>
+              Boolean(registrar?.id) && Boolean(registrar?.profile_photo_url)
+          )
+          .map((registrar) => ({
+            userId: registrar.id,
+            path: registrar.profile_photo_url,
+            role: "registrar",
+          })),
+      ];
+
+      console.log("[UserManagement] Student rows:", studentRows);
+
+      console.log("[UserManagement] Registrar rows:", registrarRows);
+
+      console.log(
+        "[UserManagement] Profile photo records:",
+        profilePhotoEntries
+      );
+
+      // -------------------------------------------------------
+      // SIGN STUDENT + REGISTRAR PHOTOS INDEPENDENTLY
+      // -------------------------------------------------------
+
+      const profilePhotoResults = await Promise.all(
+        profilePhotoEntries.map(async (item) => {
+          try {
+            const url = await getStorageImageUrl(
+              PROFILE_PHOTO_BUCKET,
+              item.path,
+              item.role
+            );
+
+            return {
+              userId: item.userId,
+              role: item.role,
+              url,
+            };
+          } catch (error) {
+            console.error(
+              `[UserManagement] Failed loading ${item.role} profile photo:`,
+              {
+                userId: item.userId,
+                path: item.path,
+                error,
+              }
+            );
+
+            return {
+              userId: item.userId,
+              role: item.role,
+              url: null,
+            };
+          }
+        })
+      );
+
+      // -------------------------------------------------------
+      // users.id -> signed profile photo URL
+      // -------------------------------------------------------
+
+      const photoMap = {};
+
+      for (const item of profilePhotoResults) {
+        if (item.userId && item.url) {
+          photoMap[item.userId] = item.url;
+        }
+      }
+
+      console.log("[UserManagement] Profile photo URL map:", photoMap);
+
+      setProfilePhotoUrls(photoMap);
+
+      // =======================================================
+      // COMPANY LOGOS
+      // =======================================================
+
+      const companyIds = [
+        ...new Set(
+          (companyRows || []).map((company) => company?.id).filter(Boolean)
+        ),
+      ];
+
+      if (companyIds.length > 0) {
+        const { data: logoRows, error: logoError } = await supabase.rpc(
+          "get_company_logos",
+          {
+            p_company_ids: companyIds,
+          }
+        );
+
+        if (logoError) {
+          console.warn(
+            "[UserManagement] Unable to load company logos:",
+            logoError
+          );
+
+          setCompanyLogoUrls({});
+        } else {
+          const companyLogoEntries = (logoRows || [])
+            .filter((company) => company?.company_id && company?.logo_path)
+            .map((company) => ({
+              id: company.company_id,
+              path: company.logo_path,
+            }));
+
+          const companyLogoResults = await Promise.all(
+            companyLogoEntries.map(async (item) => {
+              try {
+                const url = await getStorageImageUrl(
+                  COMPANY_LOGO_BUCKET,
+                  item.path
+                );
+
+                return {
+                  id: item.id,
+                  url,
+                };
+              } catch (error) {
+                console.error("[UserManagement] Failed loading company logo:", {
+                  companyId: item.id,
+                  path: item.path,
+                  error,
+                });
+
+                return {
+                  id: item.id,
+                  url: null,
+                };
+              }
+            })
+          );
+
+          const logoMap = {};
+
+          for (const item of companyLogoResults) {
+            if (item.id && item.url) {
+              logoMap[item.id] = item.url;
+            }
+          }
+
+          setCompanyLogoUrls(logoMap);
+        }
+      } else {
+        setCompanyLogoUrls({});
+      }
     } catch (error) {
-      console.error("UserManagement load error:", error);
+      console.error("[UserManagement] load error:", error);
 
       setErrorMessage(
         error?.message ||
@@ -309,20 +822,36 @@ export default function UserManagement() {
     return users
       .filter((user) => user.role !== "admin")
       .map((user) => {
+        // -----------------------------------------------------
+        // STUDENT
+        // -----------------------------------------------------
+
         const studentProfile =
           user.role === "student"
             ? students.find((item) => item.id === user.id)
             : null;
+
+        // -----------------------------------------------------
+        // REGISTRAR
+        // -----------------------------------------------------
 
         const registrarProfile =
           user.role === "registrar"
             ? registrars.find((item) => item.id === user.id)
             : null;
 
+        // -----------------------------------------------------
+        // COMPANY
+        // -----------------------------------------------------
+
         const companyProfile =
           user.role === "company"
             ? companies.find((item) => item.user_id === user.id)
             : null;
+
+        // -----------------------------------------------------
+        // ACCOUNT ID
+        // -----------------------------------------------------
 
         let accountId = user.id;
 
@@ -332,6 +861,22 @@ export default function UserManagement() {
 
         if (user.role === "registrar") {
           accountId = registrarProfile?.employee_id || user.id;
+        }
+
+        // -----------------------------------------------------
+        // PROFILE IMAGE
+        // -----------------------------------------------------
+
+        let profilePhotoUrl = null;
+
+        if (user.role === "student" || user.role === "registrar") {
+          profilePhotoUrl = profilePhotoUrls[user.id] || null;
+        }
+
+        if (user.role === "company") {
+          profilePhotoUrl = companyProfile?.id
+            ? companyLogoUrls[companyProfile.id] || null
+            : null;
         }
 
         return {
@@ -349,9 +894,20 @@ export default function UserManagement() {
           roleLabel: getRoleLabel(user.role),
 
           statusLabel: getStatusLabel(user.status),
+
+          profilePhotoUrl,
+
+          companyProfileId: companyProfile?.id || null,
         };
       });
-  }, [users, students, registrars, companies]);
+  }, [
+    users,
+    students,
+    registrars,
+    companies,
+    profilePhotoUrls,
+    companyLogoUrls,
+  ]);
 
   // =========================================================
   // CURRENT TAB
@@ -528,7 +1084,9 @@ export default function UserManagement() {
     if (!selectedUser) return;
 
     const firstName = editForm.firstName.trim();
+
     const middleName = editForm.middleName.trim();
+
     const lastName = editForm.lastName.trim();
 
     if (!firstName || !lastName) {
@@ -547,10 +1105,6 @@ export default function UserManagement() {
         throw new Error("Your administrator session is no longer valid.");
       }
 
-      // -------------------------------------------------------
-      // Save updated user information
-      // -------------------------------------------------------
-
       const { error } = await supabase
         .from("users")
         .update({
@@ -565,20 +1119,18 @@ export default function UserManagement() {
         throw error;
       }
 
-      // -------------------------------------------------------
-      // Get the updated database record
-      // -------------------------------------------------------
-
       const { data: updatedUser, error: updatedUserError } = await supabase
         .from("users")
-        .select(`
-          id,
-          email,
-          role,
-          first_name,
-          middle_name,
-          last_name
-        `)
+        .select(
+          `
+            id,
+            email,
+            role,
+            first_name,
+            middle_name,
+            last_name
+          `
+        )
         .eq("id", selectedUser.id)
         .maybeSingle();
 
@@ -589,10 +1141,6 @@ export default function UserManagement() {
       if (!updatedUser) {
         throw new Error("Unable to retrieve the updated user information.");
       }
-
-      // -------------------------------------------------------
-      // Create audit log after successful update
-      // -------------------------------------------------------
 
       const { error: auditError } = await supabase.functions.invoke(
         "create-audit-log",
@@ -617,21 +1165,21 @@ export default function UserManagement() {
 
               email: updatedUser.email || selectedUser.email || null,
 
-              updated_fields: [
-                "first_name",
-                "middle_name",
-                "last_name",
-              ],
+              updated_fields: ["first_name", "middle_name", "last_name"],
 
               previous_values: {
                 first_name: selectedUser.first_name || null,
+
                 middle_name: selectedUser.middle_name || null,
+
                 last_name: selectedUser.last_name || null,
               },
 
               new_values: {
                 first_name: updatedUser.first_name || null,
+
                 middle_name: updatedUser.middle_name || null,
+
                 last_name: updatedUser.last_name || null,
               },
             },
@@ -656,7 +1204,6 @@ export default function UserManagement() {
       setActionLoading(false);
     }
   };
-
 
   // =========================================================
   // DEACTIVATE / SOFT DELETE
@@ -693,10 +1240,6 @@ export default function UserManagement() {
     try {
       setActionLoading(true);
 
-      // -------------------------------------------------------
-      // Verify current admin session before calling Edge Function
-      // -------------------------------------------------------
-
       const {
         data: { user: authUser },
         error: authError,
@@ -709,10 +1252,6 @@ export default function UserManagement() {
       if (!authUser || authUser.id !== currentAdmin?.id) {
         throw new Error("Your administrator session is no longer valid.");
       }
-
-      // -------------------------------------------------------
-      // Call secure server-side Edge Function
-      // -------------------------------------------------------
 
       const { data, error } = await supabase.functions.invoke(
         "deactivate-user",
@@ -737,7 +1276,7 @@ export default function UserManagement() {
               message = responseBody.error;
             }
           } catch {
-            // Keep the original error message.
+            // Keep original error message.
           }
         }
 
@@ -810,10 +1349,6 @@ export default function UserManagement() {
         throw error;
       }
 
-      // -------------------------------------------------------
-      // Create audit log after successful activation
-      // -------------------------------------------------------
-
       const { error: auditError } = await supabase.functions.invoke(
         "create-audit-log",
         {
@@ -843,7 +1378,7 @@ export default function UserManagement() {
     } catch (error) {
       console.error("Activate user error:", error);
 
-      alert(error?.message || "Failed to activate the user.");
+      alert(error?.message || "Failed to activate user.");
     } finally {
       setActionLoading(false);
     }
@@ -860,9 +1395,7 @@ export default function UserManagement() {
       }`}
     >
       <div className="max-w-7xl mx-auto">
-        {/* =====================================================
-            HEADER
-        ====================================================== */}
+        {/* HEADER */}
 
         <div className="mb-6">
           <h1
@@ -883,9 +1416,7 @@ export default function UserManagement() {
           </p>
         </div>
 
-        {/* =====================================================
-            ERROR
-        ====================================================== */}
+        {/* ERROR */}
 
         {errorMessage && (
           <div
@@ -917,9 +1448,7 @@ export default function UserManagement() {
           </div>
         )}
 
-        {/* =====================================================
-            TABS
-        ====================================================== */}
+        {/* TABS */}
 
         <div
           className={`rounded-2xl border p-2 mb-6 ${
@@ -929,8 +1458,6 @@ export default function UserManagement() {
           }`}
         >
           <div className="grid grid-cols-3 gap-2">
-            {/* STUDENTS */}
-
             <button
               type="button"
               onClick={() => setActiveTab("students")}
@@ -957,8 +1484,6 @@ export default function UserManagement() {
               </span>
             </button>
 
-            {/* REGISTRAR */}
-
             <button
               type="button"
               onClick={() => setActiveTab("registrar")}
@@ -984,8 +1509,6 @@ export default function UserManagement() {
                 {registrarCount}
               </span>
             </button>
-
-            {/* COMPANY */}
 
             <button
               type="button"
@@ -1015,9 +1538,7 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* =====================================================
-            CONTROLS
-        ====================================================== */}
+        {/* CONTROLS */}
 
         <div
           className={`rounded-2xl border p-4 mb-6 ${
@@ -1027,8 +1548,6 @@ export default function UserManagement() {
           }`}
         >
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* SEARCH */}
-
             <div className="flex-1">
               <label
                 className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${
@@ -1065,8 +1584,6 @@ export default function UserManagement() {
               </div>
             </div>
 
-            {/* SORT */}
-
             <div className="w-full lg:w-56">
               <label
                 className={`block text-xs font-semibold uppercase tracking-wide mb-2 ${
@@ -1089,13 +1606,14 @@ export default function UserManagement() {
                 }`}
               >
                 <option value="name">Name</option>
+
                 <option value="id">Account ID</option>
+
                 <option value="email">Email</option>
+
                 <option value="status">Status</option>
               </select>
             </div>
-
-            {/* SORT DIRECTION */}
 
             <div className="w-full lg:w-40">
               <label
@@ -1125,9 +1643,7 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* =====================================================
-            TABLE
-        ====================================================== */}
+        {/* TABLE */}
 
         <div
           className={`rounded-2xl border overflow-hidden ${
@@ -1218,7 +1734,9 @@ export default function UserManagement() {
             </div>
           ) : (
             <>
-              {/* DESKTOP TABLE */}
+              {/* =================================================
+                  DESKTOP TABLE
+              ================================================== */}
 
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
@@ -1230,10 +1748,16 @@ export default function UserManagement() {
                           : "bg-gray-50 text-gray-400"
                       }`}
                     >
+                      <th className="px-5 py-4">Profile</th>
+
                       <th className="px-5 py-4">Account ID</th>
+
                       <th className="px-5 py-4">Name</th>
+
                       <th className="px-5 py-4">Login Email</th>
+
                       <th className="px-5 py-4">Status</th>
+
                       <th className="px-5 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -1248,6 +1772,62 @@ export default function UserManagement() {
                             : "border-gray-100 hover:bg-gray-50"
                         }`}
                       >
+                        {/* PROFILE */}
+
+                        <td className="px-5 py-4">
+                          <div
+                            className={`w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold border ${
+                              user.role === "company"
+                                ? darkMode
+                                  ? "bg-purple-900/50 text-purple-300 border-purple-800"
+                                  : "bg-purple-100 text-purple-700 border-purple-200"
+                                : darkMode
+                                ? "bg-blue-900/50 text-blue-300 border-blue-800"
+                                : "bg-blue-100 text-blue-700 border-blue-200"
+                            }`}
+                          >
+                            {user.profilePhotoUrl ? (
+                              <img
+                                src={user.profilePhotoUrl}
+                                alt={`${user.displayName} profile`}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                                onError={(event) => {
+                                  console.warn(
+                                    "[UserManagement] Profile image failed to render:",
+                                    {
+                                      userId: user.id,
+                                      role: user.role,
+                                      name: user.displayName,
+                                      url: user.profilePhotoUrl,
+                                    }
+                                  );
+
+                                  event.currentTarget.style.display = "none";
+
+                                  const fallback =
+                                    event.currentTarget.parentElement?.querySelector(
+                                      "[data-profile-fallback]"
+                                    );
+
+                                  if (fallback) {
+                                    fallback.classList.remove("hidden");
+                                  }
+                                }}
+                              />
+                            ) : null}
+
+                            <span
+                              data-profile-fallback
+                              className={user.profilePhotoUrl ? "hidden" : ""}
+                            >
+                              {user.role === "company"
+                                ? getCompanyInitials(user.companyName)
+                                : getInitials(user)}
+                            </span>
+                          </div>
+                        </td>
+
                         {/* ID */}
 
                         <td className="px-5 py-4">
@@ -1273,37 +1853,21 @@ export default function UserManagement() {
                         {/* NAME */}
 
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
+                          <div>
                             <div
-                              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${
-                                user.role === "company"
-                                  ? darkMode
-                                    ? "bg-purple-900/50 text-purple-300"
-                                    : "bg-purple-100 text-purple-700"
-                                  : darkMode
-                                  ? "bg-blue-900/50 text-blue-300"
-                                  : "bg-blue-100 text-blue-700"
+                              className={`font-medium ${
+                                darkMode ? "text-white" : "text-gray-900"
                               }`}
                             >
-                              {getInitials(user)}
+                              {user.displayName}
                             </div>
 
-                            <div>
-                              <div
-                                className={`font-medium ${
-                                  darkMode ? "text-white" : "text-gray-900"
-                                }`}
-                              >
-                                {user.displayName}
-                              </div>
-
-                              <div
-                                className={`text-xs mt-0.5 ${
-                                  darkMode ? "text-gray-500" : "text-gray-400"
-                                }`}
-                              >
-                                {user.roleLabel}
-                              </div>
+                            <div
+                              className={`text-xs mt-0.5 ${
+                                darkMode ? "text-gray-500" : "text-gray-400"
+                              }`}
+                            >
+                              {user.roleLabel}
                             </div>
                           </div>
                         </td>
@@ -1409,20 +1973,58 @@ export default function UserManagement() {
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      {/* AVATAR */}
+                      {/* PROFILE */}
 
                       <div
-                        className={`w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-sm font-bold ${
+                        className={`w-12 h-12 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold border ${
                           user.role === "company"
                             ? darkMode
-                              ? "bg-purple-900/50 text-purple-300"
-                              : "bg-purple-100 text-purple-700"
+                              ? "bg-purple-900/50 text-purple-300 border-purple-800"
+                              : "bg-purple-100 text-purple-700 border-purple-200"
                             : darkMode
-                            ? "bg-blue-900/50 text-blue-300"
-                            : "bg-blue-100 text-blue-700"
+                            ? "bg-blue-900/50 text-blue-300 border-blue-800"
+                            : "bg-blue-100 text-blue-700 border-blue-200"
                         }`}
                       >
-                        {getInitials(user)}
+                        {user.profilePhotoUrl ? (
+                          <img
+                            src={user.profilePhotoUrl}
+                            alt={`${user.displayName} profile`}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={(event) => {
+                              console.warn(
+                                "[UserManagement] Mobile profile image failed:",
+                                {
+                                  userId: user.id,
+                                  role: user.role,
+                                  name: user.displayName,
+                                  url: user.profilePhotoUrl,
+                                }
+                              );
+
+                              event.currentTarget.style.display = "none";
+
+                              const fallback =
+                                event.currentTarget.parentElement?.querySelector(
+                                  "[data-mobile-profile-fallback]"
+                                );
+
+                              if (fallback) {
+                                fallback.classList.remove("hidden");
+                              }
+                            }}
+                          />
+                        ) : null}
+
+                        <span
+                          data-mobile-profile-fallback
+                          className={user.profilePhotoUrl ? "hidden" : ""}
+                        >
+                          {user.role === "company"
+                            ? getCompanyInitials(user.companyName)
+                            : getInitials(user)}
+                        </span>
                       </div>
 
                       {/* INFO */}
@@ -1541,9 +2143,7 @@ export default function UserManagement() {
             </>
           )}
 
-          {/* =====================================================
-              PAGINATION
-          ====================================================== */}
+          {/* PAGINATION */}
 
           {!loading && filteredUsers.length > 0 && (
             <div
@@ -1615,8 +2215,6 @@ export default function UserManagement() {
               darkMode ? "bg-gray-900 text-white" : "bg-white text-gray-900"
             }`}
           >
-            {/* HEADER */}
-
             <div
               className={`px-6 py-5 border-b ${
                 darkMode ? "border-gray-800" : "border-gray-200"
@@ -1650,11 +2248,7 @@ export default function UserManagement() {
               </div>
             </div>
 
-            {/* BODY */}
-
             <div className="p-6 space-y-4">
-              {/* USER TYPE */}
-
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${
@@ -1676,8 +2270,6 @@ export default function UserManagement() {
                 />
               </div>
 
-              {/* ACCOUNT ID */}
-
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${
@@ -1698,8 +2290,6 @@ export default function UserManagement() {
                   }`}
                 />
               </div>
-
-              {/* FIRST NAME */}
 
               <div>
                 <label
@@ -1724,8 +2314,6 @@ export default function UserManagement() {
                 />
               </div>
 
-              {/* MIDDLE NAME */}
-
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${
@@ -1749,8 +2337,6 @@ export default function UserManagement() {
                 />
               </div>
 
-              {/* LAST NAME */}
-
               <div>
                 <label
                   className={`block text-xs font-semibold mb-2 ${
@@ -1773,8 +2359,6 @@ export default function UserManagement() {
                   }`}
                 />
               </div>
-
-              {/* EMAIL */}
 
               <div>
                 <label
@@ -1806,8 +2390,6 @@ export default function UserManagement() {
                 </p>
               </div>
             </div>
-
-            {/* FOOTER */}
 
             <div
               className={`px-6 py-4 border-t flex justify-end gap-3 ${
@@ -1861,13 +2443,9 @@ export default function UserManagement() {
             }`}
           >
             <div className="p-6">
-              {/* ICON */}
-
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xl mb-4">
                 !
               </div>
-
-              {/* TITLE */}
 
               <h2 className="text-lg font-bold">Deactivate User?</h2>
 
@@ -1882,8 +2460,6 @@ export default function UserManagement() {
                 </span>
                 .
               </p>
-
-              {/* USER INFO */}
 
               <div
                 className={`mt-4 rounded-xl p-4 ${
@@ -1915,8 +2491,6 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              {/* SOFT DELETE NOTICE */}
-
               <div
                 className={`mt-4 rounded-xl border p-4 ${
                   darkMode
@@ -1932,8 +2506,6 @@ export default function UserManagement() {
                   <strong>Inactive</strong>.
                 </p>
               </div>
-
-              {/* PASSWORD */}
 
               <div className="mt-5">
                 <label
@@ -1990,8 +2562,6 @@ export default function UserManagement() {
                   never stored.
                 </p>
               </div>
-
-              {/* FOOTER */}
 
               <div className="flex justify-end gap-3 mt-6">
                 <button

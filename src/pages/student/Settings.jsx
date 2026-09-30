@@ -1,8 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseStudent } from "../../supabaseClient";
 
 const Settings = () => {
   const { darkMode } = useOutletContext();
+
+  // =========================================================
+  // ACCOUNT
+  // =========================================================
+
+  const [account, setAccount] = useState({
+    email: "",
+    studentId: "",
+  });
+
+  const [accountLoading, setAccountLoading] = useState(true);
 
   // =========================================================
   // PASSWORD
@@ -20,6 +32,8 @@ const Settings = () => {
     confirm: false,
   });
 
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const [passwordMessage, setPasswordMessage] = useState({
     type: "",
     text: "",
@@ -28,19 +42,29 @@ const Settings = () => {
   // =========================================================
   // NOTIFICATION PREFERENCES
   // =========================================================
+  //
+  // Notification preferences are kept locally for now.
+  // They can be connected to the notification system when
+  // the Notifications module is implemented.
+  //
 
   const [notificationPreferences, setNotificationPreferences] = useState({
     email: true,
-    push: true,
-    sms: false,
+    portal: true,
   });
+
+  const [notificationMessage, setNotificationMessage] = useState("");
 
   // =========================================================
   // SECURITY
   // =========================================================
 
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityMessage, setSecurityMessage] = useState({
+    type: "",
+    text: "",
+  });
+
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // =========================================================
   // THEME CLASSES
@@ -65,6 +89,67 @@ const Settings = () => {
     : "border-slate-200 bg-white";
 
   // =========================================================
+  // LOAD ACCOUNT
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAccount = async () => {
+      setAccountLoading(true);
+
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseStudent.auth.getUser();
+
+        if (authError) {
+          console.error("Error loading authenticated user:", authError);
+          return;
+        }
+
+        if (!user) {
+          return;
+        }
+
+        let studentId = "";
+
+        const { data: student, error: studentError } = await supabaseStudent
+          .from("students")
+          .select("student_id")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (studentError) {
+          console.warn("Unable to load student information:", studentError);
+        } else {
+          studentId = student?.student_id || "";
+        }
+
+        if (!mounted) return;
+
+        setAccount({
+          email: user.email || "",
+          studentId,
+        });
+      } catch (error) {
+        console.error("Unexpected account loading error:", error);
+      } finally {
+        if (mounted) {
+          setAccountLoading(false);
+        }
+      }
+    };
+
+    loadAccount();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
   // PASSWORD HANDLERS
   // =========================================================
 
@@ -87,10 +172,15 @@ const Settings = () => {
     }));
   };
 
-  const handleUpdatePassword = (e) => {
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
 
     const { current, newPassword, confirm } = passwords;
+
+    setPasswordMessage({
+      type: "",
+      text: "",
+    });
 
     if (!current || !newPassword || !confirm) {
       setPasswordMessage({
@@ -119,19 +209,106 @@ const Settings = () => {
       return;
     }
 
-    // Frontend placeholder.
-    // This will later connect to Supabase.
+    if (current === newPassword) {
+      setPasswordMessage({
+        type: "error",
+        text: "Your new password must be different from your current password.",
+      });
 
-    setPasswordMessage({
-      type: "success",
-      text: "Password updated successfully.",
-    });
+      return;
+    }
 
-    setPasswords({
-      current: "",
-      newPassword: "",
-      confirm: "",
-    });
+    setPasswordLoading(true);
+
+    try {
+      // -------------------------------------------------------
+      // GET CURRENT AUTH USER
+      // -------------------------------------------------------
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (userError || !user?.email) {
+        console.error("Unable to get authenticated user:", userError);
+
+        setPasswordMessage({
+          type: "error",
+          text: "Unable to verify your account. Please sign in again.",
+        });
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // VERIFY CURRENT PASSWORD
+      // -------------------------------------------------------
+
+      const { error: verifyError } =
+        await supabaseStudent.auth.signInWithPassword({
+          email: user.email,
+          password: current,
+        });
+
+      if (verifyError) {
+        console.error("Current password verification failed:", verifyError);
+
+        setPasswordMessage({
+          type: "error",
+          text: "Your current password is incorrect.",
+        });
+
+        return;
+      }
+
+      // -------------------------------------------------------
+      // UPDATE PASSWORD
+      // -------------------------------------------------------
+
+      const { error: updateError } = await supabaseStudent.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        console.error("Password update failed:", updateError);
+
+        setPasswordMessage({
+          type: "error",
+          text:
+            updateError.message ||
+            "Unable to update your password. Please try again.",
+        });
+
+        return;
+      }
+
+      setPasswordMessage({
+        type: "success",
+        text: "Password updated successfully.",
+      });
+
+      setPasswords({
+        current: "",
+        newPassword: "",
+        confirm: "",
+      });
+
+      setShowPasswords({
+        current: false,
+        newPassword: false,
+        confirm: false,
+      });
+    } catch (error) {
+      console.error("Unexpected password update error:", error);
+
+      setPasswordMessage({
+        type: "error",
+        text: "Something went wrong while updating your password.",
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // =========================================================
@@ -143,36 +320,66 @@ const Settings = () => {
       ...prev,
       [type]: !prev[type],
     }));
-  };
 
-  // =========================================================
-  // TWO-FACTOR AUTHENTICATION
-  // =========================================================
-
-  const handleToggle2FA = () => {
-    const newValue = !twoFactorEnabled;
-
-    setTwoFactorEnabled(newValue);
-
-    setSecurityMessage(
-      newValue
-        ? "Two-factor authentication has been enabled."
-        : "Two-factor authentication has been disabled."
+    setNotificationMessage(
+      "Notification preferences are saved for this session. Full notification settings will be connected when the Notifications system is added."
     );
+
+    window.setTimeout(() => {
+      setNotificationMessage("");
+    }, 5000);
   };
 
   // =========================================================
-  // LOGOUT SESSIONS
+  // SIGN OUT OTHER SESSIONS
   // =========================================================
 
-  const handleLogoutSessions = () => {
+  const handleLogoutSessions = async () => {
     const confirmed = window.confirm(
-      "Are you sure you want to log out of all other sessions?"
+      "Are you sure you want to sign out of all other sessions? Your current session will remain active."
     );
 
     if (!confirmed) return;
 
-    setSecurityMessage("All other sessions have been logged out.");
+    setLogoutLoading(true);
+
+    setSecurityMessage({
+      type: "",
+      text: "",
+    });
+
+    try {
+      const { error } = await supabaseStudent.auth.signOut({
+        scope: "others",
+      });
+
+      if (error) {
+        console.error("Unable to sign out other sessions:", error);
+
+        setSecurityMessage({
+          type: "error",
+          text:
+            error.message ||
+            "Unable to sign out other sessions. Please try again.",
+        });
+
+        return;
+      }
+
+      setSecurityMessage({
+        type: "success",
+        text: "All other sessions have been signed out.",
+      });
+    } catch (error) {
+      console.error("Unexpected session logout error:", error);
+
+      setSecurityMessage({
+        type: "error",
+        text: "Something went wrong while signing out other sessions.",
+      });
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   // =========================================================
@@ -192,16 +399,22 @@ const Settings = () => {
             value={passwords[field]}
             onChange={(e) => handlePasswordChange(field, e.target.value)}
             placeholder={placeholder}
+            autoComplete={
+              field === "current" ? "current-password" : "new-password"
+            }
+            disabled={passwordLoading}
             className={`
               w-full
               h-11
               px-3
-              pr-12
+              pr-14
               rounded-lg
               border
               text-sm
               outline-none
               transition
+              disabled:opacity-60
+              disabled:cursor-not-allowed
               ${inputClass}
             `}
           />
@@ -209,13 +422,16 @@ const Settings = () => {
           <button
             type="button"
             onClick={() => togglePasswordVisibility(field)}
+            disabled={passwordLoading}
             className={`
               absolute
               right-3
               top-1/2
               -translate-y-1/2
               text-xs
+              font-medium
               transition
+              disabled:opacity-50
               ${
                 darkMode
                   ? "text-slate-500 hover:text-slate-200"
@@ -227,6 +443,54 @@ const Settings = () => {
           </button>
         </div>
       </div>
+    );
+  };
+
+  // =========================================================
+  // TOGGLE
+  // =========================================================
+
+  const renderToggle = (enabled, onClick, label) => {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        aria-pressed={enabled}
+        className={`
+          relative
+          flex-shrink-0
+          w-11
+          h-6
+          rounded-full
+          transition
+          focus:outline-none
+          focus:ring-2
+          ${
+            enabled
+              ? darkMode
+                ? "bg-slate-500 focus:ring-slate-600"
+                : "bg-slate-800 focus:ring-slate-300"
+              : darkMode
+              ? "bg-slate-700 focus:ring-slate-600"
+              : "bg-slate-300 focus:ring-slate-200"
+          }
+        `}
+      >
+        <span
+          className={`
+            absolute
+            top-1
+            w-4
+            h-4
+            bg-white
+            rounded-full
+            shadow-sm
+            transition-all
+            ${enabled ? "left-6" : "left-1"}
+          `}
+        />
+      </button>
     );
   };
 
@@ -259,7 +523,7 @@ const Settings = () => {
         </h1>
 
         <p className={`text-sm mt-1 ${mutedClass}`}>
-          Manage your password, notifications, and account security.
+          Manage your account, password, notifications, and security.
         </p>
       </div>
 
@@ -279,6 +543,149 @@ const Settings = () => {
       >
         <div className="p-5 md:p-7 lg:p-8 space-y-10">
           {/* =================================================
+              ACCOUNT INFORMATION
+          ================================================= */}
+
+          <section>
+            <div className="mb-5">
+              <h2 className={`text-lg font-bold ${headingClass}`}>
+                Account Information
+              </h2>
+
+              <p className={`text-xs mt-1 ${mutedClass}`}>
+                Basic information associated with your student account.
+              </p>
+            </div>
+
+            <div className="max-w-[700px] grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* EMAIL */}
+
+              <div
+                className={`
+                  border
+                  rounded-xl
+                  p-5
+                  ${innerCardClass}
+                `}
+              >
+                <p
+                  className={`text-[10px] uppercase tracking-wider font-bold ${mutedClass}`}
+                >
+                  Registered Email
+                </p>
+
+                {accountLoading ? (
+                  <div
+                    className={`
+                      mt-2
+                      h-5
+                      w-40
+                      rounded
+                      animate-pulse
+                      ${darkMode ? "bg-slate-800" : "bg-slate-100"}
+                    `}
+                  />
+                ) : (
+                  <p
+                    className={`text-sm font-semibold mt-2 break-all ${headingClass}`}
+                  >
+                    {account.email || "Not available"}
+                  </p>
+                )}
+
+                <p className={`text-[10px] mt-2 ${mutedClass}`}>
+                  Your verified account email.
+                </p>
+              </div>
+
+              {/* STUDENT ID */}
+
+              <div
+                className={`
+                  border
+                  rounded-xl
+                  p-5
+                  ${innerCardClass}
+                `}
+              >
+                <p
+                  className={`text-[10px] uppercase tracking-wider font-bold ${mutedClass}`}
+                >
+                  Student ID
+                </p>
+
+                {accountLoading ? (
+                  <div
+                    className={`
+                      mt-2
+                      h-5
+                      w-32
+                      rounded
+                      animate-pulse
+                      ${darkMode ? "bg-slate-800" : "bg-slate-100"}
+                    `}
+                  />
+                ) : (
+                  <p className={`text-sm font-semibold mt-2 ${headingClass}`}>
+                    {account.studentId || "Not available"}
+                  </p>
+                )}
+
+                <p className={`text-[10px] mt-2 ${mutedClass}`}>
+                  Your registered student identifier.
+                </p>
+              </div>
+
+              {/* ROLE */}
+
+              <div
+                className={`
+                  border
+                  rounded-xl
+                  p-5
+                  ${innerCardClass}
+                  md:col-span-2
+                `}
+              >
+                <p
+                  className={`text-[10px] uppercase tracking-wider font-bold ${mutedClass}`}
+                >
+                  Account Type
+                </p>
+
+                <div className="flex items-center gap-3 mt-2">
+                  <span
+                    className={`
+                      inline-flex
+                      items-center
+                      px-2.5
+                      py-1
+                      rounded-full
+                      text-[10px]
+                      font-bold
+                      ${
+                        darkMode
+                          ? "bg-slate-800 text-slate-300"
+                          : "bg-slate-100 text-slate-700"
+                      }
+                    `}
+                  >
+                    STUDENT
+                  </span>
+
+                  <span className={`text-xs ${mutedClass}`}>
+                    Student Portal Account
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* DIVIDER */}
+
+          <div className={`border-t ${dividerClass}`} />
+
+          {/* =================================================
               CHANGE PASSWORD
           ================================================= */}
 
@@ -289,7 +696,7 @@ const Settings = () => {
               </h2>
 
               <p className={`text-xs mt-1 ${mutedClass}`}>
-                Update your password to keep your account secure.
+                Verify your current password before setting a new one.
               </p>
             </div>
 
@@ -307,13 +714,25 @@ const Settings = () => {
                   "Enter new password"
                 )}
 
-                <p className={`text-[10px] -mt-2 ${mutedClass}`}>
-                  Use at least 8 characters.
-                </p>
+                <div
+                  className={`
+                    flex
+                    flex-wrap
+                    gap-x-4
+                    gap-y-1
+                    text-[10px]
+                    -mt-2
+                    ${mutedClass}
+                  `}
+                >
+                  <span>• At least 8 characters</span>
+
+                  <span>• Different from your current password</span>
+                </div>
 
                 {renderPasswordField(
                   "confirm",
-                  "Confirm Password",
+                  "Confirm New Password",
                   "Confirm new password"
                 )}
               </div>
@@ -329,14 +748,15 @@ const Settings = () => {
                     rounded-lg
                     text-xs
                     font-medium
+                    border
                     ${
                       passwordMessage.type === "success"
                         ? darkMode
-                          ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : darkMode
-                        ? "bg-red-950 text-red-300 border border-red-800"
-                        : "bg-red-50 text-red-700 border border-red-200"
+                        ? "bg-red-950 text-red-300 border-red-800"
+                        : "bg-red-50 text-red-700 border-red-200"
                     }
                   `}
                 >
@@ -346,6 +766,7 @@ const Settings = () => {
 
               <button
                 type="submit"
+                disabled={passwordLoading}
                 className="
                   mt-5
                   px-6
@@ -358,10 +779,12 @@ const Settings = () => {
                   font-bold
                   hover:bg-slate-700
                   dark:hover:bg-slate-600
+                  disabled:opacity-60
+                  disabled:cursor-not-allowed
                   transition
                 "
               >
-                Update Password
+                {passwordLoading ? "Updating Password..." : "Update Password"}
               </button>
             </form>
           </section>
@@ -381,7 +804,7 @@ const Settings = () => {
               </h2>
 
               <p className={`text-xs mt-1 ${mutedClass}`}>
-                Choose how you want to receive important updates.
+                Choose how you want to receive important SIMS updates.
               </p>
             </div>
 
@@ -414,109 +837,18 @@ const Settings = () => {
                   </p>
 
                   <p className={`text-xs mt-1 ${mutedClass}`}>
-                    Receive updates through your registered email.
+                    Receive important updates through your registered email.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleNotification("email")}
-                  className={`
-                    relative
-                    flex-shrink-0
-                    w-11
-                    h-6
-                    rounded-full
-                    transition
-                    ${
-                      notificationPreferences.email
-                        ? darkMode
-                          ? "bg-slate-600"
-                          : "bg-slate-800"
-                        : darkMode
-                        ? "bg-slate-700"
-                        : "bg-slate-300"
-                    }
-                  `}
-                  aria-label="Toggle email notifications"
-                >
-                  <span
-                    className={`
-                      absolute
-                      top-1
-                      w-4
-                      h-4
-                      bg-white
-                      rounded-full
-                      transition-all
-                      ${notificationPreferences.email ? "left-6" : "left-1"}
-                    `}
-                  />
-                </button>
+                {renderToggle(
+                  notificationPreferences.email,
+                  () => toggleNotification("email"),
+                  "Toggle email notifications"
+                )}
               </div>
 
-              {/* PUSH */}
-
-              <div
-                className={`
-                  flex
-                  items-center
-                  justify-between
-                  gap-4
-                  px-5
-                  py-4
-                  border-b
-                  ${dividerClass}
-                `}
-              >
-                <div>
-                  <p className={`text-sm font-semibold ${headingClass}`}>
-                    Push Notifications
-                  </p>
-
-                  <p className={`text-xs mt-1 ${mutedClass}`}>
-                    Receive notifications directly from the portal.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => toggleNotification("push")}
-                  className={`
-                    relative
-                    flex-shrink-0
-                    w-11
-                    h-6
-                    rounded-full
-                    transition
-                    ${
-                      notificationPreferences.push
-                        ? darkMode
-                          ? "bg-slate-600"
-                          : "bg-slate-800"
-                        : darkMode
-                        ? "bg-slate-700"
-                        : "bg-slate-300"
-                    }
-                  `}
-                  aria-label="Toggle push notifications"
-                >
-                  <span
-                    className={`
-                      absolute
-                      top-1
-                      w-4
-                      h-4
-                      bg-white
-                      rounded-full
-                      transition-all
-                      ${notificationPreferences.push ? "left-6" : "left-1"}
-                    `}
-                  />
-                </button>
-              </div>
-
-              {/* SMS */}
+              {/* PORTAL */}
 
               <div
                 className="
@@ -530,51 +862,44 @@ const Settings = () => {
               >
                 <div>
                   <p className={`text-sm font-semibold ${headingClass}`}>
-                    SMS Alerts
+                    Portal Notifications
                   </p>
 
                   <p className={`text-xs mt-1 ${mutedClass}`}>
-                    Receive important alerts through SMS.
+                    Receive alerts and updates inside the SIMS portal.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleNotification("sms")}
-                  className={`
-                    relative
-                    flex-shrink-0
-                    w-11
-                    h-6
-                    rounded-full
-                    transition
-                    ${
-                      notificationPreferences.sms
-                        ? darkMode
-                          ? "bg-slate-600"
-                          : "bg-slate-800"
-                        : darkMode
-                        ? "bg-slate-700"
-                        : "bg-slate-300"
-                    }
-                  `}
-                  aria-label="Toggle SMS alerts"
-                >
-                  <span
-                    className={`
-                      absolute
-                      top-1
-                      w-4
-                      h-4
-                      bg-white
-                      rounded-full
-                      transition-all
-                      ${notificationPreferences.sms ? "left-6" : "left-1"}
-                    `}
-                  />
-                </button>
+                {renderToggle(
+                  notificationPreferences.portal,
+                  () => toggleNotification("portal"),
+                  "Toggle portal notifications"
+                )}
               </div>
             </div>
+
+            {/* NOTIFICATION MESSAGE */}
+
+            {notificationMessage && (
+              <div
+                className={`
+                  max-w-[700px]
+                  mt-3
+                  px-4
+                  py-3
+                  rounded-lg
+                  border
+                  text-xs
+                  ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-300"
+                      : "bg-slate-50 border-slate-200 text-slate-600"
+                  }
+                `}
+              >
+                {notificationMessage}
+              </div>
+            )}
           </section>
 
           {/* DIVIDER */}
@@ -590,12 +915,12 @@ const Settings = () => {
               <h2 className={`text-lg font-bold ${headingClass}`}>Security</h2>
 
               <p className={`text-xs mt-1 ${mutedClass}`}>
-                Manage additional security options for your account.
+                Manage your active SIMS account sessions.
               </p>
             </div>
 
             <div className="max-w-[700px] space-y-3">
-              {/* 2FA */}
+              {/* SESSION SECURITY */}
 
               <div
                 className={`
@@ -613,102 +938,43 @@ const Settings = () => {
               >
                 <div>
                   <p className={`text-sm font-semibold ${headingClass}`}>
-                    Two-Factor Authentication
+                    Account Sessions
                   </p>
 
                   <p className={`text-xs mt-1 ${mutedClass}`}>
-                    Add an extra layer of protection to your account.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleToggle2FA}
-                  className={`
-                    px-5
-                    py-2.5
-                    rounded-lg
-                    text-xs
-                    font-bold
-                    transition
-                    ${
-                      twoFactorEnabled
-                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                        : darkMode
-                        ? "bg-slate-700 text-white hover:bg-slate-600"
-                        : "bg-slate-800 text-white hover:bg-slate-700"
-                    }
-                  `}
-                >
-                  {twoFactorEnabled ? "2FA Enabled" : "Enable 2FA"}
-                </button>
-              </div>
-
-              {/* LOGOUT SESSIONS */}
-
-              <div
-                className={`
-                  flex
-                  flex-col
-                  sm:flex-row
-                  sm:items-center
-                  justify-between
-                  gap-4
-                  border
-                  rounded-xl
-                  p-5
-                  ${
-                    darkMode
-                      ? "border-red-900 bg-red-950/40"
-                      : "border-red-200 bg-red-50"
-                  }
-                `}
-              >
-                <div>
-                  <p
-                    className={`
-                      text-sm
-                      font-semibold
-                      ${darkMode ? "text-red-300" : "text-red-800"}
-                    `}
-                  >
-                    Active Sessions
-                  </p>
-
-                  <p
-                    className={`
-                      text-xs
-                      mt-1
-                      ${darkMode ? "text-red-400" : "text-red-600"}
-                    `}
-                  >
-                    Log out of all other devices where your account is currently
-                    signed in.
+                    Sign out of SIMS sessions on other devices while keeping
+                    this current session active.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleLogoutSessions}
-                  className="
+                  disabled={logoutLoading}
+                  className={`
+                    flex-shrink-0
                     px-5
                     py-2.5
                     rounded-lg
-                    bg-red-600
-                    text-white
                     text-xs
                     font-bold
-                    hover:bg-red-700
                     transition
-                  "
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
+                    ${
+                      darkMode
+                        ? "bg-slate-700 text-white hover:bg-slate-600"
+                        : "bg-slate-800 text-white hover:bg-slate-700"
+                    }
+                  `}
                 >
-                  Logout Sessions
+                  {logoutLoading ? "Signing Out..." : "Sign Out Other Sessions"}
                 </button>
               </div>
 
               {/* SECURITY MESSAGE */}
 
-              {securityMessage && (
+              {securityMessage.text && (
                 <div
                   className={`
                     px-4
@@ -717,15 +983,59 @@ const Settings = () => {
                     border
                     text-xs
                     ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700 text-slate-300"
-                        : "bg-slate-100 border-slate-200 text-slate-600"
+                      securityMessage.type === "success"
+                        ? darkMode
+                          ? "bg-emerald-950 border-emerald-800 text-emerald-300"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : darkMode
+                        ? "bg-red-950 border-red-800 text-red-300"
+                        : "bg-red-50 border-red-200 text-red-700"
                     }
                   `}
                 >
-                  {securityMessage}
+                  {securityMessage.text}
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* DIVIDER */}
+
+          <div className={`border-t ${dividerClass}`} />
+
+          {/* =================================================
+              SECURITY NOTE
+          ================================================= */}
+
+          <section>
+            <div
+              className={`
+                max-w-[700px]
+                rounded-xl
+                border
+                p-5
+                ${
+                  darkMode
+                    ? "border-slate-700 bg-slate-800/50"
+                    : "border-slate-200 bg-slate-50"
+                }
+              `}
+            >
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 text-sm">🔒</div>
+
+                <div>
+                  <p className={`text-sm font-semibold ${headingClass}`}>
+                    Keep your account secure
+                  </p>
+
+                  <p className={`text-xs mt-1 leading-5 ${mutedClass}`}>
+                    Never share your SIMS password with anyone. If you believe
+                    your account has been compromised, change your password
+                    immediately and sign out of other sessions.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
         </div>

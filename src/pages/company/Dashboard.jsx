@@ -47,10 +47,10 @@ const Dashboard = () => {
       // GET COMPANY
       // -------------------------------------------------------
 
-      const { data: companyData, error: companyError } =
-        await supabaseCompany
-          .from("companies")
-          .select(`
+      const { data: companyData, error: companyError } = await supabaseCompany
+        .from("companies")
+        .select(
+          `
             id,
             user_id,
             company_name,
@@ -61,16 +61,15 @@ const Dashboard = () => {
             industry,
             designation,
             status
-          `)
-          .eq("user_id", user.id)
-          .maybeSingle();
+          `
+        )
+        .eq("user_id", user.id)
+        .maybeSingle();
 
       if (companyError) throw companyError;
 
       if (!companyData) {
-        throw new Error(
-          "Your company profile could not be found."
-        );
+        throw new Error("Your company profile could not be found.");
       }
 
       setCompany(companyData);
@@ -79,12 +78,11 @@ const Dashboard = () => {
       // LOAD ACTIVE INTERNS
       // =======================================================
 
-      const {
-        data: assignmentData,
-        error: assignmentError,
-      } = await supabaseCompany
-        .from("assignments")
-        .select(`
+      const { data: assignmentData, error: assignmentError } =
+        await supabaseCompany
+          .from("assignments")
+          .select(
+            `
           id,
           student_id,
           opportunity_id,
@@ -116,10 +114,11 @@ const Dashboard = () => {
             location,
             status
           )
-        `)
-        .eq("company_id", companyData.id)
-        .eq("status", "active")
-        .order("updated_at", { ascending: false });
+        `
+          )
+          .eq("company_id", companyData.id)
+          .eq("status", "active")
+          .order("updated_at", { ascending: false });
 
       if (assignmentError) throw assignmentError;
 
@@ -127,41 +126,35 @@ const Dashboard = () => {
       // FORMAT ACTIVE INTERNS
       // -------------------------------------------------------
 
-      const formattedInterns = (assignmentData || []).map(
-        (assignment) => {
-          const student = assignment.students;
-          const userRecord = student?.users;
-          const opportunity = assignment.opportunities;
+      const formattedInterns = (assignmentData || []).map((assignment) => {
+        const student = assignment.students;
+        const userRecord = student?.users;
+        const opportunity = assignment.opportunities;
 
-          const fullName = [
-            userRecord?.first_name,
-            userRecord?.middle_name,
-            userRecord?.last_name,
-          ]
-            .filter(Boolean)
-            .join(" ");
+        const fullName = [
+          userRecord?.first_name,
+          userRecord?.middle_name,
+          userRecord?.last_name,
+        ]
+          .filter(Boolean)
+          .join(" ");
 
-          return {
-            id: assignment.id,
-            studentId: student?.student_id || "N/A",
-            name: fullName || "Unknown Student",
-            email: userRecord?.email || "No email",
-            position:
-              opportunity?.title ||
-              "No internship opportunity",
-            positionType:
-              opportunity?.position_type || "N/A",
-            location:
-              opportunity?.location || "N/A",
-            status: assignment.status,
-            startDate: assignment.start_date,
-            endDate: assignment.end_date,
-            deployedAt: assignment.deployed_at,
-            studentUuid: assignment.student_id,
-            opportunityId: assignment.opportunity_id,
-          };
-        }
-      );
+        return {
+          id: assignment.id,
+          studentId: student?.student_id || "N/A",
+          name: fullName || "Unknown Student",
+          email: userRecord?.email || "No email",
+          position: opportunity?.title || "No internship opportunity",
+          positionType: opportunity?.position_type || "N/A",
+          location: opportunity?.location || "N/A",
+          status: assignment.status,
+          startDate: assignment.start_date,
+          endDate: assignment.end_date,
+          deployedAt: assignment.deployed_at,
+          studentUuid: assignment.student_id,
+          opportunityId: assignment.opportunity_id,
+        };
+      });
 
       setActiveInterns(formattedInterns);
 
@@ -169,12 +162,11 @@ const Dashboard = () => {
       // LOAD COMPANY EVALUATIONS
       // =======================================================
 
-      const {
-        data: evaluationData,
-        error: evaluationError,
-      } = await supabaseCompany
-        .from("evaluations")
-        .select(`
+      const { data: evaluationData, error: evaluationError } =
+        await supabaseCompany
+          .from("evaluations")
+          .select(
+            `
           id,
           assignment_id,
           evaluator_id,
@@ -188,10 +180,11 @@ const Dashboard = () => {
           finalized_at,
           created_at,
           updated_at
-        `)
-        .eq("evaluator_id", user.id)
-        .eq("evaluator_role", "company_supervisor")
-        .order("updated_at", { ascending: false });
+        `
+          )
+          .eq("evaluator_id", user.id)
+          .eq("evaluator_role", "company_supervisor")
+          .order("updated_at", { ascending: false });
 
       if (evaluationError) throw evaluationError;
 
@@ -216,12 +209,11 @@ const Dashboard = () => {
       // We load applications through the company's opportunities.
       // =======================================================
 
-      const {
-        data: applicationData,
-        error: applicationError,
-      } = await supabaseCompany
-        .from("applications")
-        .select(`
+      const { data: applicationData, error: applicationError } =
+        await supabaseCompany
+          .from("applications")
+          .select(
+            `
           id,
           student_id,
           opportunity_id,
@@ -246,12 +238,10 @@ const Dashboard = () => {
               email
             )
           )
-        `)
-        .eq(
-          "opportunities.company_id",
-          companyData.id
-        )
-        .order("updated_at", { ascending: false });
+        `
+          )
+          .eq("opportunities.company_id", companyData.id)
+          .order("updated_at", { ascending: false });
 
       if (applicationError) throw applicationError;
 
@@ -260,8 +250,7 @@ const Dashboard = () => {
       console.error("Company Dashboard Error:", err);
 
       setError(
-        err?.message ||
-          "Something went wrong while loading the dashboard."
+        err?.message || "Something went wrong while loading the dashboard."
       );
 
       setCompany(null);
@@ -289,10 +278,7 @@ const Dashboard = () => {
     return applications.filter((application) => {
       const status = application.status?.toLowerCase();
 
-      return (
-        status === "submitted" ||
-        status === "info_requested"
-      );
+      return status === "submitted" || status === "info_requested";
     });
   }, [applications]);
 
@@ -304,10 +290,7 @@ const Dashboard = () => {
     return evaluations.filter((evaluation) => {
       const status = evaluation.status?.toLowerCase();
 
-      return (
-        status === "draft" ||
-        status === "returned"
-      );
+      return status === "draft" || status === "returned";
     });
   }, [evaluations]);
 
@@ -327,25 +310,18 @@ const Dashboard = () => {
     today.setHours(0, 0, 0, 0);
 
     const thirtyDaysFromNow = new Date(today);
-    thirtyDaysFromNow.setDate(
-      thirtyDaysFromNow.getDate() + 30
-    );
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
     return activeInterns.filter((intern) => {
       if (!intern.endDate) return false;
 
-      const endDate = new Date(
-        `${intern.endDate}T00:00:00`
-      );
+      const endDate = new Date(`${intern.endDate}T00:00:00`);
 
       if (Number.isNaN(endDate.getTime())) {
         return false;
       }
 
-      return (
-        endDate >= today &&
-        endDate <= thirtyDaysFromNow
-      );
+      return endDate >= today && endDate <= thirtyDaysFromNow;
     });
   }, [activeInterns]);
 
@@ -438,13 +414,9 @@ const Dashboard = () => {
   // THEME CLASSES
   // =========================================================
 
-  const headingClass = darkMode
-    ? "text-slate-100"
-    : "text-slate-900";
+  const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
 
-  const mutedClass = darkMode
-    ? "text-slate-400"
-    : "text-slate-500";
+  const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
 
   const cardClass = darkMode
     ? "bg-slate-900 border-slate-700"
@@ -454,13 +426,9 @@ const Dashboard = () => {
     ? "bg-slate-800 text-slate-300 border-slate-700"
     : "bg-slate-50 text-slate-600 border-slate-200";
 
-  const tableRowClass = darkMode
-    ? "border-slate-700"
-    : "border-slate-200";
+  const tableRowClass = darkMode ? "border-slate-700" : "border-slate-200";
 
-  const tableTextClass = darkMode
-    ? "text-slate-200"
-    : "text-slate-700";
+  const tableTextClass = darkMode ? "text-slate-200" : "text-slate-700";
 
   // =========================================================
   // QUICK ACTIONS
@@ -497,25 +465,19 @@ const Dashboard = () => {
           <div className="mb-6">
             <div
               className={`h-3 w-24 rounded ${
-                darkMode
-                  ? "bg-slate-800"
-                  : "bg-slate-200"
+                darkMode ? "bg-slate-800" : "bg-slate-200"
               }`}
             />
 
             <div
               className={`h-8 w-64 rounded mt-3 ${
-                darkMode
-                  ? "bg-slate-800"
-                  : "bg-slate-200"
+                darkMode ? "bg-slate-800" : "bg-slate-200"
               }`}
             />
 
             <div
               className={`h-4 w-96 max-w-full rounded mt-2 ${
-                darkMode
-                  ? "bg-slate-800"
-                  : "bg-slate-200"
+                darkMode ? "bg-slate-800" : "bg-slate-200"
               }`}
             />
           </div>
@@ -528,17 +490,13 @@ const Dashboard = () => {
               >
                 <div
                   className={`h-8 w-12 mx-auto rounded ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-200"
+                    darkMode ? "bg-slate-800" : "bg-slate-200"
                   }`}
                 />
 
                 <div
                   className={`h-3 w-24 mx-auto rounded mt-4 ${
-                    darkMode
-                      ? "bg-slate-800"
-                      : "bg-slate-200"
+                    darkMode ? "bg-slate-800" : "bg-slate-200"
                   }`}
                 />
               </div>
@@ -566,9 +524,7 @@ const Dashboard = () => {
           >
             <h2
               className={`text-base font-bold ${
-                darkMode
-                  ? "text-red-300"
-                  : "text-red-700"
+                darkMode ? "text-red-300" : "text-red-700"
               }`}
             >
               Unable to load dashboard
@@ -576,9 +532,7 @@ const Dashboard = () => {
 
             <p
               className={`text-xs mt-2 ${
-                darkMode
-                  ? "text-red-400"
-                  : "text-red-600"
+                darkMode ? "text-red-400" : "text-red-600"
               }`}
             >
               {error}
@@ -608,7 +562,6 @@ const Dashboard = () => {
   return (
     <div className="w-full min-h-full p-4 sm:p-5 md:p-6 lg:p-8">
       <div className="max-w-[1400px] mx-auto">
-
         {/* =====================================================
             PAGE INTRO
         ===================================================== */}
@@ -628,11 +581,8 @@ const Dashboard = () => {
 
           <p className={`text-sm mt-1 ${mutedClass}`}>
             Welcome back
-            {company?.company_name
-              ? `, ${company.company_name}.`
-              : "."}{" "}
-            Monitor your interns, applications, evaluations,
-            and internship activities.
+            {company?.company_name ? `, ${company.company_name}.` : "."} Monitor
+            your interns, applications, evaluations, and internship activities.
           </p>
         </div>
 
@@ -711,8 +661,8 @@ const Dashboard = () => {
                 </h2>
 
                 <p className={`text-xs mt-1 ${mutedClass}`}>
-                  Students currently deployed and completing
-                  their internship at your company.
+                  Students currently deployed and completing their internship at
+                  your company.
                 </p>
               </div>
 
@@ -754,15 +704,13 @@ const Dashboard = () => {
                   }
                 `}
               >
-                <p
-                  className={`text-sm font-semibold ${headingClass}`}
-                >
+                <p className={`text-sm font-semibold ${headingClass}`}>
                   No active interns
                 </p>
 
                 <p className={`text-xs mt-1 ${mutedClass}`}>
-                  Students assigned to your company will appear
-                  here once they are deployed.
+                  Students assigned to your company will appear here once they
+                  are deployed.
                 </p>
               </div>
             ) : (
@@ -913,9 +861,7 @@ const Dashboard = () => {
                               ${mutedClass}
                             `}
                           >
-                            <div>
-                              {formatDate(intern.startDate)}
-                            </div>
+                            <div>{formatDate(intern.startDate)}</div>
 
                             <div className="mt-1">
                               → {formatDate(intern.endDate)}
@@ -940,9 +886,7 @@ const Dashboard = () => {
                                 border
                                 text-[9px]
                                 font-bold
-                                ${getInternStatusClass(
-                                  intern.status
-                                )}
+                                ${getInternStatusClass(intern.status)}
                               `}
                             >
                               Active
@@ -967,24 +911,16 @@ const Dashboard = () => {
                         rounded-lg
                         p-4
                         ${tableRowClass}
-                        ${
-                          darkMode
-                            ? "bg-slate-800"
-                            : "bg-slate-50"
-                        }
+                        ${darkMode ? "bg-slate-800" : "bg-slate-50"}
                       `}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p
-                            className={`text-sm font-bold ${headingClass}`}
-                          >
+                          <p className={`text-sm font-bold ${headingClass}`}>
                             {intern.name}
                           </p>
 
-                          <p
-                            className={`text-[10px] mt-1 ${mutedClass}`}
-                          >
+                          <p className={`text-[10px] mt-1 ${mutedClass}`}>
                             {intern.studentId}
                           </p>
                         </div>
@@ -998,9 +934,7 @@ const Dashboard = () => {
                             border
                             text-[9px]
                             font-bold
-                            ${getInternStatusClass(
-                              intern.status
-                            )}
+                            ${getInternStatusClass(intern.status)}
                           `}
                         >
                           Active
@@ -1011,23 +945,15 @@ const Dashboard = () => {
                         className={`
                           h-px
                           my-3
-                          ${
-                            darkMode
-                              ? "bg-slate-700"
-                              : "bg-slate-200"
-                          }
+                          ${darkMode ? "bg-slate-700" : "bg-slate-200"}
                         `}
                       />
 
-                      <p
-                        className={`text-xs font-semibold ${headingClass}`}
-                      >
+                      <p className={`text-xs font-semibold ${headingClass}`}>
                         {intern.position}
                       </p>
 
-                      <p
-                        className={`text-[10px] mt-2 ${mutedClass}`}
-                      >
+                      <p className={`text-[10px] mt-2 ${mutedClass}`}>
                         {formatDate(intern.startDate)}
                         {" → "}
                         {formatDate(intern.endDate)}
@@ -1058,11 +984,7 @@ const Dashboard = () => {
                   w-full
                   text-xs
                   font-bold
-                  ${
-                    darkMode
-                      ? "text-slate-300"
-                      : "text-slate-600"
-                  }
+                  ${darkMode ? "text-slate-300" : "text-slate-600"}
                 `}
               >
                 View All Interns →
@@ -1098,11 +1020,7 @@ const Dashboard = () => {
             `}
           >
             <div className="mb-4">
-              <h2
-                className={`text-base font-bold ${headingClass}`}
-              >
-                Alerts
-              </h2>
+              <h2 className={`text-base font-bold ${headingClass}`}>Alerts</h2>
 
               <p className={`text-xs mt-1 ${mutedClass}`}>
                 Important items that may require your attention.
@@ -1139,11 +1057,7 @@ const Dashboard = () => {
                         h-2
                         flex-shrink-0
                         rounded-full
-                        ${
-                          darkMode
-                            ? "bg-amber-400"
-                            : "bg-amber-500"
-                        }
+                        ${darkMode ? "bg-amber-400" : "bg-amber-500"}
                       `}
                     />
 
@@ -1152,33 +1066,21 @@ const Dashboard = () => {
                         className={`
                           text-xs
                           font-semibold
-                          ${
-                            darkMode
-                              ? "text-amber-300"
-                              : "text-amber-700"
-                          }
+                          ${darkMode ? "text-amber-300" : "text-amber-700"}
                         `}
                       >
-                        {pendingApplications.length}{" "}
-                        pending application
-                        {pendingApplications.length !== 1
-                          ? "s"
-                          : ""}
+                        {pendingApplications.length} pending application
+                        {pendingApplications.length !== 1 ? "s" : ""}
                       </p>
 
                       <p
                         className={`
                           text-[10px]
                           mt-1
-                          ${
-                            darkMode
-                              ? "text-amber-400"
-                              : "text-amber-600"
-                          }
+                          ${darkMode ? "text-amber-400" : "text-amber-600"}
                         `}
                       >
-                        Applications are waiting for your
-                        review.
+                        Applications are waiting for your review.
                       </p>
                     </div>
                   </div>
@@ -1209,11 +1111,7 @@ const Dashboard = () => {
                         h-2
                         flex-shrink-0
                         rounded-full
-                        ${
-                          darkMode
-                            ? "bg-red-400"
-                            : "bg-red-500"
-                        }
+                        ${darkMode ? "bg-red-400" : "bg-red-500"}
                       `}
                     />
 
@@ -1222,15 +1120,10 @@ const Dashboard = () => {
                         className={`
                           text-xs
                           font-semibold
-                          ${
-                            darkMode
-                              ? "text-red-300"
-                              : "text-red-700"
-                          }
+                          ${darkMode ? "text-red-300" : "text-red-700"}
                         `}
                       >
-                        {internshipsEndingSoon.length}{" "}
-                        internship
+                        {internshipsEndingSoon.length} internship
                         {internshipsEndingSoon.length !== 1
                           ? "s are"
                           : " is"}{" "}
@@ -1241,15 +1134,10 @@ const Dashboard = () => {
                         className={`
                           text-[10px]
                           mt-1
-                          ${
-                            darkMode
-                              ? "text-red-400"
-                              : "text-red-600"
-                          }
+                          ${darkMode ? "text-red-400" : "text-red-600"}
                         `}
                       >
-                        Review upcoming completion and
-                        evaluation requirements.
+                        Review upcoming completion and evaluation requirements.
                       </p>
                     </div>
                   </div>
@@ -1285,11 +1173,7 @@ const Dashboard = () => {
                         h-2
                         flex-shrink-0
                         rounded-full
-                        ${
-                          darkMode
-                            ? "bg-blue-400"
-                            : "bg-blue-500"
-                        }
+                        ${darkMode ? "bg-blue-400" : "bg-blue-500"}
                       `}
                     />
 
@@ -1298,34 +1182,22 @@ const Dashboard = () => {
                         className={`
                           text-xs
                           font-semibold
-                          ${
-                            darkMode
-                              ? "text-blue-300"
-                              : "text-blue-700"
-                          }
+                          ${darkMode ? "text-blue-300" : "text-blue-700"}
                         `}
                       >
-                        {pendingEvaluations.length}{" "}
-                        evaluation
-                        {pendingEvaluations.length !== 1
-                          ? "s"
-                          : ""}{" "}
-                        need attention
+                        {pendingEvaluations.length} evaluation
+                        {pendingEvaluations.length !== 1 ? "s" : ""} need
+                        attention
                       </p>
 
                       <p
                         className={`
                           text-[10px]
                           mt-1
-                          ${
-                            darkMode
-                              ? "text-blue-400"
-                              : "text-blue-600"
-                          }
+                          ${darkMode ? "text-blue-400" : "text-blue-600"}
                         `}
                       >
-                        Continue or update your pending
-                        evaluations.
+                        Continue or update your pending evaluations.
                       </p>
                     </div>
                   </div>
@@ -1351,9 +1223,7 @@ const Dashboard = () => {
                       }
                     `}
                   >
-                    <p
-                      className={`text-xs ${mutedClass}`}
-                    >
+                    <p className={`text-xs ${mutedClass}`}>
                       No important alerts right now.
                     </p>
                   </div>
@@ -1375,9 +1245,7 @@ const Dashboard = () => {
             `}
           >
             <div className="mb-4">
-              <h2
-                className={`text-base font-bold ${headingClass}`}
-              >
+              <h2 className={`text-base font-bold ${headingClass}`}>
                 Quick Actions
               </h2>
 
@@ -1453,7 +1321,7 @@ const Dashboard = () => {
                   }
                 `}
               >
-                Post Position
+                Post Opportunity
               </button>
             </div>
           </section>
@@ -1475,9 +1343,7 @@ const Dashboard = () => {
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h2
-                className={`text-base font-bold ${headingClass}`}
-              >
+              <h2 className={`text-base font-bold ${headingClass}`}>
                 Internship Summary
               </h2>
 
@@ -1521,11 +1387,8 @@ const Dashboard = () => {
                   }
                 `}
               >
-                {pendingApplications.length} Pending
-                Application
-                {pendingApplications.length !== 1
-                  ? "s"
-                  : ""}
+                {pendingApplications.length} Pending Application
+                {pendingApplications.length !== 1 ? "s" : ""}
               </span>
 
               <span

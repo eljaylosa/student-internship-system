@@ -14,6 +14,11 @@ const COMPANY_ACTIVE_LIGHT = "bg-purple-50 text-purple-700";
 const COMPANY_ACTIVE_DARK = "bg-purple-500/15 text-purple-400";
 
 /* =========================================================
+   COMPANY LOGO
+   ========================================================= */
+const COMPANY_LOGO_BUCKET = "company-logos";
+
+/* =========================================================
    TEMPORARY NOTIFICATIONS
    ========================================================= */
 const initialNotifications = [
@@ -63,6 +68,7 @@ export default function CompanyPortalLayout() {
      COMPANY PROFILE
      ========================================================= */
   const [companyName, setCompanyName] = useState("Company Account");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState(null);
 
   /* =========================================================
      SIDEBAR
@@ -109,6 +115,21 @@ export default function CompanyPortalLayout() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   /* =========================================================
+     INITIALS
+     ========================================================= */
+  const getInitials = (name) => {
+    if (!name) return "CO";
+
+    const parts = name.trim().split(" ").filter(Boolean);
+
+    if (parts.length === 1) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  /* =========================================================
      LOAD COMPANY
      ========================================================= */
   useEffect(() => {
@@ -129,6 +150,9 @@ export default function CompanyPortalLayout() {
 
       if (!user) return;
 
+      /* =====================================================
+         COMPANY NAME
+         ===================================================== */
       const { data, error } = await supabaseCompany
         .from("companies")
         .select("company_name")
@@ -137,14 +161,54 @@ export default function CompanyPortalLayout() {
 
       if (error) {
         console.error("Company profile error:", error);
-        return;
       }
 
       if (data?.company_name) {
         setCompanyName(data.company_name);
       }
+
+      /* =====================================================
+         COMPANY LOGO
+         ===================================================== */
+
+      const logoPath =
+        user.user_metadata?.company_logo_url ||
+        user.user_metadata?.companyLogoUrl ||
+        null;
+
+      if (!logoPath) {
+        setCompanyLogoUrl(null);
+        return;
+      }
+
+      /* =====================================================
+         SUPPORT DIRECT URLS
+         ===================================================== */
+
+      if (/^https?:\/\//i.test(logoPath)) {
+        setCompanyLogoUrl(logoPath);
+        return;
+      }
+
+      /* =====================================================
+         CREATE SIGNED URL
+         ===================================================== */
+
+      const { data: signedData, error: signedError } =
+        await supabaseCompany.storage
+          .from(COMPANY_LOGO_BUCKET)
+          .createSignedUrl(logoPath, 60 * 60);
+
+      if (signedError) {
+        console.warn("Unable to load company logo:", signedError);
+        setCompanyLogoUrl(null);
+        return;
+      }
+
+      setCompanyLogoUrl(signedData?.signedUrl || null);
     } catch (error) {
       console.error("Failed to load company profile:", error);
+      setCompanyLogoUrl(null);
     }
   };
 
@@ -429,21 +493,6 @@ export default function CompanyPortalLayout() {
   };
 
   /* =========================================================
-     INITIALS
-     ========================================================= */
-  const getInitials = (name) => {
-    if (!name) return "CO";
-
-    const parts = name.trim().split(" ").filter(Boolean);
-
-    if (parts.length === 1) {
-      return parts[0].substring(0, 2).toUpperCase();
-    }
-
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  /* =========================================================
      NOTIFICATION HANDLERS
      ========================================================= */
   const markNotificationRead = (id) => {
@@ -491,6 +540,46 @@ export default function CompanyPortalLayout() {
   };
 
   /* =========================================================
+     COMPANY AVATAR
+     ========================================================= */
+  const renderCompanyAvatar = (sizeClass, roundedClass = "rounded-full") => {
+    return (
+      <div
+        className={`relative flex flex-shrink-0 items-center justify-center overflow-hidden ${sizeClass} ${roundedClass} ${
+          companyLogoUrl ? "bg-white" : COMPANY_PRIMARY
+        } shadow-sm`}
+      >
+        {companyLogoUrl ? (
+          <img
+            src={companyLogoUrl}
+            alt={`${companyName || "Company"} logo`}
+            className="h-full w-full object-contain p-1"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+              const fallback = event.currentTarget.parentElement?.querySelector(
+                "[data-company-avatar-fallback]"
+              );
+
+              if (fallback) {
+                fallback.classList.remove("hidden");
+              }
+            }}
+          />
+        ) : null}
+
+        <span
+          data-company-avatar-fallback
+          className={`${
+            companyLogoUrl ? "hidden" : "flex"
+          } h-full w-full items-center justify-center text-xs font-bold text-white`}
+        >
+          {getInitials(companyName)}
+        </span>
+      </div>
+    );
+  };
+
+  /* =========================================================
      SIDEBAR CONTENT
      ========================================================= */
   const renderSidebarContent = (mobile = false) => {
@@ -506,11 +595,7 @@ export default function CompanyPortalLayout() {
         >
           <div className="flex min-w-0 items-center gap-3">
             {/* COMPANY LOGO */}
-            <div
-              className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white shadow-md ${COMPANY_PRIMARY}`}
-            >
-              C
-            </div>
+            {renderCompanyAvatar("h-11 w-11", "rounded-xl")}
 
             <div className="min-w-0">
               <h1
@@ -1043,12 +1128,8 @@ export default function CompanyPortalLayout() {
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
-                  {/* PURPLE AVATAR */}
-                  <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm ${COMPANY_PRIMARY}`}
-                  >
-                    {getInitials(companyName)}
-                  </div>
+                  {/* COMPANY AVATAR */}
+                  {renderCompanyAvatar("h-9 w-9")}
 
                   <div className="hidden text-left sm:block">
                     <p
@@ -1093,11 +1174,8 @@ export default function CompanyPortalLayout() {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm ${COMPANY_PRIMARY}`}
-                        >
-                          {getInitials(companyName)}
-                        </div>
+                        {/* COMPANY AVATAR */}
+                        {renderCompanyAvatar("h-10 w-10")}
 
                         <div className="min-w-0">
                           <p
@@ -1131,7 +1209,7 @@ export default function CompanyPortalLayout() {
                         }`}
                       >
                         👤
-                        <span>My Profile</span>
+                        <span>Company Profile</span>
                       </button>
 
                       {/* SETTINGS */}
@@ -1188,6 +1266,7 @@ export default function CompanyPortalLayout() {
               context={{
                 darkMode,
                 companyName,
+                companyLogoUrl,
                 notifications,
                 unreadCount,
                 markNotificationRead,

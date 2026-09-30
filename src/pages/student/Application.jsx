@@ -37,6 +37,7 @@ const STATUS = {
 };
 
 const DOCUMENT_BUCKET = "internship-documents";
+const COMPANY_LOGO_BUCKET = "company-logos";
 
 const DOCUMENT_STATUS = {
   [STATUS.document.SUBMITTED]: {
@@ -203,6 +204,8 @@ export default function Application() {
   const [coverLetter, setCoverLetter] = useState("");
   const [isReapplying, setIsReapplying] = useState(false);
 
+  const [companyLogoUrls, setCompanyLogoUrls] = useState({});
+
   // ---------------------------------------------------------
   // NEW OPPORTUNITY BROWSING STATE
   // ---------------------------------------------------------
@@ -290,6 +293,75 @@ export default function Application() {
     setApplicationDocuments(data || []);
 
     return data || [];
+  };
+
+  // LoadCompanyLogos
+
+  const loadCompanyLogos = async (companies) => {
+    if (!companies?.length) {
+      setCompanyLogoUrls({});
+      return;
+    }
+
+    const companyIds = [
+      ...new Set(companies.map((company) => company?.id).filter(Boolean)),
+    ];
+
+    if (!companyIds.length) {
+      setCompanyLogoUrls({});
+      return;
+    }
+
+    try {
+      const { data, error } = await supabaseStudent.rpc("get_company_logos", {
+        p_company_ids: companyIds,
+      });
+
+      if (error) {
+        console.error("Error loading company logos:", error);
+        setCompanyLogoUrls({});
+        return;
+      }
+
+      const logoMap = {};
+
+      for (const company of data || []) {
+        if (!company?.company_id || !company?.logo_path) {
+          continue;
+        }
+
+        const logoPath = company.logo_path;
+
+        // If metadata somehow contains a complete URL,
+        // use it directly.
+        if (/^https?:\/\//i.test(logoPath)) {
+          logoMap[company.company_id] = logoPath;
+          continue;
+        }
+
+        const { data: signedData, error: signedError } =
+          await supabaseStudent.storage
+            .from(COMPANY_LOGO_BUCKET)
+            .createSignedUrl(logoPath, 60 * 60);
+
+        if (signedError) {
+          console.warn(
+            `Unable to create logo URL for company ${company.company_id}:`,
+            signedError
+          );
+          continue;
+        }
+
+        if (signedData?.signedUrl) {
+          logoMap[company.company_id] = signedData.signedUrl;
+        }
+      }
+
+      setCompanyLogoUrls(logoMap);
+    } catch (err) {
+      console.error("Unexpected error loading company logos:", err);
+      setCompanyLogoUrls({});
+    }
   };
 
   // =========================================================
@@ -497,6 +569,12 @@ export default function Application() {
       );
 
       setOpportunities(opportunitiesWithCompanies);
+
+      await loadCompanyLogos(
+        opportunitiesWithCompanies
+          .map((opportunity) => opportunity.companies)
+          .filter(Boolean)
+      );
 
       // -------------------------------------------------------
       // DOCUMENT TYPES
@@ -2884,19 +2962,114 @@ export default function Application() {
                           {/* CARD HEADER */}
 
                           <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h3 className="font-black text-base truncate">
-                                {opportunity.title || "Internship Opportunity"}
-                              </h3>
+                            <div className="flex items-start gap-3 min-w-0">
+                              {/* =====================================================
+        COMPANY LOGO
+    ===================================================== */}
 
-                              <p
-                                className={`text-xs mt-1 truncate ${
-                                  darkMode ? "text-slate-400" : "text-slate-500"
+                              <div
+                                className={`w-12 h-12 flex-shrink-0 rounded-xl border overflow-hidden flex items-center justify-center ${
+                                  darkMode
+                                    ? "bg-slate-800 border-slate-700"
+                                    : "bg-slate-50 border-slate-200"
                                 }`}
                               >
-                                {opportunity.companies?.company_name ||
-                                  "Company"}
-                              </p>
+                                {companyLogoUrls[opportunity.companies?.id] ? (
+                                  <img
+                                    src={
+                                      companyLogoUrls[opportunity.companies.id]
+                                    }
+                                    alt={`${
+                                      opportunity.companies?.company_name ||
+                                      "Company"
+                                    } logo`}
+                                    className="w-full h-full object-contain p-1.5"
+                                    onError={(event) => {
+                                      event.currentTarget.style.display =
+                                        "none";
+
+                                      const fallback =
+                                        event.currentTarget.parentElement?.querySelector(
+                                          "[data-company-logo-fallback]"
+                                        );
+
+                                      if (fallback) {
+                                        fallback.classList.remove("hidden");
+                                      }
+                                    }}
+                                  />
+                                ) : null}
+
+                                {/* ===================================================
+          FALLBACK INITIALS
+      =================================================== */}
+
+                                <div
+                                  data-company-logo-fallback
+                                  className={`${
+                                    companyLogoUrls[opportunity.companies?.id]
+                                      ? "hidden"
+                                      : ""
+                                  } w-full h-full flex items-center justify-center`}
+                                >
+                                  <span
+                                    className={`text-sm font-black ${
+                                      darkMode
+                                        ? "text-slate-300"
+                                        : "text-slate-500"
+                                    }`}
+                                  >
+                                    {(() => {
+                                      const companyName =
+                                        opportunity.companies?.company_name ||
+                                        "Company";
+
+                                      const words = companyName
+                                        .trim()
+                                        .split(/\s+/)
+                                        .filter(Boolean);
+
+                                      if (!words.length) {
+                                        return "CO";
+                                      }
+
+                                      if (words.length === 1) {
+                                        return words[0]
+                                          .slice(0, 2)
+                                          .toUpperCase();
+                                      }
+
+                                      return words
+                                        .slice(0, 2)
+                                        .map((word) => word[0])
+                                        .join("")
+                                        .toUpperCase();
+                                    })()}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* =====================================================
+        OPPORTUNITY INFO
+    ===================================================== */}
+
+                              <div className="min-w-0">
+                                <h3 className="font-black text-base truncate">
+                                  {opportunity.title ||
+                                    "Internship Opportunity"}
+                                </h3>
+
+                                <p
+                                  className={`text-xs mt-1 truncate ${
+                                    darkMode
+                                      ? "text-slate-400"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  {opportunity.companies?.company_name ||
+                                    "Company"}
+                                </p>
+                              </div>
                             </div>
 
                             <span

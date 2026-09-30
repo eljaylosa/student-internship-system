@@ -81,6 +81,7 @@ import CompanyNotification from "./pages/company/Notification.jsx";
 import CompanyMessages from "./pages/company/Messages.jsx";
 import CompanySettings from "./pages/company/Settings.jsx";
 import CompanyVerificationUpload from "./pages/company/VerificationUpload.jsx";
+import CompanyProfile from "./pages/company/Profile.jsx";
 
 // =========================================================
 // ADMIN PORTAL
@@ -392,6 +393,7 @@ function AppContent() {
             <Route path="feedback" element={<CompanyFeedback />} />
             <Route path="notifications" element={<CompanyNotification />} />
             <Route path="messages" element={<CompanyMessages />} />
+            <Route path="profile" element={<CompanyProfile />} />
 
             {/* Company information is now managed through Settings */}
             <Route path="settings" element={<CompanySettings />} />
