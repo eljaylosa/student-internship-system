@@ -1026,185 +1026,222 @@ export default function Evaluate() {
   // SAVE EVALUATION
   // =========================================================
 
-  const saveEvaluation = async ({ submit = false }) => {
-    try {
-      setSaving(true);
-      setError("");
-      setSuccessMessage("");
+const saveEvaluation = async ({ submit = false }) => {
+  try {
+    setSaving(true);
+    setError("");
+    setSuccessMessage("");
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabaseCompany.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseCompany.auth.getUser();
 
-      if (userError) {
-        throw userError;
-      }
-
-      if (!user) {
-        throw new Error("Your company session has expired.");
-      }
-
-      if (!assignmentId) {
-        throw new Error("Please select an intern.");
-      }
-
-      if (!company) {
-        throw new Error("Company information could not be loaded.");
-      }
-
-      if (!companyTemplate) {
-        throw new Error(
-          "No published company evaluation template is currently available."
-        );
-      }
-
-      const assignment = getAssignment(assignmentId);
-
-      if (!assignment) {
-        throw new Error("The selected internship assignment was not found.");
-      }
-
-      if (assignment.status !== ASSIGNMENT_STATUS.COMPLETED) {
-        throw new Error("Only completed internships can be evaluated.");
-      }
-
-      const existingEvaluation = getEvaluationForAssignment(assignmentId);
-
-      if (
-        existingEvaluation &&
-        [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.FINALIZED].includes(
-          existingEvaluation.status
-        )
-      ) {
-        throw new Error(
-          "This evaluation has already been submitted and can no longer be edited."
-        );
-      }
-
-      if (submit) {
-        const validationError = validateEvaluation();
-
-        if (validationError) {
-          throw new Error(validationError);
-        }
-      }
-
-      const numericRatings = companyCriteria
-        .map((criterion) => Number(responses[criterion.id]))
-        .filter((value) => value >= 1 && value <= 5);
-
-      const averageRating =
-        numericRatings.length > 0
-          ? Number(
-              (
-                numericRatings.reduce((sum, value) => sum + value, 0) /
-                numericRatings.length
-              ).toFixed(2)
-            )
-          : null;
-
-      const payload = {
-        assignment_id: assignment.id,
-        template_id: companyTemplate.id,
-        evaluator_id: user.id,
-        evaluated_student_id: assignment.student_id,
-        evaluated_company_id: assignment.company_id,
-        evaluator_role: EVALUATOR_ROLE,
-        status: submit ? EVALUATION_STATUS.SUBMITTED : EVALUATION_STATUS.DRAFT,
-        responses,
-        overall_rating: submit ? averageRating : averageRating || null,
-        comments: comments.trim() || null,
-        submitted_at: submit ? new Date().toISOString() : null,
-      };
-
-      if (existingEvaluation) {
-        const { data: updatedEvaluation, error: updateError } =
-          await supabaseCompany
-            .from("evaluations")
-            .update(payload)
-            .eq("id", existingEvaluation.id)
-            .select(
-              `
-              id,
-              assignment_id,
-              template_id,
-              evaluator_id,
-              evaluated_student_id,
-              evaluated_company_id,
-              evaluator_role,
-              status,
-              responses,
-              overall_rating,
-              comments,
-              submitted_at,
-              finalized_at,
-              created_at,
-              updated_at
-            `
-            )
-            .single();
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        setEvaluations((previous) => [
-          updatedEvaluation,
-          ...previous.filter(
-            (evaluation) => evaluation.id !== updatedEvaluation.id
-          ),
-        ]);
-      } else {
-        const { data: newEvaluation, error: insertError } =
-          await supabaseCompany
-            .from("evaluations")
-            .insert(payload)
-            .select(
-              `
-              id,
-              assignment_id,
-              template_id,
-              evaluator_id,
-              evaluated_student_id,
-              evaluated_company_id,
-              evaluator_role,
-              status,
-              responses,
-              overall_rating,
-              comments,
-              submitted_at,
-              finalized_at,
-              created_at,
-              updated_at
-            `
-            )
-            .single();
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        setEvaluations((previous) => [newEvaluation, ...previous]);
-      }
-
-      if (submit) {
-        setSuccessMessage(
-          "Evaluation submitted successfully. The evaluation is now recorded."
-        );
-      } else {
-        setSuccessMessage(
-          "Evaluation draft saved successfully. You can continue editing it later."
-        );
-      }
-    } catch (err) {
-      console.error("Error saving company evaluation:", err);
-
-      setError(err?.message || "Unable to save the evaluation.");
-    } finally {
-      setSaving(false);
+    if (userError) {
+      throw userError;
     }
-  };
+
+    if (!user) {
+      throw new Error("Your company session has expired.");
+    }
+
+    if (!assignmentId) {
+      throw new Error("Please select an intern.");
+    }
+
+    if (!company) {
+      throw new Error("Company information could not be loaded.");
+    }
+
+    if (!companyTemplate) {
+      throw new Error(
+        "No published company evaluation template is currently available."
+      );
+    }
+
+    const assignment = getAssignment(assignmentId);
+
+    if (!assignment) {
+      throw new Error("The selected internship assignment was not found.");
+    }
+
+    if (assignment.status !== ASSIGNMENT_STATUS.COMPLETED) {
+      throw new Error("Only completed internships can be evaluated.");
+    }
+
+    const existingEvaluation = getEvaluationForAssignment(assignmentId);
+
+    if (
+      existingEvaluation &&
+      [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.FINALIZED].includes(
+        existingEvaluation.status
+      )
+    ) {
+      throw new Error(
+        "This evaluation has already been submitted and can no longer be edited."
+      );
+    }
+
+    if (submit) {
+      const validationError = validateEvaluation();
+
+      if (validationError) {
+        throw new Error(validationError);
+      }
+    }
+
+    const numericRatings = companyCriteria
+      .map((criterion) => Number(responses[criterion.id]))
+      .filter((value) => value >= 1 && value <= 5);
+
+    const averageRating =
+      numericRatings.length > 0
+        ? Number(
+            (
+              numericRatings.reduce((sum, value) => sum + value, 0) /
+              numericRatings.length
+            ).toFixed(2)
+          )
+        : null;
+
+    // =========================================================
+    // SUBMIT EVALUATION
+    // =========================================================
+    // Actual submission goes through the RPC so the evaluation
+    // and Student notification are created in the same transaction.
+
+    if (submit) {
+      const { data: submittedEvaluation, error: submitError } =
+        await supabaseCompany.rpc("submit_company_student_evaluation", {
+          p_evaluation_id: existingEvaluation?.id || null,
+          p_assignment_id: assignment.id,
+          p_template_id: companyTemplate.id,
+          p_responses: responses,
+          p_overall_rating: averageRating,
+          p_comments: comments.trim() || null,
+        });
+
+      if (submitError) {
+        throw submitError;
+      }
+
+      if (!submittedEvaluation) {
+        throw new Error("The evaluation could not be submitted.");
+      }
+
+      setEvaluations((previous) => [
+        submittedEvaluation,
+        ...previous.filter(
+          (evaluation) => evaluation.id !== submittedEvaluation.id
+        ),
+      ]);
+
+      setSuccessMessage(
+        "Evaluation submitted successfully. The evaluation is now recorded."
+      );
+
+      return;
+    }
+
+    // =========================================================
+    // SAVE DRAFT
+    // =========================================================
+    // Drafts continue using the existing direct INSERT/UPDATE flow.
+
+    const payload = {
+      assignment_id: assignment.id,
+      template_id: companyTemplate.id,
+      evaluator_id: user.id,
+      evaluated_student_id: assignment.student_id,
+      evaluated_company_id: assignment.company_id,
+      evaluator_role: EVALUATOR_ROLE,
+      status: EVALUATION_STATUS.DRAFT,
+      responses,
+      overall_rating: averageRating || null,
+      comments: comments.trim() || null,
+      submitted_at: null,
+    };
+
+    if (existingEvaluation) {
+      const { data: updatedEvaluation, error: updateError } =
+        await supabaseCompany
+          .from("evaluations")
+          .update(payload)
+          .eq("id", existingEvaluation.id)
+          .select(
+            `
+              id,
+              assignment_id,
+              template_id,
+              evaluator_id,
+              evaluated_student_id,
+              evaluated_company_id,
+              evaluator_role,
+              status,
+              responses,
+              overall_rating,
+              comments,
+              submitted_at,
+              finalized_at,
+              created_at,
+              updated_at
+            `
+          )
+          .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setEvaluations((previous) => [
+        updatedEvaluation,
+        ...previous.filter(
+          (evaluation) => evaluation.id !== updatedEvaluation.id
+        ),
+      ]);
+    } else {
+      const { data: newEvaluation, error: insertError } = await supabaseCompany
+        .from("evaluations")
+        .insert(payload)
+        .select(
+          `
+              id,
+              assignment_id,
+              template_id,
+              evaluator_id,
+              evaluated_student_id,
+              evaluated_company_id,
+              evaluator_role,
+              status,
+              responses,
+              overall_rating,
+              comments,
+              submitted_at,
+              finalized_at,
+              created_at,
+              updated_at
+            `
+        )
+        .single();
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      setEvaluations((previous) => [newEvaluation, ...previous]);
+    }
+
+    setSuccessMessage(
+      "Evaluation draft saved successfully. You can continue editing it later."
+    );
+  } catch (err) {
+    console.error("Error saving company evaluation:", err);
+
+    setError(err?.message || "Unable to save the evaluation.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   // =========================================================
   // SAVE DRAFT

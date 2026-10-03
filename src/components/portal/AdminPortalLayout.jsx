@@ -1,60 +1,239 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../../supabaseClient";
 
 // =========================================================
-// ADMIN NOTIFICATIONS
+// ADMIN NOTIFICATION HELPERS
 // =========================================================
 
-const adminNotifications = [
-  {
-    id: 1,
-    type: "account-request",
-    category: "Student Account",
-    title: "New Student Account Request",
-    message:
-      "A new student account is waiting for administrator review and approval.",
-    time: "10 mins ago",
-    unread: true,
-    icon: "🎓",
-    path: "/admin/requests",
-  },
-  {
-    id: 2,
-    type: "account-request",
-    category: "Registrar Account",
-    title: "New Registrar Account Request",
-    message:
-      "A new registrar account has been submitted and is waiting for review.",
-    time: "35 mins ago",
-    unread: true,
-    icon: "👨‍💼",
-    path: "/admin/requests",
-  },
-  {
-    id: 3,
-    type: "company-registration",
-    category: "Company Registration",
-    title: "New Company Registration",
-    message:
-      "A company registration request is waiting for administrator approval.",
-    time: "1 hr ago",
-    unread: true,
-    icon: "🏢",
-    path: "/admin/companies",
-  },
-  {
-    id: 4,
-    type: "system",
-    category: "System",
-    title: "System Update",
-    message: "The internship management system was successfully updated.",
-    time: "Yesterday",
-    unread: false,
-    icon: "⚙️",
-    path: "/admin/notifications",
-  },
-];
+const NOTIFICATION_SELECT = `
+  id,
+  recipient_id,
+  recipient_role,
+  type,
+  category,
+  title,
+  message,
+  related_entity_type,
+  related_entity_id,
+  action_path,
+  created_by,
+  read_at,
+  created_at
+`;
 
+const getNotificationIcon = (notification) => {
+  const type = notification?.type;
+  const category = notification?.category;
+  const relatedEntityType =
+    notification?.related_entity_type || notification?.relatedEntityType;
+
+  if (
+    type === "registration_request" ||
+    type === "account-request" ||
+    category === "Account Requests"
+  ) {
+    if (notification?.title?.toLowerCase().includes("student")) {
+      return "🎓";
+    }
+
+    if (notification?.title?.toLowerCase().includes("registrar")) {
+      return "👨‍💼";
+    }
+
+    return "📩";
+  }
+
+  if (
+    type === "company_registration" ||
+    type === "company-registration" ||
+    category === "Company Registration" ||
+    relatedEntityType === "CompanyRegistration"
+  ) {
+    return "🏢";
+  }
+
+  if (type === "system" || category === "System") {
+    return "⚙️";
+  }
+
+  if (type === "announcement" || category === "Announcements") {
+    return "📢";
+  }
+
+  return "🔔";
+};
+
+const formatRelativeTime = (dateValue) => {
+  if (!dateValue) {
+    return "";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 60) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} hr${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+};
+
+// =========================================================
+// NOTIFICATION ACTION LABEL
+// =========================================================
+//
+// The notification's action_path is the source of truth.
+//
+// Registration requests:
+// /admin/requests
+//      -> Review Request
+//
+// Other future actions can use their own paths.
+// =========================================================
+
+const getNotificationActionLabel = (notification) => {
+  if (!notification) {
+    return null;
+  }
+
+  const actionPath = notification.actionPath || notification.path || null;
+
+  if (!actionPath || actionPath === "/admin/notifications") {
+    return null;
+  }
+
+  if (
+    actionPath === "/admin/requests" ||
+    notification.relatedEntityType === "RegistrationRequest" ||
+    notification.related_entity_type === "RegistrationRequest"
+  ) {
+    return "Review Request";
+  }
+
+  if (
+    actionPath === "/admin/companies" ||
+    notification.relatedEntityType === "CompanyRegistration" ||
+    notification.related_entity_type === "CompanyRegistration"
+  ) {
+    return "Review Company";
+  }
+
+  return "View Details";
+};
+
+// =========================================================
+// MAP DATABASE NOTIFICATION
+// =========================================================
+
+const mapNotification = (row) => {
+  if (!row) {
+    return null;
+  }
+
+  const relatedEntityType = row.related_entity_type || null;
+  const type = row.type || null;
+
+  // =======================================================
+  // DETERMINE ACTION PATH
+  // =======================================================
+  //
+  // Registration requests MUST go to:
+  // /admin/requests
+  //
+  // This prevents old/wrong action_path values such as:
+  // /admin/users
+  //
+  // User Management is for EXISTING accounts.
+  // ReviewCreateRequests is for PENDING REGISTRATION REQUESTS.
+  // =======================================================
+
+  let actionPath = row.action_path || null;
+
+  if (
+    relatedEntityType === "RegistrationRequest" ||
+    type === "registration_request" ||
+    type === "account-request"
+  ) {
+    actionPath = "/admin/requests";
+  }
+
+  // Company registration requests go to Company Management.
+  if (
+    relatedEntityType === "CompanyRegistration" ||
+    type === "company_registration" ||
+    type === "company-registration"
+  ) {
+    actionPath = "/admin/companies";
+  }
+
+  return {
+    id: row.id,
+
+    type: row.type,
+
+    category: row.category,
+
+    title: row.title,
+
+    message: row.message,
+
+    time: formatRelativeTime(row.created_at),
+
+    unread: !row.read_at,
+
+    icon: getNotificationIcon(row),
+
+    // =======================================================
+    // ACTION-READY FIELDS
+    // =======================================================
+
+    path: actionPath || "/admin/notifications",
+
+    actionPath,
+
+    relatedEntityType,
+
+    relatedEntityId: row.related_entity_id || null,
+
+    readAt: row.read_at,
+
+    createdAt: row.created_at,
+
+    recipientId: row.recipient_id,
+
+    recipientRole: row.recipient_role,
+
+    createdBy: row.created_by,
+  };
+};
 // =========================================================
 // COMPONENT
 // =========================================================
@@ -86,13 +265,13 @@ const AdminPortalLayout = () => {
   // NOTIFICATIONS
   // =========================================================
 
-  const [notifications, setNotifications] = useState(adminNotifications);
+  const [notifications, setNotifications] = useState([]);
 
   const [selectedNotification, setSelectedNotification] = useState(null);
 
-  const unreadCount = notifications.filter(
-    (notification) => notification.unread
-  ).length;
+  const [adminUserId, setAdminUserId] = useState(null);
+
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // =========================================================
   // DARK MODE
@@ -109,6 +288,14 @@ const AdminPortalLayout = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // =========================================================
+  // UNREAD COUNT
+  // =========================================================
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter((notification) => notification.unread).length;
+  }, [notifications]);
 
   // =========================================================
   // SIDEBAR ITEMS
@@ -140,21 +327,6 @@ const AdminPortalLayout = () => {
       path: "/admin/schools",
       icon: "🏫",
     },
-    // {
-    //   label: "Internship Records",
-    //   path: "/admin/internships",
-    //   icon: "▣",
-    // },
-    // {
-    //   label: "Document Management",
-    //   path: "/admin/documents",
-    //   icon: "▰",
-    // },
-    // {
-    //   label: "Information Management",
-    //   path: "/admin/information",
-    //   icon: "ⓘ",
-    // },
     {
       label: "Evaluation Management",
       path: "/admin/evaluations",
@@ -184,32 +356,349 @@ const AdminPortalLayout = () => {
   ];
 
   // =========================================================
+  // LOAD CURRENT ADMIN
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAdminUser = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (error) {
+          console.error("Unable to get authenticated admin:", error);
+
+          if (mounted) {
+            setAdminUserId(null);
+          }
+
+          return;
+        }
+
+        if (!user) {
+          if (mounted) {
+            setAdminUserId(null);
+          }
+
+          return;
+        }
+
+        if (mounted) {
+          setAdminUserId(user.id);
+        }
+      } catch (error) {
+        console.error("Unexpected error loading admin user:", error);
+
+        if (mounted) {
+          setAdminUserId(null);
+        }
+      }
+    };
+
+    loadAdminUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // LOAD ADMIN NOTIFICATIONS
+  // =========================================================
+
+  useEffect(() => {
+    if (!adminUserId) {
+      setNotifications([]);
+      setNotificationsLoading(false);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadNotifications = async () => {
+      try {
+        setNotificationsLoading(true);
+
+        const { data, error } = await supabase
+          .from("notifications")
+          .select(NOTIFICATION_SELECT)
+          .eq("recipient_id", adminUserId)
+          .eq("recipient_role", "admin")
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (error) {
+          console.error("Error loading admin notifications:", error);
+
+          if (mounted) {
+            setNotifications([]);
+          }
+
+          return;
+        }
+
+        if (mounted) {
+          setNotifications((data || []).map(mapNotification).filter(Boolean));
+        }
+      } catch (error) {
+        console.error("Unexpected notification loading error:", error);
+
+        if (mounted) {
+          setNotifications([]);
+        }
+      } finally {
+        if (mounted) {
+          setNotificationsLoading(false);
+        }
+      }
+    };
+
+    loadNotifications();
+
+    return () => {
+      mounted = false;
+    };
+  }, [adminUserId]);
+
+  // =========================================================
+  // REALTIME NOTIFICATIONS
+  // =========================================================
+
+  useEffect(() => {
+    if (!adminUserId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`admin-portal-notifications-${adminUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${adminUserId}`,
+        },
+        (payload) => {
+          const incomingNotification = mapNotification(payload.new);
+
+          if (!incomingNotification) {
+            return;
+          }
+
+          if (incomingNotification.recipientRole !== "admin") {
+            return;
+          }
+
+          setNotifications((previous) => {
+            const alreadyExists = previous.some(
+              (notification) => notification.id === incomingNotification.id
+            );
+
+            if (alreadyExists) {
+              return previous;
+            }
+
+            return [incomingNotification, ...previous];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${adminUserId}`,
+        },
+        (payload) => {
+          const updatedNotification = mapNotification(payload.new);
+
+          if (!updatedNotification) {
+            return;
+          }
+
+          if (updatedNotification.recipientRole !== "admin") {
+            return;
+          }
+
+          setNotifications((previous) =>
+            previous.map((notification) =>
+              notification.id === updatedNotification.id
+                ? updatedNotification
+                : notification
+            )
+          );
+
+          setSelectedNotification((previous) =>
+            previous?.id === updatedNotification.id
+              ? updatedNotification
+              : previous
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${adminUserId}`,
+        },
+        (payload) => {
+          const deletedId = payload.old?.id;
+
+          if (!deletedId) {
+            return;
+          }
+
+          setNotifications((previous) =>
+            previous.filter((notification) => notification.id !== deletedId)
+          );
+
+          setSelectedNotification((previous) =>
+            previous?.id === deletedId ? null : previous
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log(
+          "[AdminPortalLayout] Notification realtime status:",
+          status
+        );
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [adminUserId]);
+
+  // =========================================================
   // NOTIFICATION HANDLERS
   // =========================================================
 
-  const markNotificationAsRead = (id) => {
+  const markNotificationAsRead = async (id) => {
+    if (!adminUserId || !id) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
     setNotifications((previous) =>
       previous.map((notification) =>
         notification.id === id
           ? {
               ...notification,
               unread: false,
+              readAt: now,
             }
           : notification
       )
     );
+
+    setSelectedNotification((previous) =>
+      previous?.id === id
+        ? {
+            ...previous,
+            unread: false,
+            readAt: now,
+          }
+        : previous
+    );
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        read_at: now,
+      })
+      .eq("id", id)
+      .eq("recipient_id", adminUserId);
+
+    if (error) {
+      console.error("Error marking notification as read:", error);
+
+      const { data } = await supabase
+        .from("notifications")
+        .select(NOTIFICATION_SELECT)
+        .eq("recipient_id", adminUserId)
+        .eq("recipient_role", "admin")
+        .order("created_at", {
+          ascending: false,
+        });
+
+      setNotifications((data || []).map(mapNotification).filter(Boolean));
+    }
   };
 
-  const markAllNotificationsRead = () => {
+  // =========================================================
+  // MARK ALL READ
+  // =========================================================
+
+  const markAllNotificationsRead = async () => {
+    if (!adminUserId || unreadCount === 0) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
     setNotifications((previous) =>
       previous.map((notification) => ({
         ...notification,
         unread: false,
+        readAt: notification.readAt || now,
       }))
     );
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        read_at: now,
+      })
+      .eq("recipient_id", adminUserId)
+      .eq("recipient_role", "admin")
+      .is("read_at", null);
+
+    if (error) {
+      console.error("Error marking all notifications as read:", error);
+
+      const { data } = await supabase
+        .from("notifications")
+        .select(NOTIFICATION_SELECT)
+        .eq("recipient_id", adminUserId)
+        .eq("recipient_role", "admin")
+        .order("created_at", {
+          ascending: false,
+        });
+
+      setNotifications((data || []).map(mapNotification).filter(Boolean));
+    }
   };
 
-  const deleteNotification = (id) => {
+  // =========================================================
+  // DELETE NOTIFICATION
+  // =========================================================
+
+  const deleteNotification = async (id) => {
+    if (!adminUserId || !id) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("id", id)
+      .eq("recipient_id", adminUserId);
+
+    if (error) {
+      console.error("Error deleting notification:", error);
+      return;
+    }
+
     setNotifications((previous) =>
       previous.filter((notification) => notification.id !== id)
     );
@@ -219,23 +708,71 @@ const AdminPortalLayout = () => {
     }
   };
 
-  const openNotification = (notification) => {
-    markNotificationAsRead(notification.id);
-    setSelectedNotification(notification);
+  // =========================================================
+  // OPEN NOTIFICATION
+  // =========================================================
+
+  const openNotification = async (notification) => {
+    if (!notification) {
+      return;
+    }
+
+    if (notification.unread) {
+      await markNotificationAsRead(notification.id);
+    }
+
+    setSelectedNotification({
+      ...notification,
+      unread: false,
+    });
+
     setIsNotificationOpen(false);
   };
+
+  // =========================================================
+  // CLOSE NOTIFICATION MODAL
+  // =========================================================
 
   const closeNotificationModal = () => {
     setSelectedNotification(null);
   };
 
-  const handleNotificationClick = (notification) => {
-    markNotificationAsRead(notification.id);
+  // =========================================================
+  // HANDLE NOTIFICATION ACTION
+  // =========================================================
+  //
+  // Registration notification example:
+  //
+  // actionPath:
+  // "/admin/requests"
+  //
+  // relatedEntityType:
+  // "RegistrationRequest"
+  //
+  // relatedEntityId:
+  // "<request UUID>"
+  //
+  // This sends the Admin directly to the Create Request /
+  // Account Request review page.
+  // =========================================================
 
+  const handleNotificationAction = async (notification) => {
+    if (!notification) {
+      return;
+    }
+
+    if (notification.unread) {
+      await markNotificationAsRead(notification.id);
+    }
+
+    setSelectedNotification(null);
     setIsNotificationOpen(false);
     setIsProfileOpen(false);
 
-    navigate(notification.path || "/admin/notifications");
+    const actionPath =
+      notification.actionPath || notification.path || "/admin/notifications";
+
+    navigate(actionPath);
   };
 
   // =========================================================
@@ -291,7 +828,9 @@ const AdminPortalLayout = () => {
 
   useEffect(() => {
     const handleEscape = (event) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape") {
+        return;
+      }
 
       setIsMobileSidebarOpen(false);
       setIsProfileOpen(false);
@@ -341,7 +880,6 @@ const AdminPortalLayout = () => {
   // =========================================================
 
   const handleResizeStart = (event) => {
-    // Only allow primary mouse button / normal touch pointer
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
@@ -351,8 +889,6 @@ const AdminPortalLayout = () => {
 
     setIsResizing(true);
 
-    // Capture the pointer so dragging remains active
-    // even when the cursor moves away from the handle.
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch (error) {
@@ -364,7 +900,9 @@ const AdminPortalLayout = () => {
   };
 
   const handleResizeMove = (event) => {
-    if (!isResizing) return;
+    if (!isResizing) {
+      return;
+    }
 
     event.preventDefault();
 
@@ -377,7 +915,9 @@ const AdminPortalLayout = () => {
   };
 
   const handleResizeEnd = (event) => {
-    if (!isResizing) return;
+    if (!isResizing) {
+      return;
+    }
 
     try {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -393,7 +933,6 @@ const AdminPortalLayout = () => {
     document.body.style.cursor = "";
   };
 
-  // Safety cleanup if component unmounts while resizing
   useEffect(() => {
     return () => {
       document.body.style.userSelect = "";
@@ -453,7 +992,9 @@ const AdminPortalLayout = () => {
   };
 
   const confirmLogout = async () => {
-    if (isLoggingOut) return;
+    if (isLoggingOut) {
+      return;
+    }
 
     try {
       setIsLoggingOut(true);
@@ -469,12 +1010,15 @@ const AdminPortalLayout = () => {
       });
     } catch (error) {
       console.error("Logout failed:", error);
+
       setIsLoggingOut(false);
     }
   };
 
   const cancelLogout = () => {
-    if (isLoggingOut) return;
+    if (isLoggingOut) {
+      return;
+    }
 
     setShowLogoutConfirm(false);
   };
@@ -490,9 +1034,7 @@ const AdminPortalLayout = () => {
           darkMode ? "bg-slate-900 text-white" : "bg-white text-slate-900"
         }`}
       >
-        {/* ===================================================
-            BRAND
-        =================================================== */}
+        {/* BRAND */}
 
         <div
           className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
@@ -527,8 +1069,6 @@ const AdminPortalLayout = () => {
             </div>
           </div>
 
-          {/* MOBILE CLOSE */}
-
           {mobile && (
             <button
               type="button"
@@ -545,9 +1085,7 @@ const AdminPortalLayout = () => {
           )}
         </div>
 
-        {/* ===================================================
-            NAVIGATION
-        =================================================== */}
+        {/* NAVIGATION */}
 
         <div
           className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
@@ -578,8 +1116,6 @@ const AdminPortalLayout = () => {
                       : "text-slate-600 hover:bg-slate-800 hover:text-white"
                   }`}
                 >
-                  {/* ACTIVE INDICATOR */}
-
                   {active && (
                     <span
                       className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${
@@ -588,17 +1124,11 @@ const AdminPortalLayout = () => {
                     />
                   )}
 
-                  {/* ICON */}
-
                   <span className="flex w-6 flex-shrink-0 items-center justify-center text-base">
                     {item.icon}
                   </span>
 
-                  {/* LABEL */}
-
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
-
-                  {/* BADGE */}
 
                   {item.badge && unreadCount > 0 && (
                     <span className="flex h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
@@ -609,9 +1139,7 @@ const AdminPortalLayout = () => {
           </div>
         </div>
 
-        {/* ===================================================
-            FIXED LOGOUT FOOTER
-        =================================================== */}
+        {/* LOGOUT FOOTER */}
 
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 border-t p-3 backdrop-blur-md ${
@@ -654,9 +1182,7 @@ const AdminPortalLayout = () => {
       }}
     >
       <div className="flex min-h-screen w-full">
-        {/* ===================================================
-            DESKTOP SIDEBAR
-        =================================================== */}
+        {/* DESKTOP SIDEBAR */}
 
         <aside
           style={{
@@ -669,10 +1195,6 @@ const AdminPortalLayout = () => {
           } ${isResizing ? "select-none" : ""}`}
         >
           {renderSidebarContent(false)}
-
-          {/* =================================================
-              RESIZE HANDLE
-          ================================================= */}
 
           <div
             role="separator"
@@ -693,8 +1215,6 @@ const AdminPortalLayout = () => {
                 : "hover:bg-slate-300"
             }`}
           >
-            {/* SMALL VISUAL GRIP */}
-
             <div
               className={`absolute left-1/2 top-1/2 h-12 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full transition ${
                 isResizing
@@ -707,9 +1227,7 @@ const AdminPortalLayout = () => {
           </div>
         </aside>
 
-        {/* ===================================================
-            DESKTOP SIDEBAR SPACER
-        =================================================== */}
+        {/* DESKTOP SIDEBAR SPACER */}
 
         <div
           className="hidden flex-shrink-0 lg:block"
@@ -719,14 +1237,10 @@ const AdminPortalLayout = () => {
           aria-hidden="true"
         />
 
-        {/* ===================================================
-            MAIN AREA
-        =================================================== */}
+        {/* MAIN AREA */}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* =================================================
-              NAVBAR
-          ================================================= */}
+          {/* NAVBAR */}
 
           <header
             className={`sticky top-0 z-50 flex h-20 flex-shrink-0 items-center justify-between border-b px-3 shadow-sm backdrop-blur sm:px-6 lg:px-8 ${
@@ -735,13 +1249,9 @@ const AdminPortalLayout = () => {
                 : "border-slate-200 bg-white/95"
             }`}
           >
-            {/* =================================================
-                LEFT
-            ================================================= */}
+            {/* LEFT */}
 
             <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-              {/* MOBILE MENU */}
-
               <button
                 type="button"
                 onClick={() => {
@@ -758,8 +1268,6 @@ const AdminPortalLayout = () => {
               >
                 ☰
               </button>
-
-              {/* PAGE TITLE */}
 
               <div className="min-w-0">
                 <h2
@@ -780,14 +1288,10 @@ const AdminPortalLayout = () => {
               </div>
             </div>
 
-            {/* =================================================
-                RIGHT
-            ================================================= */}
+            {/* RIGHT */}
 
             <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-3">
-              {/* =================================================
-                  DARK MODE
-              ================================================= */}
+              {/* DARK MODE */}
 
               <button
                 type="button"
@@ -807,9 +1311,7 @@ const AdminPortalLayout = () => {
                 {darkMode ? "☀️" : "🌙"}
               </button>
 
-              {/* =================================================
-                  NOTIFICATIONS
-              ================================================= */}
+              {/* NOTIFICATIONS */}
 
               <div ref={notificationRef} className="relative">
                 <button
@@ -837,7 +1339,7 @@ const AdminPortalLayout = () => {
 
                 {isNotificationOpen && (
                   <div
-                    className={`fixed left-3 right-3 top-[84px] z-[100] w-auto max-w-none overflow-hidden rounded-2xl border shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] ${
+                    className={`fixed left-3 right-3 top-[84px] z-[100] w-auto max-w-none overflow-hidden rounded-2xl border shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[380px] sm:max-w-[calc(100vw-2rem)] ${
                       darkMode
                         ? "border-slate-700 bg-slate-900"
                         : "border-slate-200 bg-white"
@@ -884,13 +1386,25 @@ const AdminPortalLayout = () => {
                     {/* LIST */}
 
                     <div
-                      className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
+                      className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[420px]"
                       style={{
                         WebkitOverflowScrolling: "touch",
                         touchAction: "pan-y",
                       }}
                     >
-                      {notifications.length === 0 ? (
+                      {notificationsLoading ? (
+                        <div className="px-5 py-8 text-center">
+                          <div className="mb-2 text-2xl">⏳</div>
+
+                          <p
+                            className={`text-sm ${
+                              darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
+                            Loading notifications...
+                          </p>
+                        </div>
+                      ) : notifications.length === 0 ? (
                         <div className="px-5 py-8 text-center">
                           <div className="mb-2 text-3xl">✓</div>
 
@@ -903,108 +1417,122 @@ const AdminPortalLayout = () => {
                           </p>
                         </div>
                       ) : (
-                        notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={`group relative border-b px-4 py-3 transition ${
-                              darkMode
-                                ? "border-slate-800 hover:bg-slate-800/70"
-                                : "border-slate-100 hover:bg-slate-50"
-                            } ${
-                              notification.unread
-                                ? darkMode
-                                  ? "bg-slate-800/60"
-                                  : "bg-slate-50"
-                                : ""
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => openNotification(notification)}
-                              className="w-full pr-8 text-left"
+                        notifications.map((notification) => {
+                          const actionLabel =
+                            getNotificationActionLabel(notification);
+
+                          return (
+                            <div
+                              key={notification.id}
+                              className={`group relative border-b px-4 py-3 transition ${
+                                darkMode
+                                  ? "border-slate-800 hover:bg-slate-800/70"
+                                  : "border-slate-100 hover:bg-slate-50"
+                              } ${
+                                notification.unread
+                                  ? darkMode
+                                    ? "bg-slate-800/60"
+                                    : "bg-slate-50"
+                                  : ""
+                              }`}
                             >
-                              <div className="flex gap-3">
-                                {/* ICON */}
+                              {/* NOTIFICATION CONTENT */}
 
-                                <div
-                                  className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
-                                    notification.type === "account-request"
-                                      ? darkMode
-                                        ? "bg-blue-950 text-blue-300"
-                                        : "bg-blue-100 text-blue-700"
-                                      : notification.type ===
-                                        "company-registration"
-                                      ? darkMode
-                                        ? "bg-emerald-950 text-emerald-300"
-                                        : "bg-emerald-100 text-emerald-700"
-                                      : darkMode
-                                      ? "bg-slate-700"
-                                      : "bg-slate-100"
-                                  }`}
-                                >
-                                  {notification.icon}
-                                </div>
+                              <button
+                                type="button"
+                                onClick={() => openNotification(notification)}
+                                className="w-full text-left"
+                              >
+                                <div className="flex gap-3">
+                                  {/* ICON */}
 
-                                {/* CONTENT */}
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start gap-2">
-                                    <h4
-                                      className={`min-w-0 flex-1 break-words text-sm font-semibold ${
-                                        darkMode
-                                          ? "text-white"
-                                          : "text-slate-800"
-                                      }`}
-                                    >
-                                      {notification.title}
-                                    </h4>
-
-                                    {notification.unread && (
-                                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
-                                    )}
+                                  <div
+                                    className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
+                                      notification.type ===
+                                      "registration_request"
+                                        ? darkMode
+                                          ? "bg-blue-950 text-blue-300"
+                                          : "bg-blue-100 text-blue-700"
+                                        : notification.type ===
+                                          "company_registration"
+                                        ? darkMode
+                                          ? "bg-emerald-950 text-emerald-300"
+                                          : "bg-emerald-100 text-emerald-700"
+                                        : darkMode
+                                        ? "bg-slate-700"
+                                        : "bg-slate-100"
+                                    }`}
+                                  >
+                                    {notification.icon}
                                   </div>
 
-                                  <p
-                                    className={`mt-1 break-words text-xs leading-5 ${
-                                      darkMode
-                                        ? "text-slate-400"
-                                        : "text-slate-500"
-                                    }`}
-                                  >
-                                    {notification.message}
-                                  </p>
+                                  {/* CONTENT */}
 
-                                  <p
-                                    className={`mt-1.5 text-[10px] ${
-                                      darkMode
-                                        ? "text-slate-500"
-                                        : "text-slate-400"
-                                    }`}
-                                  >
-                                    {notification.time}
-                                  </p>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start gap-2">
+                                      <h4
+                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                          darkMode
+                                            ? "text-white"
+                                            : "text-slate-800"
+                                        }`}
+                                      >
+                                        {notification.title}
+                                      </h4>
+
+                                      {notification.unread && (
+                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                                      )}
+                                    </div>
+
+                                    <p
+                                      className={`mt-1 break-words text-xs leading-5 ${
+                                        darkMode
+                                          ? "text-slate-400"
+                                          : "text-slate-500"
+                                      }`}
+                                    >
+                                      {notification.message}
+                                    </p>
+
+                                    <p
+                                      className={`mt-1.5 text-[10px] ${
+                                        darkMode
+                                          ? "text-slate-500"
+                                          : "text-slate-400"
+                                      }`}
+                                    >
+                                      {notification.time}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
+                              </button>
 
-                            {/* DELETE */}
+                              {/* =================================================
+                                  REAL ACTION BUTTON
+                              ================================================= */}
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteNotification(notification.id)
-                              }
-                              className={`absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg text-xs opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 ${
-                                darkMode
-                                  ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-                                  : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              }`}
-                              aria-label="Delete notification"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))
+                              {actionLabel && notification.actionPath && (
+                                <div className="mt-2 ml-12">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleNotificationAction(notification)
+                                    }
+                                    className={`inline-flex items-center rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition ${
+                                      darkMode
+                                        ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
+                                        : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                    }`}
+                                  >
+                                    {actionLabel}
+                                    <span className="ml-1">→</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
 
@@ -1031,9 +1559,7 @@ const AdminPortalLayout = () => {
                 )}
               </div>
 
-              {/* =================================================
-                  PROFILE
-              ================================================= */}
+              {/* PROFILE */}
 
               <div ref={profileRef} className="relative">
                 <button
@@ -1046,8 +1572,6 @@ const AdminPortalLayout = () => {
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
-                  {/* AVATAR */}
-
                   <div
                     className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold sm:h-10 sm:w-10 ${
                       darkMode
@@ -1057,8 +1581,6 @@ const AdminPortalLayout = () => {
                   >
                     AD
                   </div>
-
-                  {/* INFO */}
 
                   <div className="hidden text-left sm:block">
                     <p
@@ -1097,8 +1619,6 @@ const AdminPortalLayout = () => {
                         : "border-slate-200 bg-white"
                     }`}
                   >
-                    {/* HEADER */}
-
                     <div
                       className={`border-b px-4 py-4 ${
                         darkMode ? "border-slate-800" : "border-slate-100"
@@ -1136,8 +1656,6 @@ const AdminPortalLayout = () => {
                     </div>
 
                     <div className="p-2">
-                      {/* MY PROFILE */}
-
                       <button
                         type="button"
                         onClick={() => navigateTo("/admin/profile")}
@@ -1150,8 +1668,6 @@ const AdminPortalLayout = () => {
                         👤
                         <span>My Profile</span>
                       </button>
-
-                      {/* SETTINGS */}
 
                       <button
                         type="button"
@@ -1172,8 +1688,6 @@ const AdminPortalLayout = () => {
                         }`}
                       />
 
-                      {/* LOGOUT */}
-
                       <button
                         type="button"
                         onClick={handleLogoutClick}
@@ -1192,9 +1706,7 @@ const AdminPortalLayout = () => {
             </div>
           </header>
 
-          {/* =================================================
-              PAGE CONTENT
-          ================================================= */}
+          {/* PAGE CONTENT */}
 
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 transition-colors duration-300 ${
@@ -1207,23 +1719,33 @@ const AdminPortalLayout = () => {
             <Outlet
               context={{
                 darkMode,
+
                 notifications,
+
                 unreadCount,
+
                 markNotificationAsRead,
+
                 markAllNotificationsRead,
+
                 deleteNotification,
+
                 selectedNotification,
+
                 openNotification,
+
                 closeNotificationModal,
+
+                handleNotificationAction,
+
+                getNotificationActionLabel,
               }}
             />
           </main>
         </div>
       </div>
 
-      {/* =====================================================
-          MOBILE OVERLAY
-      ===================================================== */}
+      {/* MOBILE OVERLAY */}
 
       {isMobileSidebarOpen && (
         <div
@@ -1232,9 +1754,7 @@ const AdminPortalLayout = () => {
         />
       )}
 
-      {/* =====================================================
-          MOBILE SIDEBAR
-      ===================================================== */}
+      {/* MOBILE SIDEBAR */}
 
       <aside
         className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
@@ -1295,11 +1815,11 @@ const AdminPortalLayout = () => {
               <div className="mb-4 flex items-start gap-3">
                 <div
                   className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl ${
-                    selectedNotification.type === "account-request"
+                    selectedNotification.type === "registration_request"
                       ? darkMode
                         ? "bg-blue-950 text-blue-300"
                         : "bg-blue-100 text-blue-700"
-                      : selectedNotification.type === "company-registration"
+                      : selectedNotification.type === "company_registration"
                       ? darkMode
                         ? "bg-emerald-950 text-emerald-300"
                         : "bg-emerald-100 text-emerald-700"
@@ -1337,6 +1857,23 @@ const AdminPortalLayout = () => {
               >
                 {selectedNotification.message}
               </p>
+
+              {/* ACTION BUTTON */}
+
+              {selectedNotification.actionPath && (
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleNotificationAction(selectedNotification)
+                    }
+                    className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    {getNotificationActionLabel(selectedNotification) ||
+                      "View Details"}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* FOOTER */}
@@ -1349,7 +1886,11 @@ const AdminPortalLayout = () => {
               <button
                 type="button"
                 onClick={closeNotificationModal}
-                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  darkMode
+                    ? "bg-slate-800 text-white hover:bg-slate-700"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
               >
                 Close
               </button>
@@ -1375,8 +1916,6 @@ const AdminPortalLayout = () => {
                 : "border-slate-200 bg-white"
             }`}
           >
-            {/* ICON */}
-
             <div className="flex justify-center pt-7">
               <div
                 className={`flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
@@ -1386,8 +1925,6 @@ const AdminPortalLayout = () => {
                 ↪
               </div>
             </div>
-
-            {/* CONTENT */}
 
             <div className="px-6 pb-5 pt-4 text-center">
               <h3
@@ -1406,8 +1943,6 @@ const AdminPortalLayout = () => {
                 Are you sure you want to log out of your administrator account?
               </p>
             </div>
-
-            {/* BUTTONS */}
 
             <div
               className={`flex gap-3 border-t p-4 ${

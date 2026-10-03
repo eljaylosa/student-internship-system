@@ -1637,6 +1637,8 @@ export default function Application() {
         throw error;
       }
 
+      console.log("Internship placement confirmed successfully:", data);
+
       await loadData();
 
       setActiveTab("status");
@@ -1652,7 +1654,6 @@ export default function Application() {
       setIsConfirmingPlacement(false);
     }
   };
-
   // =========================================================
   // DECLINE PLACEMENT
   // =========================================================
@@ -1996,7 +1997,15 @@ export default function Application() {
         throw new Error("You are not logged in.");
       }
 
+      // =========================================================
+      // CREATE APPLICATION DRAFT
+      // =========================================================
+
       const application = await createApplicationDraft(user);
+
+      // =========================================================
+      // UPLOAD PENDING DOCUMENTS
+      // =========================================================
 
       const uploadResult = await uploadPendingDocuments(
         application.id,
@@ -2021,6 +2030,10 @@ export default function Application() {
         return;
       }
 
+      // =========================================================
+      // VALIDATE REQUIRED DOCUMENTS
+      // =========================================================
+
       const validation = await validateRequiredDocuments(
         application.id,
         user.id
@@ -2038,14 +2051,20 @@ export default function Application() {
         return;
       }
 
+      // =========================================================
+      // SUBMIT APPLICATION
+      // =========================================================
+
+      const submittedAt = new Date().toISOString();
+
       const { data: submittedApplication, error: updateError } =
         await supabaseStudent
           .from("applications")
           .update({
             cover_letter: coverLetter.trim(),
             status: STATUS.application.SUBMITTED,
-            submitted_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            submitted_at: submittedAt,
+            updated_at: submittedAt,
           })
           .eq("id", application.id)
           .eq("student_id", user.id)
@@ -2055,6 +2074,46 @@ export default function Application() {
       if (updateError) {
         throw updateError;
       }
+
+      // =========================================================
+      // NOTIFY REGISTRAR(S)
+      //
+      // The RPC determines:
+      // - student's school
+      // - matching registrar(s)
+      // - active registrar accounts
+      //
+      // The student cannot choose the recipient.
+      // =========================================================
+
+      const { data: registrarNotificationCount, error: notificationError } =
+        await supabaseStudent.rpc("notify_registrars_application_submitted", {
+          p_application_id: submittedApplication.id,
+        });
+
+      if (notificationError) {
+        console.error(
+          "Application submitted, but Registrar notification failed:",
+          {
+            message: notificationError.message,
+            details: notificationError.details,
+            hint: notificationError.hint,
+            code: notificationError.code,
+          }
+        );
+      } else if (Number(registrarNotificationCount || 0) === 0) {
+        console.warn(
+          "Application submitted successfully, but no active Registrar was found for the student's school."
+        );
+      } else {
+        console.log(
+          `Application submitted. ${registrarNotificationCount} Registrar(s) notified.`
+        );
+      }
+
+      // =========================================================
+      // UPDATE LOCAL APPLICATION STATE
+      // =========================================================
 
       setApplications((previous) =>
         previous.map((item) =>
@@ -2066,6 +2125,10 @@ export default function Application() {
       setSelectedDocumentFiles({});
       setIsReapplying(false);
       setOpportunityView("browse");
+
+      // =========================================================
+      // SUCCESS
+      // =========================================================
 
       alert(
         `Application submitted successfully for ${selectedOpportunity.title}.`

@@ -5,9 +5,8 @@ import { supabaseCompany } from "../../supabaseClient";
 /* =========================================================
    COMPANY THEME
    ========================================================= */
-const COMPANY_PRIMARY = "bg-gradient-to-r from-purple-500 to-purple-700";
 
-const COMPANY_TEXT = "text-purple-600 dark:text-purple-400";
+const COMPANY_PRIMARY = "bg-gradient-to-r from-purple-500 to-purple-700";
 
 const COMPANY_ACTIVE_LIGHT = "bg-purple-50 text-purple-700";
 
@@ -16,50 +15,128 @@ const COMPANY_ACTIVE_DARK = "bg-purple-500/15 text-purple-400";
 /* =========================================================
    COMPANY LOGO
    ========================================================= */
+
 const COMPANY_LOGO_BUCKET = "company-logos";
 
 /* =========================================================
-   TEMPORARY NOTIFICATIONS
+   NOTIFICATION HELPERS
    ========================================================= */
-const initialNotifications = [
-  {
-    id: "CNOT-001",
-    title: "Internship Application Received",
-    message:
-      "A student has submitted an internship application to your company.",
-    time: "2 hours ago",
-    read: false,
-    type: "application",
-    relatedType: "InternshipApplication",
-    relatedId: "APP-001",
-  },
-  {
-    id: "CNOT-002",
-    title: "Document Review Update",
-    message:
-      "A student's submitted internship document requires your attention.",
-    time: "1 day ago",
-    read: false,
-    type: "document",
-    relatedType: "DocumentSubmission",
-    relatedId: "DOC-001",
-  },
-  {
-    id: "CNOT-003",
-    title: "Internship Information Updated",
-    message:
-      "Important internship information has been updated by the registrar.",
-    time: "2 days ago",
-    read: true,
-    type: "information",
-    relatedType: "InformationItem",
-    relatedId: "INFO-001",
-  },
-];
+
+/*
+  Convert database notification rows into the format
+  already expected by the Company Portal UI.
+*/
+const mapNotificationRow = (row) => ({
+  id: row.id,
+  title: row.title,
+  message: row.message,
+
+  type: row.type,
+  category: row.category,
+
+  relatedType: row.related_entity_type,
+  relatedId: row.related_entity_id,
+
+  actionPath: row.action_path,
+
+  createdAt: row.created_at,
+  readAt: row.read_at,
+
+  read: Boolean(row.read_at),
+
+  time: formatNotificationTime(row.created_at),
+});
+
+/* =========================================================
+   NOTIFICATION TIME FORMATTER
+   ========================================================= */
+
+function formatNotificationTime(createdAt) {
+  if (!createdAt) return "";
+
+  const created = new Date(createdAt);
+
+  if (Number.isNaN(created.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+
+  const diffMs = now.getTime() - created.getTime();
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSeconds < 60) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} ${diffMinutes === 1 ? "minute" : "minutes"} ago`;
+  }
+
+  if (diffHours < 24) {
+    return `${diffHours} ${diffHours === 1 ? "hour" : "hours"} ago`;
+  }
+
+  if (diffDays < 7) {
+    return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
+  }
+
+  return created.toLocaleDateString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/* =========================================================
+   FETCH COMPANY NOTIFICATIONS
+   ========================================================= */
+
+const fetchCompanyNotifications = async (userId) => {
+  if (!userId) {
+    return [];
+  }
+
+  const { data, error } = await supabaseCompany
+    .from("notifications")
+    .select(
+      `
+        id,
+        recipient_id,
+        recipient_role,
+        type,
+        category,
+        title,
+        message,
+        related_entity_type,
+        related_entity_id,
+        action_path,
+        created_by,
+        read_at,
+        created_at
+      `
+    )
+    .eq("recipient_id", userId)
+    .eq("recipient_role", "company")
+    .order("created_at", {
+      ascending: false,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).map(mapNotificationRow);
+};
 
 /* =========================================================
    COMPONENT
    ========================================================= */
+
 export default function CompanyPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,12 +144,15 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      COMPANY PROFILE
      ========================================================= */
+
   const [companyName, setCompanyName] = useState("Company Account");
   const [companyLogoUrl, setCompanyLogoUrl] = useState(null);
+  const [companyUserId, setCompanyUserId] = useState(null);
 
   /* =========================================================
      SIDEBAR
      ========================================================= */
+
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -80,6 +160,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      DROPDOWNS
      ========================================================= */
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
@@ -89,17 +170,18 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      NOTIFICATIONS
      ========================================================= */
-  const [notifications, setNotifications] = useState(initialNotifications);
 
+  const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
 
   const unreadCount = notifications.filter(
-    (notification) => !notification.read
+    (notification) => !notification.readAt
   ).length;
 
   /* =========================================================
      DARK MODE
      ========================================================= */
+
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("companyPortalDarkMode") === "true";
   });
@@ -107,16 +189,19 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SUBMENUS
      ========================================================= */
+
   const [expandedMenus, setExpandedMenus] = useState({});
 
   /* =========================================================
      LOGOUT CONFIRMATION
      ========================================================= */
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   /* =========================================================
      INITIALS
      ========================================================= */
+
   const getInitials = (name) => {
     if (!name) return "CO";
 
@@ -132,6 +217,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      LOAD COMPANY
      ========================================================= */
+
   useEffect(() => {
     loadCompanyProfile();
   }, []);
@@ -148,11 +234,20 @@ export default function CompanyPortalLayout() {
         return;
       }
 
-      if (!user) return;
+      if (!user) {
+        return;
+      }
+
+      /* =====================================================
+         STORE COMPANY USER ID
+         ===================================================== */
+
+      setCompanyUserId(user.id);
 
       /* =====================================================
          COMPANY NAME
          ===================================================== */
+
       const { data, error } = await supabaseCompany
         .from("companies")
         .select("company_name")
@@ -201,6 +296,7 @@ export default function CompanyPortalLayout() {
 
       if (signedError) {
         console.warn("Unable to load company logo:", signedError);
+
         setCompanyLogoUrl(null);
         return;
       }
@@ -208,13 +304,122 @@ export default function CompanyPortalLayout() {
       setCompanyLogoUrl(signedData?.signedUrl || null);
     } catch (error) {
       console.error("Failed to load company profile:", error);
+
       setCompanyLogoUrl(null);
     }
   };
 
   /* =========================================================
+     LOAD + REALTIME COMPANY NOTIFICATIONS
+     ========================================================= */
+
+  useEffect(() => {
+    if (!companyUserId) {
+      return;
+    }
+
+    let isMounted = true;
+    let notificationChannel = null;
+
+    const refreshNotifications = async () => {
+      try {
+        const rows = await fetchCompanyNotifications(companyUserId);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setNotifications(rows);
+
+        /*
+          Keep currently opened notification synchronized
+          with the database.
+        */
+        setSelectedNotification((current) => {
+          if (!current) {
+            return null;
+          }
+
+          const updated = rows.find(
+            (notification) => notification.id === current.id
+          );
+
+          return updated || null;
+        });
+      } catch (error) {
+        console.error("Failed to load company notifications:", error);
+      }
+    };
+
+    const setupRealtime = async () => {
+      await refreshNotifications();
+
+      if (!isMounted) {
+        return;
+      }
+
+      /*
+        Listen only to notifications belonging to
+        the currently logged-in company user.
+      */
+      notificationChannel = supabaseCompany
+        .channel(`company-notifications:${companyUserId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `recipient_id=eq.${companyUserId}`,
+          },
+          async (payload) => {
+            /*
+              INSERT / UPDATE:
+              Only process company notifications.
+
+              DELETE events do not expose the same new row,
+              so simply refresh the current list.
+            */
+            if (
+              payload.eventType !== "DELETE" &&
+              payload.new?.recipient_role !== "company"
+            ) {
+              return;
+            }
+
+            await refreshNotifications();
+          }
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("[Company Notifications] Realtime connected.");
+          }
+
+          if (status === "CHANNEL_ERROR") {
+            console.error("[Company Notifications] Realtime channel error.");
+          }
+
+          if (status === "TIMED_OUT") {
+            console.warn("[Company Notifications] Realtime channel timed out.");
+          }
+        });
+    };
+
+    setupRealtime();
+
+    return () => {
+      isMounted = false;
+
+      if (notificationChannel) {
+        supabaseCompany.removeChannel(notificationChannel);
+      }
+    };
+  }, [companyUserId]);
+
+  /* =========================================================
      DARK MODE
      ========================================================= */
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -228,6 +433,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      CLOSE MOBILE SIDEBAR ON ROUTE CHANGE
      ========================================================= */
+
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [location.pathname]);
@@ -235,6 +441,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      LOCK BODY SCROLL WHEN MOBILE SIDEBAR IS OPEN
      ========================================================= */
+
   useEffect(() => {
     if (!isMobileSidebarOpen) {
       document.body.style.overflow = "";
@@ -251,9 +458,12 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      ESCAPE KEY
      ========================================================= */
+
   useEffect(() => {
     const handleEscape = (event) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape") {
+        return;
+      }
 
       setIsMobileSidebarOpen(false);
       setIsNotificationOpen(false);
@@ -272,6 +482,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      CLICK OUTSIDE DROPDOWNS
      ========================================================= */
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -296,8 +507,11 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SIDEBAR RESIZE
      ========================================================= */
+
   useEffect(() => {
-    if (!isResizing) return;
+    if (!isResizing) {
+      return;
+    }
 
     const handleMouseMove = (event) => {
       const newWidth = Math.min(Math.max(event.clientX, 240), 360);
@@ -323,6 +537,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SIDEBAR ITEMS
      ========================================================= */
+
   const sidebarItems = [
     {
       label: "Dashboard",
@@ -349,11 +564,6 @@ export default function CompanyPortalLayout() {
       path: "/company/evaluate",
       icon: "⭐",
     },
-    // {
-    //   label: "Feedback",
-    //   path: "/company/feedback",
-    //   icon: "💬",
-    // },
     {
       label: "Notifications",
       path: "/company/notifications",
@@ -374,6 +584,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      NAVIGATION
      ========================================================= */
+
   const navigateTo = (path) => {
     navigate(path);
 
@@ -385,6 +596,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SUBMENU
      ========================================================= */
+
   const toggleSubmenu = (label) => {
     setExpandedMenus((previous) => ({
       ...previous,
@@ -395,6 +607,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      ACTIVE PATH
      ========================================================= */
+
   const isPathActive = (path) => {
     return location.pathname === path;
   };
@@ -406,6 +619,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      PAGE TITLE
      ========================================================= */
+
   const getPageTitle = () => {
     const currentItem = sidebarItems.find(
       (item) => item.path === location.pathname
@@ -422,19 +636,16 @@ export default function CompanyPortalLayout() {
      LOGOUT CONFIRMATION
      ========================================================= */
 
-  // Opens the confirmation modal
   const requestLogout = () => {
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
     setShowLogoutModal(true);
   };
 
-  // Cancels logout
   const cancelLogout = () => {
     setShowLogoutModal(false);
   };
 
-  // Performs the actual logout
   const handleLogout = async () => {
     try {
       const {
@@ -493,47 +704,392 @@ export default function CompanyPortalLayout() {
   };
 
   /* =========================================================
-     NOTIFICATION HANDLERS
+     NOTIFICATION ACTION
      ========================================================= */
-  const markNotificationRead = (id) => {
+
+  const getNotificationAction = (notification) => {
+    if (!notification) {
+      return null;
+    }
+
+    const type = String(notification.type || "").toLowerCase();
+
+    const relatedType = String(notification.relatedType || "").toLowerCase();
+
+    /* =======================================================
+       INTERN DEPLOYMENT
+       ======================================================= */
+
+    if (
+      type === "intern_deployment" ||
+      type === "deployment_confirmed" ||
+      relatedType === "internshipassignment"
+    ) {
+      return {
+        label: "View Applications",
+        path: "/company/applications",
+      };
+    }
+
+    /* =======================================================
+       APPLICATION
+       ======================================================= */
+
+    if (
+      [
+        "application",
+        "application_submission",
+        "application_submitted",
+        "application_resubmitted",
+        "application_review",
+      ].includes(type) ||
+      relatedType === "internshipapplication"
+    ) {
+      return {
+        label: "View Application",
+        path: "/company/applications",
+      };
+    }
+
+    /* =======================================================
+       DOCUMENT
+       ======================================================= */
+
+    if (
+      [
+        "document",
+        "document_submission",
+        "document_revision",
+        "document_update",
+      ].includes(type) ||
+      relatedType === "documentsubmission"
+    ) {
+      return {
+        label: "View Application",
+        path: "/company/applications",
+      };
+    }
+
+    /* =======================================================
+       EVALUATION
+       ======================================================= */
+
+    if (
+      type === "evaluation" ||
+      type === "evaluation_submitted" ||
+      type === "evaluation_update" ||
+      relatedType === "evaluation"
+    ) {
+      return {
+        label: "View Evaluation",
+        path: "/company/evaluate",
+      };
+    }
+
+    /* =======================================================
+       MESSAGE
+       ======================================================= */
+
+    if (type === "message" || relatedType === "message") {
+      return {
+        label: "Open Messages",
+        path: "/company/messages",
+      };
+    }
+
+    /* =======================================================
+       DATABASE ACTION PATH FALLBACK
+       ======================================================= */
+
+    const allowedPaths = [
+      "/company/dashboard",
+      "/company/jobs",
+      "/company/applications",
+      "/company/interns",
+      "/company/evaluate",
+      "/company/notifications",
+      "/company/messages",
+      "/company/settings",
+      "/company/profile",
+    ];
+
+    if (
+      notification.actionPath &&
+      allowedPaths.includes(notification.actionPath)
+    ) {
+      return {
+        label: "Open",
+        path: notification.actionPath,
+      };
+    }
+
+    return null;
+  };
+
+  /* =========================================================
+     NOTIFICATION ICON
+     ========================================================= */
+
+  const getNotificationIcon = (notification) => {
+    const type = String(notification?.type || "").toLowerCase();
+
+    switch (type) {
+      case "intern_deployment":
+      case "deployment_confirmed":
+        return "👥";
+
+      case "application":
+      case "application_submission":
+      case "application_submitted":
+      case "application_resubmitted":
+      case "application_review":
+        return "📝";
+
+      case "document":
+      case "document_submission":
+      case "document_revision":
+      case "document_update":
+        return "📄";
+
+      case "evaluation":
+      case "evaluation_submitted":
+      case "evaluation_update":
+        return "⭐";
+
+      case "information":
+        return "ℹ️";
+
+      case "message":
+        return "✉️";
+
+      case "system":
+        return "⚙️";
+
+      default:
+        return "🔔";
+    }
+  };
+
+  /* =========================================================
+     HANDLE NOTIFICATION ACTION
+     ========================================================= */
+
+  const handleNotificationAction = async () => {
+    if (!selectedNotification) {
+      return;
+    }
+
+    const action = getNotificationAction(selectedNotification);
+
+    if (!action?.path) {
+      return;
+    }
+
+    /*
+      Make sure notification is read before
+      navigating away.
+    */
+    if (!selectedNotification.readAt) {
+      await markNotificationRead(selectedNotification.id);
+    }
+
+    closeNotificationModal();
+
+    navigateTo(action.path);
+  };
+
+  /* =========================================================
+     UPDATE NOTIFICATION READ STATE
+     ========================================================= */
+
+  const updateNotificationReadState = async (id, readAt) => {
+    if (!companyUserId) {
+      return false;
+    }
+
+    /* =======================================================
+       OPTIMISTIC UI UPDATE
+       ======================================================= */
+
     setNotifications((previous) =>
       previous.map((notification) =>
         notification.id === id
           ? {
               ...notification,
-              read: true,
+              readAt,
+              read: Boolean(readAt),
             }
           : notification
       )
     );
+
+    setSelectedNotification((current) => {
+      if (!current || current.id !== id) {
+        return current;
+      }
+
+      return {
+        ...current,
+        readAt,
+        read: Boolean(readAt),
+      };
+    });
+
+    /* =======================================================
+       DATABASE UPDATE
+       ======================================================= */
+
+    const { error } = await supabaseCompany
+      .from("notifications")
+      .update({
+        read_at: readAt,
+      })
+      .eq("id", id)
+      .eq("recipient_id", companyUserId)
+      .eq("recipient_role", "company");
+
+    if (error) {
+      console.error("Failed to update notification read state:", error);
+
+      try {
+        const rows = await fetchCompanyNotifications(companyUserId);
+
+        setNotifications(rows);
+
+        setSelectedNotification((current) => {
+          if (!current) {
+            return null;
+          }
+
+          return (
+            rows.find((notification) => notification.id === current.id) || null
+          );
+        });
+      } catch (reloadError) {
+        console.error(
+          "Failed to reload notifications after update error:",
+          reloadError
+        );
+      }
+
+      return false;
+    }
+
+    return true;
   };
 
-  const markAllNotificationsRead = () => {
+  /* =========================================================
+     MARK NOTIFICATION READ
+     ========================================================= */
+
+  const markNotificationRead = async (id) => {
+    await updateNotificationReadState(id, new Date().toISOString());
+  };
+
+  /* =========================================================
+     MARK NOTIFICATION UNREAD
+     ========================================================= */
+
+  const markNotificationUnread = async (id) => {
+    await updateNotificationReadState(id, null);
+  };
+
+  /* =========================================================
+     MARK ALL NOTIFICATIONS READ
+     ========================================================= */
+
+  const markAllNotificationsRead = async () => {
+    if (!companyUserId) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    /* =======================================================
+       OPTIMISTIC UI UPDATE
+       ======================================================= */
+
     setNotifications((previous) =>
       previous.map((notification) => ({
         ...notification,
+        readAt: notification.readAt || now,
         read: true,
       }))
     );
-  };
 
-  const deleteNotification = (id) => {
-    setNotifications((previous) =>
-      previous.filter((notification) => notification.id !== id)
-    );
+    setSelectedNotification((current) => {
+      if (!current) {
+        return current;
+      }
 
-    if (selectedNotification?.id === id) {
-      setSelectedNotification(null);
+      return {
+        ...current,
+        readAt: current.readAt || now,
+        read: true,
+      };
+    });
+
+    /* =======================================================
+       DATABASE UPDATE
+       ======================================================= */
+
+    const { error } = await supabaseCompany
+      .from("notifications")
+      .update({
+        read_at: now,
+      })
+      .eq("recipient_id", companyUserId)
+      .eq("recipient_role", "company")
+      .is("read_at", null);
+
+    if (error) {
+      console.error("Failed to mark all company notifications as read:", error);
+
+      try {
+        const rows = await fetchCompanyNotifications(companyUserId);
+
+        setNotifications(rows);
+
+        setSelectedNotification((current) => {
+          if (!current) {
+            return null;
+          }
+
+          return (
+            rows.find((notification) => notification.id === current.id) || null
+          );
+        });
+      } catch (reloadError) {
+        console.error("Failed to reload company notifications:", reloadError);
+      }
     }
   };
 
-  const openNotification = (notification) => {
-    markNotificationRead(notification.id);
+  /* =========================================================
+     OPEN NOTIFICATION
+     ========================================================= */
 
-    setSelectedNotification(notification);
+  const openNotification = async (notification) => {
+    /*
+      Mark as read first.
+    */
+    await markNotificationRead(notification.id);
+
+    /*
+      Update modal immediately.
+    */
+    setSelectedNotification({
+      ...notification,
+      readAt: notification.readAt || new Date().toISOString(),
+      read: true,
+    });
 
     setIsNotificationOpen(false);
   };
+
+  /* =========================================================
+     CLOSE NOTIFICATION MODAL
+     ========================================================= */
 
   const closeNotificationModal = () => {
     setSelectedNotification(null);
@@ -542,6 +1098,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      COMPANY AVATAR
      ========================================================= */
+
   const renderCompanyAvatar = (sizeClass, roundedClass = "rounded-full") => {
     return (
       <div
@@ -556,6 +1113,7 @@ export default function CompanyPortalLayout() {
             className="h-full w-full object-contain p-1"
             onError={(event) => {
               event.currentTarget.style.display = "none";
+
               const fallback = event.currentTarget.parentElement?.querySelector(
                 "[data-company-avatar-fallback]"
               );
@@ -582,19 +1140,20 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      SIDEBAR CONTENT
      ========================================================= */
+
   const renderSidebarContent = (mobile = false) => {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         {/* ===================================================
             BRAND
             =================================================== */}
+
         <div
           className={`flex h-20 flex-shrink-0 items-center border-b px-5 ${
             darkMode ? "border-slate-800" : "border-slate-100"
           }`}
         >
           <div className="flex min-w-0 items-center gap-3">
-            {/* COMPANY LOGO */}
             {renderCompanyAvatar("h-11 w-11", "rounded-xl")}
 
             <div className="min-w-0">
@@ -616,7 +1175,6 @@ export default function CompanyPortalLayout() {
             </div>
           </div>
 
-          {/* MOBILE CLOSE */}
           {mobile && (
             <button
               type="button"
@@ -635,8 +1193,8 @@ export default function CompanyPortalLayout() {
 
         {/* ===================================================
             NAVIGATION
-            ONLY THIS AREA SCROLLS
             =================================================== */}
+
         <div
           className={`flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28 scrollbar-thin ${
             darkMode ? "scrollbar-thumb-slate-700" : "scrollbar-thumb-slate-300"
@@ -676,7 +1234,6 @@ export default function CompanyPortalLayout() {
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-                    {/* PURPLE ACTIVE INDICATOR */}
                     {active && (
                       <span
                         className={`absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full ${COMPANY_PRIMARY}`}
@@ -691,6 +1248,12 @@ export default function CompanyPortalLayout() {
                       {item.label}
                     </span>
 
+                    {item.label === "Notifications" && unreadCount > 0 && (
+                      <span className="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+
                     {hasChildren && (
                       <span className="text-xs">
                         {expandedMenus[item.label] ? "▲" : "▼"}
@@ -698,9 +1261,6 @@ export default function CompanyPortalLayout() {
                     )}
                   </button>
 
-                  {/* =================================================
-                      SUBMENU
-                      ================================================= */}
                   {hasChildren && expandedMenus[item.label] && (
                     <div
                       className={`ml-9 mt-1 space-y-1 border-l pl-2 ${
@@ -736,6 +1296,7 @@ export default function CompanyPortalLayout() {
         {/* ===================================================
             FIXED LOGOUT FOOTER
             =================================================== */}
+
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 border-t p-3 backdrop-blur-md ${
             darkMode
@@ -766,6 +1327,7 @@ export default function CompanyPortalLayout() {
   /* =========================================================
      RENDER
      ========================================================= */
+
   return (
     <div
       className={`min-h-screen w-full ${
@@ -778,10 +1340,12 @@ export default function CompanyPortalLayout() {
       {/* =====================================================
           DESKTOP LAYOUT
           ===================================================== */}
+
       <div className="flex min-h-screen w-full">
         {/* ===================================================
             FIXED DESKTOP SIDEBAR
             =================================================== */}
+
         <aside
           style={{
             width: `${sidebarWidth}px`,
@@ -795,6 +1359,7 @@ export default function CompanyPortalLayout() {
           {renderSidebarContent(false)}
 
           {/* RESIZE HANDLE */}
+
           <div
             onMouseDown={() => setIsResizing(true)}
             className={`absolute right-0 top-0 h-full w-1 cursor-col-resize transition ${
@@ -810,6 +1375,7 @@ export default function CompanyPortalLayout() {
         {/* ===================================================
             SIDEBAR SPACER
             =================================================== */}
+
         <div
           className="hidden flex-shrink-0 lg:block"
           style={{
@@ -821,10 +1387,12 @@ export default function CompanyPortalLayout() {
         {/* ===================================================
             MAIN AREA
             =================================================== */}
+
         <div className="flex min-w-0 flex-1 flex-col">
           {/* =================================================
               HEADER
               ================================================= */}
+
           <header
             className={`sticky top-0 z-50 flex h-20 flex-shrink-0 items-center justify-between border-b px-4 shadow-sm sm:px-6 ${
               darkMode
@@ -833,8 +1401,8 @@ export default function CompanyPortalLayout() {
             } backdrop-blur`}
           >
             {/* LEFT */}
+
             <div className="flex min-w-0 items-center gap-3">
-              {/* MOBILE MENU */}
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -868,10 +1436,12 @@ export default function CompanyPortalLayout() {
             </div>
 
             {/* RIGHT */}
+
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
               {/* =================================================
-                  DARK MODE TOGGLE
+                  DARK MODE
                   ================================================= */}
+
               <button
                 type="button"
                 onClick={() => setDarkMode((previous) => !previous)}
@@ -891,6 +1461,7 @@ export default function CompanyPortalLayout() {
               {/* =================================================
                   NOTIFICATIONS
                   ================================================= */}
+
               <div ref={notificationRef} className="relative">
                 <button
                   type="button"
@@ -917,197 +1488,173 @@ export default function CompanyPortalLayout() {
                 {/* =================================================
                     NOTIFICATION DROPDOWN
                     ================================================= */}
+
                 {isNotificationOpen && (
                   <div
-                    className={`
+                    className="
                       fixed left-4 right-4 top-[84px]
                       z-[100]
                       w-auto max-w-none
                       overflow-hidden rounded-2xl border shadow-xl
                       sm:absolute sm:left-auto sm:right-0 sm:top-12
                       sm:w-[340px] sm:max-w-[calc(100vw-2rem)]
-                      ${
+                    "
+                  >
+                    <div
+                      className={`overflow-hidden rounded-2xl border ${
                         darkMode
                           ? "border-slate-700 bg-slate-900"
                           : "border-slate-200 bg-white"
-                      }
-                    `}
-                  >
-                    {/* HEADER */}
-                    <div
-                      className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
-                        darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
-                      <div className="min-w-0">
-                        <h3
-                          className={`font-bold ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}
-                        >
-                          Notifications
-                        </h3>
+                      {/* HEADER */}
 
-                        <p
-                          className={`text-xs ${
-                            darkMode ? "text-slate-400" : "text-slate-500"
-                          }`}
-                        >
-                          {unreadCount} unread
-                        </p>
-                      </div>
-
-                      {unreadCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={markAllNotificationsRead}
-                          className="flex-shrink-0 text-xs font-semibold text-purple-600 hover:underline dark:text-purple-400"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-
-                    {/* LIST */}
-                    <div
-                      className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
-                      style={{
-                        WebkitOverflowScrolling: "touch",
-                        touchAction: "pan-y",
-                      }}
-                    >
-                      {notifications.length === 0 ? (
-                        <div className="px-5 py-8 text-center">
-                          <div className="mb-2 text-3xl">🔔</div>
+                      <div
+                        className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${
+                          darkMode ? "border-slate-800" : "border-slate-100"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <h3
+                            className={`font-bold ${
+                              darkMode ? "text-white" : "text-slate-900"
+                            }`}
+                          >
+                            Notifications
+                          </h3>
 
                           <p
-                            className={`text-sm ${
+                            className={`text-xs ${
                               darkMode ? "text-slate-400" : "text-slate-500"
                             }`}
                           >
-                            No notifications
+                            {unreadCount} unread
                           </p>
                         </div>
-                      ) : (
-                        notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={`group relative border-b px-4 py-3 transition ${
-                              darkMode
-                                ? "border-slate-800 hover:bg-slate-800/70"
-                                : "border-slate-100 hover:bg-slate-50"
-                            } ${
-                              !notification.read
-                                ? darkMode
-                                  ? "bg-purple-500/5"
-                                  : "bg-purple-50/50"
-                                : ""
-                            }`}
+
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsRead}
+                            className="flex-shrink-0 text-xs font-semibold text-purple-600 hover:underline dark:text-purple-400"
                           >
-                            <button
-                              type="button"
-                              onClick={() => openNotification(notification)}
-                              className="w-full pr-8 text-left"
+                            Mark all read
+                          </button>
+                        )}
+                      </div>
+
+                      {/* LIST */}
+
+                      <div
+                        className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
+                        style={{
+                          WebkitOverflowScrolling: "touch",
+                          touchAction: "pan-y",
+                        }}
+                      >
+                        {notifications.length === 0 ? (
+                          <div className="px-5 py-8 text-center">
+                            <div className="mb-2 text-3xl">🔔</div>
+
+                            <p
+                              className={`text-sm ${
+                                darkMode ? "text-slate-400" : "text-slate-500"
+                              }`}
                             >
-                              <div className="flex gap-3">
-                                <div className="mt-0.5 flex-shrink-0">
-                                  <span className="text-lg">
-                                    {notification.type === "application"
-                                      ? "📝"
-                                      : notification.type === "document"
-                                      ? "📄"
-                                      : notification.type === "information"
-                                      ? "ℹ️"
-                                      : "🔔"}
-                                  </span>
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start gap-2">
-                                    <h4
-                                      className={`min-w-0 flex-1 break-words text-sm font-semibold ${
-                                        darkMode
-                                          ? "text-white"
-                                          : "text-slate-800"
-                                      }`}
-                                    >
-                                      {notification.title}
-                                    </h4>
-
-                                    {!notification.read && (
-                                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" />
-                                    )}
+                              No notifications
+                            </p>
+                          </div>
+                        ) : (
+                          notifications.map((notification) => (
+                            <div
+                              key={notification.id}
+                              className={`group relative border-b px-4 py-3 transition ${
+                                darkMode
+                                  ? "border-slate-800 hover:bg-slate-800/70"
+                                  : "border-slate-100 hover:bg-slate-50"
+                              } ${
+                                !notification.readAt
+                                  ? darkMode
+                                    ? "bg-purple-500/5"
+                                    : "bg-purple-50/50"
+                                  : ""
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => openNotification(notification)}
+                                className="w-full text-left"
+                              >
+                                <div className="flex gap-3">
+                                  <div className="mt-0.5 flex-shrink-0">
+                                    <span className="text-lg">
+                                      {getNotificationIcon(notification)}
+                                    </span>
                                   </div>
 
-                                  <p
-                                    className={`mt-1 break-words text-xs leading-5 ${
-                                      darkMode
-                                        ? "text-slate-400"
-                                        : "text-slate-500"
-                                    }`}
-                                  >
-                                    {notification.message}
-                                  </p>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start gap-2">
+                                      <h4
+                                        className={`min-w-0 flex-1 break-words text-sm font-semibold ${
+                                          darkMode
+                                            ? "text-white"
+                                            : "text-slate-800"
+                                        }`}
+                                      >
+                                        {notification.title}
+                                      </h4>
 
-                                  <p
-                                    className={`mt-1.5 text-[10px] ${
-                                      darkMode
-                                        ? "text-slate-500"
-                                        : "text-slate-400"
-                                    }`}
-                                  >
-                                    {notification.time}
-                                  </p>
+                                      {!notification.readAt && (
+                                        <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" />
+                                      )}
+                                    </div>
+
+                                    <p
+                                      className={`mt-1 break-words text-xs leading-5 ${
+                                        darkMode
+                                          ? "text-slate-400"
+                                          : "text-slate-500"
+                                      }`}
+                                    >
+                                      {notification.message}
+                                    </p>
+
+                                    <p
+                                      className={`mt-1.5 text-[10px] ${
+                                        darkMode
+                                          ? "text-slate-500"
+                                          : "text-slate-400"
+                                      }`}
+                                    >
+                                      {notification.time}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </button>
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
 
-                            {/* DELETE */}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteNotification(notification.id)
-                              }
-                              className={`
-                                  absolute right-3 top-3
-                                  flex h-7 w-7
-                                  items-center justify-center
-                                  rounded-lg text-xs
-                                  opacity-100
-                                  transition
-                                  sm:opacity-0 sm:group-hover:opacity-100
-                                  ${
-                                    darkMode
-                                      ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-                                      : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                  }
-                                `}
-                              aria-label="Delete notification"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                      {/* VIEW ALL */}
 
-                    {/* VIEW ALL */}
-                    <div
-                      className={`border-t p-2 ${
-                        darkMode ? "border-slate-800" : "border-slate-100"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => navigateTo("/company/notifications")}
-                        className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
-                          darkMode
-                            ? "text-purple-400 hover:bg-slate-800"
-                            : "text-purple-600 hover:bg-purple-50"
+                      <div
+                        className={`border-t p-2 ${
+                          darkMode ? "border-slate-800" : "border-slate-100"
                         }`}
                       >
-                        View all notifications
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => navigateTo("/company/notifications")}
+                          className={`w-full rounded-lg py-2.5 text-xs font-semibold transition ${
+                            darkMode
+                              ? "text-purple-400 hover:bg-slate-800"
+                              : "text-purple-600 hover:bg-purple-50"
+                          }`}
+                        >
+                          View all notifications
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1116,6 +1663,7 @@ export default function CompanyPortalLayout() {
               {/* =================================================
                   PROFILE
                   ================================================= */}
+
               <div ref={profileRef} className="relative">
                 <button
                   type="button"
@@ -1128,7 +1676,6 @@ export default function CompanyPortalLayout() {
                     darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                   }`}
                 >
-                  {/* COMPANY AVATAR */}
                   {renderCompanyAvatar("h-9 w-9")}
 
                   <div className="hidden text-left sm:block">
@@ -1159,6 +1706,7 @@ export default function CompanyPortalLayout() {
                 </button>
 
                 {/* PROFILE DROPDOWN */}
+
                 {isProfileOpen && (
                   <div
                     className={`absolute right-0 top-12 z-[100] w-60 overflow-hidden rounded-2xl border shadow-xl ${
@@ -1167,14 +1715,12 @@ export default function CompanyPortalLayout() {
                         : "border-slate-200 bg-white"
                     }`}
                   >
-                    {/* PROFILE HEADER */}
                     <div
                       className={`border-b px-4 py-4 ${
                         darkMode ? "border-slate-800" : "border-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        {/* COMPANY AVATAR */}
                         {renderCompanyAvatar("h-10 w-10")}
 
                         <div className="min-w-0">
@@ -1198,7 +1744,6 @@ export default function CompanyPortalLayout() {
                     </div>
 
                     <div className="p-2">
-                      {/* PROFILE */}
                       <button
                         type="button"
                         onClick={() => navigateTo("/company/profile")}
@@ -1212,7 +1757,6 @@ export default function CompanyPortalLayout() {
                         <span>Company Profile</span>
                       </button>
 
-                      {/* SETTINGS */}
                       <button
                         type="button"
                         onClick={() => navigateTo("/company/settings")}
@@ -1232,7 +1776,6 @@ export default function CompanyPortalLayout() {
                         }`}
                       />
 
-                      {/* LOGOUT */}
                       <button
                         type="button"
                         onClick={requestLogout}
@@ -1254,6 +1797,7 @@ export default function CompanyPortalLayout() {
           {/* ===================================================
               PAGE CONTENT
               =================================================== */}
+
           <main
             className={`min-h-[calc(100vh-5rem)] min-w-0 flex-1 ${
               darkMode ? "bg-slate-950" : "bg-slate-50"
@@ -1267,14 +1811,30 @@ export default function CompanyPortalLayout() {
                 darkMode,
                 companyName,
                 companyLogoUrl,
+
+                /* =============================================
+                   REAL NOTIFICATIONS
+                   ============================================= */
+
                 notifications,
                 unreadCount,
+
                 markNotificationRead,
+                markNotificationUnread,
                 markAllNotificationsRead,
-                deleteNotification,
+
                 selectedNotification,
                 openNotification,
                 closeNotificationModal,
+
+                /*
+                  Expose action resolver so the main
+                  notification page can use the exact
+                  same action rules as the layout.
+                */
+                getNotificationAction,
+                handleNotificationAction,
+                getNotificationIcon,
               }}
             />
           </main>
@@ -1284,6 +1844,7 @@ export default function CompanyPortalLayout() {
       {/* =====================================================
           MOBILE OVERLAY
           ===================================================== */}
+
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 z-[80] bg-black/50 lg:hidden"
@@ -1294,6 +1855,7 @@ export default function CompanyPortalLayout() {
       {/* =====================================================
           MOBILE SIDEBAR
           ===================================================== */}
+
       <aside
         className={`fixed inset-y-0 left-0 z-[90] flex w-[290px] max-w-[85vw] flex-col overflow-hidden shadow-2xl transition-transform duration-300 lg:hidden ${
           isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -1305,6 +1867,7 @@ export default function CompanyPortalLayout() {
       {/* =====================================================
           NOTIFICATION MODAL
           ===================================================== */}
+
       {selectedNotification && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
@@ -1319,6 +1882,7 @@ export default function CompanyPortalLayout() {
             }`}
           >
             {/* HEADER */}
+
             <div
               className={`flex items-center justify-between border-b px-5 py-4 ${
                 darkMode ? "border-slate-800" : "border-slate-100"
@@ -1340,24 +1904,20 @@ export default function CompanyPortalLayout() {
                     ? "text-slate-400 hover:bg-slate-800"
                     : "text-slate-500 hover:bg-slate-100"
                 }`}
+                aria-label="Close notification"
               >
                 ✕
               </button>
             </div>
 
             {/* CONTENT */}
+
             <div className="px-5 py-6">
               <div className="mb-4 flex items-start gap-3">
                 <div
                   className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-xl text-white shadow-sm ${COMPANY_PRIMARY}`}
                 >
-                  {selectedNotification.type === "application"
-                    ? "📝"
-                    : selectedNotification.type === "document"
-                    ? "📄"
-                    : selectedNotification.type === "information"
-                    ? "ℹ️"
-                    : "🔔"}
+                  {getNotificationIcon(selectedNotification)}
                 </div>
 
                 <div className="min-w-0">
@@ -1386,18 +1946,75 @@ export default function CompanyPortalLayout() {
               >
                 {selectedNotification.message}
               </p>
+
+              {/* RELATED RECORD */}
+
+              {selectedNotification.relatedType && (
+                <div
+                  className={`mt-5 rounded-xl border p-3 ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-800/50"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <p
+                    className={`text-[10px] font-semibold uppercase tracking-wide ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
+                    Related Record
+                  </p>
+
+                  <p
+                    className={`mt-1 text-sm font-medium ${
+                      darkMode ? "text-slate-200" : "text-slate-700"
+                    }`}
+                  >
+                    {selectedNotification.relatedType}
+                  </p>
+
+                  {selectedNotification.relatedId && (
+                    <p
+                      className={`mt-1 break-all text-xs ${
+                        darkMode ? "text-slate-500" : "text-slate-400"
+                      }`}
+                    >
+                      ID: {selectedNotification.relatedId}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* FOOTER */}
+
             <div
-              className={`border-t px-5 py-3 text-right ${
+              className={`flex flex-wrap items-center justify-end gap-2 border-t px-5 py-3 ${
                 darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
+              {/* ACTION */}
+
+              {getNotificationAction(selectedNotification) && (
+                <button
+                  type="button"
+                  onClick={handleNotificationAction}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 ${COMPANY_PRIMARY}`}
+                >
+                  {getNotificationAction(selectedNotification).label}
+                </button>
+              )}
+
+              {/* CLOSE */}
+
               <button
                 type="button"
                 onClick={closeNotificationModal}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 ${COMPANY_PRIMARY}`}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+                  darkMode
+                    ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
               >
                 Close
               </button>
@@ -1409,6 +2026,7 @@ export default function CompanyPortalLayout() {
       {/* =====================================================
           LOGOUT CONFIRMATION MODAL
           ===================================================== */}
+
       {showLogoutModal && (
         <div
           className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
@@ -1423,8 +2041,8 @@ export default function CompanyPortalLayout() {
             }`}
           >
             {/* MODAL CONTENT */}
+
             <div className="px-6 pb-5 pt-6 text-center">
-              {/* ICON */}
               <div
                 className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${
                   darkMode ? "bg-red-500/10" : "bg-red-50"
@@ -1451,12 +2069,12 @@ export default function CompanyPortalLayout() {
             </div>
 
             {/* MODAL FOOTER */}
+
             <div
               className={`flex gap-3 border-t px-5 py-4 ${
                 darkMode ? "border-slate-800" : "border-slate-100"
               }`}
             >
-              {/* CANCEL */}
               <button
                 type="button"
                 onClick={cancelLogout}
@@ -1469,7 +2087,6 @@ export default function CompanyPortalLayout() {
                 Cancel
               </button>
 
-              {/* LOGOUT */}
               <button
                 type="button"
                 onClick={handleLogout}

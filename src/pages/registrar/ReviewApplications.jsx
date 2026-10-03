@@ -1022,154 +1022,6 @@ export default function ReviewApplications() {
         .eq("id", application.id)
         .select(
           `
-              id,
-              student_id,
-              opportunity_id,
-              cover_letter,
-              status,
-              reviewer_id,
-              notes,
-              submitted_at,
-              created_at,
-              updated_at,
-              students (
-                id,
-                student_id,
-                phone,
-                address,
-                program,
-                year_level,
-                department,
-                profile_photo_url,
-                resume_url,
-                resume_name,
-                cor_url,
-                cor_name,
-                users (
-                  id,
-                  email,
-                  first_name,
-                  middle_name,
-                  last_name
-                )
-              ),
-              opportunities (
-                id,
-                company_id,
-                title,
-                description,
-                location,
-                position_type,
-                availability,
-                requirements,
-                openings,
-                status,
-                internship_start_date,
-                internship_end_date,
-                internship_start,
-                internship_end,
-                companies (
-                  id,
-                  company_name,
-                  company_email,
-                  company_phone,
-                  company_address,
-                  website,
-                  industry,
-                  designation,
-                  status
-                )
-              )
-            `
-        )
-        .single();
-
-      if (applicationUpdateError) {
-        throw applicationUpdateError;
-      }
-
-      setApplications((previous) =>
-        previous.filter((item) => item.id !== application.id)
-      );
-
-      setSelectedApplication(null);
-      setIsProfilePhotoExpanded(false);
-
-      const emailResult = await sendApplicationDecisionEmail({
-        application: data || application,
-        decision: "approved",
-      });
-
-      if (emailResult.success) {
-        alert(
-          `Application approved successfully.\n\n` +
-            `Student: ${studentName}\n` +
-            `Application Status: Approved\n` +
-            `Email Notification: Sent\n\n` +
-            `The student must now go to View Status and confirm this internship placement.\n\n` +
-            `No assignment was created yet.`
-        );
-      } else {
-        alert(
-          `Application approved successfully.\n\n` +
-            `Student: ${studentName}\n` +
-            `Application Status: Approved\n` +
-            `Email Notification: Failed to send\n\n` +
-            `The student can still see the updated status in the Student Portal.\n\n` +
-            `Email error: ${emailResult.error || "Unknown error"}\n\n` +
-            `No assignment was created yet.`
-        );
-      }
-    } catch (error) {
-      console.error("Error approving application:", error);
-
-      alert(error.message || "Unable to approve application.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  // =========================================================
-  // REQUEST INFORMATION
-  // =========================================================
-
-  const handleRequestInformation = async (application) => {
-    if (!application) return;
-
-    const notes = window.prompt(
-      "What additional information should the student provide?",
-      "Please provide additional application information."
-    );
-
-    if (notes === null) return;
-
-    setProcessingId(application.id);
-
-    try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabaseRegistrar.auth.getUser();
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (!user) {
-        throw new Error("You are not logged in.");
-      }
-
-      const { data, error } = await supabaseRegistrar
-        .from("applications")
-        .update({
-          status: STATUS.application.INFO_REQUESTED,
-          reviewer_id: user.id,
-          notes: notes.trim() || "Additional information requested.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", application.id)
-        .select(
-          `
             id,
             student_id,
             opportunity_id,
@@ -1232,8 +1084,233 @@ export default function ReviewApplications() {
         )
         .single();
 
+      if (applicationUpdateError) {
+        throw applicationUpdateError;
+      }
+
+      let notificationSent = false;
+
+      const { data: notificationCount, error: notificationError } =
+        await supabaseRegistrar.rpc("notify_student_application_status", {
+          p_application_id: application.id,
+          p_type: "application_approved",
+          p_title: "Internship Application Approved",
+          p_message:
+            `Your internship application for ` +
+            `${data?.opportunities?.title || "the internship opportunity"} ` +
+            `has been approved by the Registrar. ` +
+            `Please go to View Status to confirm your internship placement.`,
+        });
+
+      if (notificationError) {
+        console.error(
+          "Application approved, but Student notification failed:",
+          {
+            message: notificationError.message,
+            details: notificationError.details,
+            hint: notificationError.hint,
+            code: notificationError.code,
+          }
+        );
+      } else {
+        notificationSent = Number(notificationCount || 0) > 0;
+
+        console.log(
+          `Student approval notification created: ${notificationCount || 0}`
+        );
+      }
+
+      setApplications((previous) =>
+        previous.filter((item) => item.id !== application.id)
+      );
+
+      setSelectedApplication(null);
+      setIsProfilePhotoExpanded(false);
+
+      const emailResult = await sendApplicationDecisionEmail({
+        application: data || application,
+        decision: "approved",
+      });
+
+      if (emailResult.success) {
+        alert(
+          `Application approved successfully.\n\n` +
+            `Student: ${studentName}\n` +
+            `Application Status: Approved\n` +
+            `In-App Notification: ${
+              notificationSent ? "Sent" : "Not created"
+            }\n` +
+            `Email Notification: Sent\n\n` +
+            `The student must now go to View Status and confirm this internship placement.\n\n` +
+            `No assignment was created yet.`
+        );
+      } else {
+        alert(
+          `Application approved successfully.\n\n` +
+            `Student: ${studentName}\n` +
+            `Application Status: Approved\n` +
+            `In-App Notification: ${
+              notificationSent ? "Sent" : "Not created"
+            }\n` +
+            `Email Notification: Failed to send\n\n` +
+            `The student can still see the updated status in the Student Portal.\n\n` +
+            `Email error: ${emailResult.error || "Unknown error"}\n\n` +
+            `No assignment was created yet.`
+        );
+      }
+    } catch (error) {
+      console.error("Error approving application:", error);
+
+      alert(error.message || "Unable to approve application.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // =========================================================
+  // REQUEST INFORMATION
+  // =========================================================
+
+  const handleRequestInformation = async (application) => {
+    if (!application) return;
+
+    const notes = window.prompt(
+      "What additional information should the student provide?",
+      "Please provide additional application information."
+    );
+
+    if (notes === null) return;
+
+    setProcessingId(application.id);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseRegistrar.auth.getUser();
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (!user) {
+        throw new Error("You are not logged in.");
+      }
+
+      const informationRequest =
+        notes.trim() || "Additional information requested.";
+
+      const { data, error } = await supabaseRegistrar
+        .from("applications")
+        .update({
+          status: STATUS.application.INFO_REQUESTED,
+          reviewer_id: user.id,
+          notes: informationRequest,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", application.id)
+        .select(
+          `
+          id,
+          student_id,
+          opportunity_id,
+          cover_letter,
+          status,
+          reviewer_id,
+          notes,
+          submitted_at,
+          created_at,
+          updated_at,
+          students (
+            id,
+            student_id,
+            phone,
+            address,
+            program,
+            year_level,
+            department,
+            profile_photo_url,
+            resume_url,
+            resume_name,
+            cor_url,
+            cor_name,
+            users (
+              id,
+              email,
+              first_name,
+              middle_name,
+              last_name
+            )
+          ),
+          opportunities (
+            id,
+            company_id,
+            title,
+            description,
+            location,
+            position_type,
+            availability,
+            requirements,
+            openings,
+            status,
+            internship_start_date,
+            internship_end_date,
+            internship_start,
+            internship_end,
+            companies (
+              id,
+              company_name,
+              company_email,
+              company_phone,
+              company_address,
+              website,
+              industry,
+              designation,
+              status
+            )
+          )
+        `
+        )
+        .single();
+
       if (error) {
         throw error;
+      }
+
+      let notificationSent = false;
+
+      const { data: notificationCount, error: notificationError } =
+        await supabaseRegistrar.rpc("notify_student_application_status", {
+          p_application_id: application.id,
+          p_type: "application_info_requested",
+          p_title: "Additional Information Requested",
+          p_message:
+            `The Registrar requested additional information for your ` +
+            `internship application for ` +
+            `${
+              data?.opportunities?.title || "the internship opportunity"
+            }.\n\n` +
+            `Note: ${informationRequest}`,
+        });
+
+      if (notificationError) {
+        console.error(
+          "Information request saved, but Student notification failed:",
+          {
+            message: notificationError.message,
+            details: notificationError.details,
+            hint: notificationError.hint,
+            code: notificationError.code,
+          }
+        );
+      } else {
+        notificationSent = Number(notificationCount || 0) > 0;
+
+        console.log(
+          `Student information-request notification created: ${
+            notificationCount || 0
+          }`
+        );
       }
 
       setApplications((previous) =>
@@ -1243,7 +1320,11 @@ export default function ReviewApplications() {
       setSelectedApplication(null);
       setIsProfilePhotoExpanded(false);
 
-      alert("Additional information has been requested.");
+      alert(
+        `Additional information has been requested.\n\n` +
+          `Student: ${getStudentName(application.students)}\n` +
+          `In-App Notification: ${notificationSent ? "Sent" : "Not created"}`
+      );
     } catch (error) {
       console.error("Error requesting information:", error);
 
@@ -1297,70 +1378,102 @@ export default function ReviewApplications() {
         .eq("id", application.id)
         .select(
           `
+          id,
+          student_id,
+          opportunity_id,
+          cover_letter,
+          status,
+          reviewer_id,
+          notes,
+          submitted_at,
+          created_at,
+          updated_at,
+          students (
             id,
             student_id,
-            opportunity_id,
-            cover_letter,
-            status,
-            reviewer_id,
-            notes,
-            submitted_at,
-            created_at,
-            updated_at,
-            students (
+            phone,
+            address,
+            program,
+            year_level,
+            department,
+            profile_photo_url,
+            resume_url,
+            resume_name,
+            cor_url,
+            cor_name,
+            users (
               id,
-              student_id,
-              phone,
-              address,
-              program,
-              year_level,
-              department,
-              profile_photo_url,
-              resume_url,
-              resume_name,
-              cor_url,
-              cor_name,
-              users (
-                id,
-                email,
-                first_name,
-                middle_name,
-                last_name
-              )
-            ),
-            opportunities (
-              id,
-              company_id,
-              title,
-              description,
-              location,
-              position_type,
-              availability,
-              requirements,
-              openings,
-              status,
-              internship_start_date,
-              internship_end_date,
-              internship_start,
-              internship_end,
-              companies (
-                id,
-                company_name,
-                company_email,
-                company_phone,
-                company_address,
-                website,
-                industry,
-                designation,
-                status
-              )
+              email,
+              first_name,
+              middle_name,
+              last_name
             )
-          `
+          ),
+          opportunities (
+            id,
+            company_id,
+            title,
+            description,
+            location,
+            position_type,
+            availability,
+            requirements,
+            openings,
+            status,
+            internship_start_date,
+            internship_end_date,
+            internship_start,
+            internship_end,
+            companies (
+              id,
+              company_name,
+              company_email,
+              company_phone,
+              company_address,
+              website,
+              industry,
+              designation,
+              status
+            )
+          )
+        `
         )
         .single();
 
       if (error) {
         throw error;
+      }
+
+      let notificationSent = false;
+
+      const { data: notificationCount, error: notificationError } =
+        await supabaseRegistrar.rpc("notify_student_application_status", {
+          p_application_id: application.id,
+          p_type: "application_rejected",
+          p_title: "Internship Application Rejected",
+          p_message:
+            `Your internship application for ` +
+            `${data?.opportunities?.title || "the internship opportunity"} ` +
+            `has been rejected by the Registrar.\n\n` +
+            `Reason: ${rejectionReason}`,
+        });
+
+      if (notificationError) {
+        console.error(
+          "Application rejected, but Student notification failed:",
+          {
+            message: notificationError.message,
+            details: notificationError.details,
+            hint: notificationError.hint,
+            code: notificationError.code,
+          }
+        );
+      } else {
+        notificationSent = Number(notificationCount || 0) > 0;
+
+        console.log(
+          `Student rejection notification created: ${notificationCount || 0}`
+        );
       }
 
       setApplications((previous) =>
@@ -1381,6 +1494,9 @@ export default function ReviewApplications() {
           `Application rejected successfully.\n\n` +
             `Student: ${getStudentName(application.students)}\n` +
             `Application Status: Rejected\n` +
+            `In-App Notification: ${
+              notificationSent ? "Sent" : "Not created"
+            }\n` +
             `Email Notification: Sent`
         );
       } else {
@@ -1388,6 +1504,9 @@ export default function ReviewApplications() {
           `Application rejected successfully.\n\n` +
             `Student: ${getStudentName(application.students)}\n` +
             `Application Status: Rejected\n` +
+            `In-App Notification: ${
+              notificationSent ? "Sent" : "Not created"
+            }\n` +
             `Email Notification: Failed to send\n\n` +
             `The student can still see the updated status in the Student Portal.\n\n` +
             `Email error: ${emailResult.error || "Unknown error"}`

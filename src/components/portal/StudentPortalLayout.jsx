@@ -5,37 +5,6 @@ import { supabaseStudent } from "../../supabaseClient";
 const STORAGE_BUCKET = "profile-photos";
 
 /* =========================================================
-   TEMPORARY NOTIFICATIONS
-   ========================================================= */
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Application Update",
-    message: "Your internship application is currently under review.",
-    time: "2 hours ago",
-    read: false,
-    type: "application",
-  },
-  {
-    id: 2,
-    title: "Document Approved",
-    message: "Your submitted internship document has been approved.",
-    time: "1 day ago",
-    read: false,
-    type: "document",
-  },
-  {
-    id: 3,
-    title: "Internship Reminder",
-    message:
-      "Please make sure all required internship documents are submitted.",
-    time: "2 days ago",
-    read: true,
-    type: "reminder",
-  },
-];
-
-/* =========================================================
    COMPONENT
    ========================================================= */
 export default function StudentPortalLayout() {
@@ -68,13 +37,10 @@ export default function StudentPortalLayout() {
   /* =========================================================
      NOTIFICATIONS
      ========================================================= */
-  const [notifications, setNotifications] = useState(initialNotifications);
-
-  const [selectedNotification, setSelectedNotification] = useState(null);
-
-  const unreadCount = notifications.filter(
-    (notification) => !notification.read
-  ).length;
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationActionLoading, setNotificationActionLoading] =
+    useState(false);
 
   /* =========================================================
      DARK MODE
@@ -160,6 +126,168 @@ export default function StudentPortalLayout() {
      ========================================================= */
   useEffect(() => {
     loadStudentProfile();
+  }, []);
+
+  /* =========================================================
+     LOAD NOTIFICATIONS
+     ========================================================= */
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  /* =========================================================
+   LOAD NOTIFICATIONS + REALTIME
+   ========================================================= */
+  useEffect(() => {
+    let channel = null;
+    let isMounted = true;
+
+    const initializeNotifications = async () => {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (userError) {
+        console.error(
+          "[Student Notifications] Unable to get authenticated student:",
+          userError
+        );
+        return;
+      }
+
+      if (!user || !isMounted) {
+        return;
+      }
+
+      // Initial notification load
+      await loadNotifications();
+
+      // =====================================================
+      // REALTIME SUBSCRIPTION
+      // =====================================================
+
+      channel = supabaseStudent
+        .channel(`student-notifications-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `recipient_id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (!isMounted) return;
+
+            console.log(
+              "[Student Notifications] Realtime event:",
+              payload.eventType,
+              payload
+            );
+
+            // =================================================
+            // INSERT
+            // =================================================
+
+            if (payload.eventType === "INSERT") {
+              const notification = payload.new;
+
+              const normalizedNotification = {
+                id: notification.id,
+                title: notification.title,
+                message: notification.message,
+
+                type: notification.type,
+                category: notification.category,
+
+                relatedEntityType: notification.related_entity_type,
+                relatedEntityId: notification.related_entity_id,
+
+                actionPath:
+                  notification.action_path === "/student/view-status"
+                    ? "/student/status"
+                    : notification.action_path || "/student/notifications",
+
+                createdAt: notification.created_at,
+                readAt: notification.read_at,
+              };
+
+              setNotifications((previous) => {
+                // Prevent duplicate notifications
+                if (
+                  previous.some((item) => item.id === normalizedNotification.id)
+                ) {
+                  return previous;
+                }
+
+                return [normalizedNotification, ...previous].slice(0, 10);
+              });
+
+              return;
+            }
+
+            // =================================================
+            // UPDATE
+            // =================================================
+
+            if (payload.eventType === "UPDATE") {
+              const notification = payload.new;
+
+              setNotifications((previous) =>
+                previous.map((item) =>
+                  item.id === notification.id
+                    ? {
+                        ...item,
+                        title: notification.title,
+                        message: notification.message,
+                        type: notification.type,
+                        category: notification.category,
+                        relatedEntityType: notification.related_entity_type,
+                        relatedEntityId: notification.related_entity_id,
+                        actionPath:
+                          notification.action_path === "/student/view-status"
+                            ? "/student/status"
+                            : notification.action_path ||
+                              item.actionPath ||
+                              "/student/notifications",
+                        createdAt: notification.created_at,
+                        readAt: notification.read_at,
+                      }
+                    : item
+                )
+              );
+
+              return;
+            }
+
+            // =================================================
+            // DELETE
+            // =================================================
+
+            if (payload.eventType === "DELETE") {
+              const notification = payload.old;
+
+              setNotifications((previous) =>
+                previous.filter((item) => item.id !== notification.id)
+              );
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log("[Student Notifications] Realtime status:", status);
+        });
+    };
+
+    initializeNotifications();
+
+    return () => {
+      isMounted = false;
+
+      if (channel) {
+        supabaseStudent.removeChannel(channel);
+      }
+    };
   }, []);
 
   const getProfilePhotoUrl = async (photoPath) => {
@@ -309,6 +437,172 @@ export default function StudentPortalLayout() {
   };
 
   /* =========================================================
+     LOAD NOTIFICATIONS
+     ========================================================= */
+  const loadNotifications = async () => {
+    try {
+      setNotificationsLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (userError) {
+        console.error("Unable to get authenticated student:", userError);
+
+        setNotifications([]);
+        return;
+      }
+
+      if (!user) {
+        setNotifications([]);
+        return;
+      }
+
+      const { data, error } = await supabaseStudent
+        .from("notifications")
+        .select(
+          `
+            id,
+            recipient_id,
+            recipient_role,
+            type,
+            category,
+            title,
+            message,
+            related_entity_type,
+            related_entity_id,
+            action_path,
+            created_by,
+            read_at,
+            created_at
+          `
+        )
+        .eq("recipient_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(10);
+
+      if (error) {
+        console.error("Error loading student notifications:", error);
+
+        setNotifications([]);
+        return;
+      }
+
+      const getStudentNotificationActionPath = (notification) => {
+        if (!notification) {
+          return "/student/notifications";
+        }
+
+        const type = String(notification.type || "").toLowerCase();
+        const category = String(notification.category || "").toLowerCase();
+        const relatedEntityType = String(
+          notification.related_entity_type || ""
+        ).toLowerCase();
+
+        /*
+         * =========================================================
+         * APPLICATION NOTIFICATIONS
+         * =========================================================
+         *
+         * All application-related notifications should open
+         * the Student Full Status page.
+         *
+         * This also fixes older notifications that may still contain
+         * /student/view-status in the database.
+         */
+        if (
+          relatedEntityType === "internshipapplication" ||
+          type.includes("application") ||
+          category.includes("application")
+        ) {
+          return "/student/status";
+        }
+
+        /*
+         * =========================================================
+         * DOCUMENT NOTIFICATIONS
+         * =========================================================
+         */
+        if (
+          relatedEntityType === "documentsubmission" ||
+          type.includes("document") ||
+          category.includes("document")
+        ) {
+          return "/student/status";
+        }
+
+        /*
+         * =========================================================
+         * DEPLOYMENT / ASSIGNMENT NOTIFICATIONS
+         * =========================================================
+         */
+        if (
+          relatedEntityType === "internshipassignment" ||
+          relatedEntityType === "assignment" ||
+          type.includes("deployment") ||
+          type.includes("assignment") ||
+          category.includes("internship")
+        ) {
+          return "/student/status";
+        }
+
+        /*
+         * =========================================================
+         * FALLBACK
+         * =========================================================
+         *
+         * Keep the database action_path for other notification
+         * types, but never use the old incorrect View Status route.
+         */
+        const databasePath = notification.action_path;
+
+        if (databasePath === "/student/view-status") {
+          return "/student/status";
+        }
+
+        return databasePath || "/student/notifications";
+      };
+
+      const normalizedNotifications = (data || []).map((notification) => ({
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+
+        type: notification.type,
+        category: notification.category,
+
+        relatedEntityType: notification.related_entity_type,
+
+        relatedEntityId: notification.related_entity_id,
+
+        actionPath: getStudentNotificationActionPath(notification),
+
+        createdAt: notification.created_at,
+        readAt: notification.read_at,
+      }));
+
+      setNotifications(normalizedNotifications);
+    } catch (error) {
+      console.error("Unexpected error loading notifications:", error);
+
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  /* =========================================================
+     NOTIFICATION COUNTS
+     ========================================================= */
+  const unreadCount = notifications.filter(
+    (notification) => !notification.readAt
+  ).length;
+
+  /* =========================================================
      DARK MODE
      ========================================================= */
   useEffect(() => {
@@ -358,7 +652,6 @@ export default function StudentPortalLayout() {
       setIsMobileSidebarOpen(false);
       setIsNotificationOpen(false);
       setIsProfileOpen(false);
-      setSelectedNotification(null);
       setShowLogoutConfirm(false);
     };
 
@@ -608,48 +901,236 @@ export default function StudentPortalLayout() {
   };
 
   /* =========================================================
-     NOTIFICATION HANDLERS
+     NOTIFICATION HELPERS
      ========================================================= */
-  const markNotificationRead = (id) => {
-    setNotifications((previous) =>
-      previous.map((notification) =>
-        notification.id === id
-          ? {
-              ...notification,
-              read: true,
-            }
-          : notification
-      )
-    );
+  const getNotificationIcon = (notification) => {
+    const type = String(notification?.type || "").toLowerCase();
+
+    const category = String(notification?.category || "").toLowerCase();
+
+    const relatedEntity = String(
+      notification?.relatedEntityType || ""
+    ).toLowerCase();
+
+    if (
+      type.includes("application") ||
+      category.includes("application") ||
+      relatedEntity.includes("application")
+    ) {
+      return "📝";
+    }
+
+    if (
+      type.includes("document") ||
+      category.includes("document") ||
+      relatedEntity.includes("document")
+    ) {
+      return "📄";
+    }
+
+    if (
+      type.includes("evaluation") ||
+      category.includes("evaluation") ||
+      relatedEntity.includes("evaluation")
+    ) {
+      return "⭐";
+    }
+
+    if (
+      type.includes("message") ||
+      category.includes("message") ||
+      relatedEntity.includes("message")
+    ) {
+      return "💬";
+    }
+
+    if (
+      type.includes("internship") ||
+      category.includes("internship") ||
+      relatedEntity.includes("assignment")
+    ) {
+      return "💼";
+    }
+
+    return "🔔";
   };
 
-  const markAllNotificationsRead = () => {
-    setNotifications((previous) =>
-      previous.map((notification) => ({
-        ...notification,
-        read: true,
-      }))
-    );
+  const formatNotificationTime = (date) => {
+    if (!date) return "";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "";
+    }
+
+    const now = new Date();
+    const diffMs = now.getTime() - parsedDate.getTime();
+
+    const diffSeconds = Math.floor(diffMs / 1000);
+
+    const diffMinutes = Math.floor(diffSeconds / 60);
+
+    const diffHours = Math.floor(diffMinutes / 60);
+
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSeconds < 60) {
+      return "Just now";
+    }
+
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    }
+
+    if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    }
+
+    if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    }
+
+    return parsedDate.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year:
+        parsedDate.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    });
   };
 
-  const deleteNotification = (id) => {
-    setNotifications((previous) =>
-      previous.filter((notification) => notification.id !== id)
-    );
+  /* =========================================================
+     MARK ONE NOTIFICATION AS READ
+     ========================================================= */
+  const markNotificationRead = async (id) => {
+    const notification = notifications.find((item) => item.id === id);
 
-    if (selectedNotification?.id === id) {
-      setSelectedNotification(null);
+    if (!notification || notification.readAt) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    try {
+      setNotificationActionLoading(true);
+
+      const { error } = await supabaseStudent
+        .from("notifications")
+        .update({
+          read_at: now,
+        })
+        .eq("id", id)
+        .eq(
+          "recipient_id",
+          (
+            await supabaseStudent.auth.getUser()
+          ).data?.user?.id
+        );
+
+      if (error) {
+        console.error("Error marking notification as read:", error);
+
+        return;
+      }
+
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                readAt: now,
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Unexpected error marking notification as read:", error);
+    } finally {
+      setNotificationActionLoading(false);
     }
   };
 
-  const openNotification = (notification) => {
-    markNotificationRead(notification.id);
-    setSelectedNotification(notification);
-    setIsNotificationOpen(false);
+  /* =========================================================
+     MARK ALL NOTIFICATIONS AS READ
+     ========================================================= */
+  const markAllNotificationsRead = async () => {
+    if (unreadCount === 0) return;
+
+    try {
+      setNotificationActionLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseStudent.auth.getUser();
+
+      if (userError || !user) {
+        console.error("Unable to identify current student:", userError);
+
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      const { error } = await supabaseStudent
+        .from("notifications")
+        .update({
+          read_at: now,
+        })
+        .eq("recipient_id", user.id)
+        .is("read_at", null);
+
+      if (error) {
+        console.error("Error marking all notifications as read:", error);
+
+        return;
+      }
+
+      setNotifications((previous) =>
+        previous.map((notification) => ({
+          ...notification,
+          readAt: notification.readAt || now,
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "Unexpected error marking all notifications as read:",
+        error
+      );
+    } finally {
+      setNotificationActionLoading(false);
+    }
   };
 
-  const closeNotificationModal = () => {
-    setSelectedNotification(null);
+  /* =========================================================
+     OPEN NOTIFICATION
+     ========================================================= */
+  const openNotification = async (notification) => {
+    if (!notification) return;
+
+    // -------------------------------------------------------
+    // MARK READ
+    // -------------------------------------------------------
+
+    if (!notification.readAt) {
+      await markNotificationRead(notification.id);
+    }
+
+    // -------------------------------------------------------
+    // CLOSE DROPDOWN
+    // -------------------------------------------------------
+
+    setIsNotificationOpen(false);
+
+    // -------------------------------------------------------
+    // NAVIGATE TO RELATED PAGE
+    // -------------------------------------------------------
+
+    if (notification.actionPath) {
+      navigate(notification.actionPath);
+    } else {
+      navigate("/student/notifications");
+    }
   };
 
   /* =========================================================
@@ -1062,11 +1543,18 @@ export default function StudentPortalLayout() {
                         <button
                           type="button"
                           onClick={markAllNotificationsRead}
+                          disabled={notificationActionLoading}
                           className={`flex-shrink-0 text-xs font-semibold ${
+                            notificationActionLoading
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          } ${
                             darkMode ? "text-blue-400" : "text-blue-600"
                           } hover:underline`}
                         >
-                          Mark all read
+                          {notificationActionLoading
+                            ? "Updating..."
+                            : "Mark all read"}
                         </button>
                       )}
                     </div>
@@ -1084,7 +1572,25 @@ export default function StudentPortalLayout() {
                         touchAction: "pan-y",
                       }}
                     >
-                      {notifications.length === 0 ? (
+                      {notificationsLoading ? (
+                        <div className="px-5 py-8 text-center">
+                          <div
+                            className={`mx-auto h-7 w-7 animate-spin rounded-full border-3 ${
+                              darkMode
+                                ? "border-slate-700 border-t-blue-400"
+                                : "border-slate-200 border-t-blue-500"
+                            }`}
+                          />
+
+                          <p
+                            className={`mt-3 text-xs ${
+                              darkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
+                            Loading notifications...
+                          </p>
+                        </div>
+                      ) : notifications.length === 0 ? (
                         <div className="px-5 py-8 text-center">
                           <div className="mb-2 text-3xl">🔔</div>
 
@@ -1097,34 +1603,30 @@ export default function StudentPortalLayout() {
                           </p>
                         </div>
                       ) : (
-                        notifications.map((notification) => (
-                          <div
-                            key={notification.id}
-                            className={`group relative border-b px-4 py-3 transition ${
-                              darkMode
-                                ? "border-slate-800 hover:bg-slate-800/70"
-                                : "border-slate-100 hover:bg-slate-50"
-                            } ${
-                              !notification.read
-                                ? darkMode
-                                  ? "bg-blue-500/5"
-                                  : "bg-blue-50/50"
-                                : ""
-                            }`}
-                          >
+                        notifications.map((notification) => {
+                          const isUnread = !notification.readAt;
+
+                          return (
                             <button
+                              key={notification.id}
                               type="button"
                               onClick={() => openNotification(notification)}
-                              className="w-full pr-8 text-left"
+                              className={`group relative w-full border-b px-4 py-3 text-left transition ${
+                                darkMode
+                                  ? "border-slate-800 hover:bg-slate-800/70"
+                                  : "border-slate-100 hover:bg-slate-50"
+                              } ${
+                                isUnread
+                                  ? darkMode
+                                    ? "bg-blue-500/5"
+                                    : "bg-blue-50/50"
+                                  : ""
+                              }`}
                             >
                               <div className="flex gap-3">
                                 <div className="mt-0.5 flex-shrink-0">
                                   <span className="text-lg">
-                                    {notification.type === "application"
-                                      ? "📝"
-                                      : notification.type === "document"
-                                      ? "📄"
-                                      : "🔔"}
+                                    {getNotificationIcon(notification)}
                                   </span>
                                 </div>
 
@@ -1140,7 +1642,7 @@ export default function StudentPortalLayout() {
                                       {notification.title}
                                     </h4>
 
-                                    {!notification.read && (
+                                    {isUnread && (
                                       <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
                                     )}
                                   </div>
@@ -1162,38 +1664,15 @@ export default function StudentPortalLayout() {
                                         : "text-slate-400"
                                     }`}
                                   >
-                                    {notification.time}
+                                    {formatNotificationTime(
+                                      notification.createdAt
+                                    )}
                                   </p>
                                 </div>
                               </div>
                             </button>
-
-                            {/* DELETE */}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteNotification(notification.id)
-                              }
-                              className={`
-                                  absolute right-3 top-3
-                                  flex h-7 w-7
-                                  items-center justify-center
-                                  rounded-lg text-xs
-                                  opacity-100
-                                  transition
-                                  sm:opacity-0 sm:group-hover:opacity-100
-                                  ${
-                                    darkMode
-                                      ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-                                      : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                  }
-                                `}
-                              aria-label="Delete notification"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
 
@@ -1424,14 +1903,13 @@ export default function StudentPortalLayout() {
             <Outlet
               context={{
                 darkMode,
+
                 notifications,
                 unreadCount,
                 markNotificationRead,
                 markAllNotificationsRead,
-                deleteNotification,
-                selectedNotification,
+
                 openNotification,
-                closeNotificationModal,
               }}
             />
           </main>
@@ -1458,103 +1936,6 @@ export default function StudentPortalLayout() {
       >
         {renderSidebarContent(true)}
       </aside>
-
-      {/* =====================================================
-          NOTIFICATION MODAL
-          ===================================================== */}
-      {selectedNotification && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4"
-          onClick={closeNotificationModal}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className={`w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl ${
-              darkMode
-                ? "border-slate-700 bg-slate-900"
-                : "border-slate-200 bg-white"
-            }`}
-          >
-            <div
-              className={`flex items-center justify-between border-b px-5 py-4 ${
-                darkMode ? "border-slate-800" : "border-slate-100"
-              }`}
-            >
-              <h3
-                className={`font-bold ${
-                  darkMode ? "text-white" : "text-slate-900"
-                }`}
-              >
-                Notification
-              </h3>
-
-              <button
-                type="button"
-                onClick={closeNotificationModal}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                  darkMode
-                    ? "text-slate-400 hover:bg-slate-800"
-                    : "text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="px-5 py-6">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl dark:bg-blue-500/10">
-                  {selectedNotification.type === "application"
-                    ? "📝"
-                    : selectedNotification.type === "document"
-                    ? "📄"
-                    : "🔔"}
-                </div>
-
-                <div>
-                  <h4
-                    className={`font-bold ${
-                      darkMode ? "text-white" : "text-slate-900"
-                    }`}
-                  >
-                    {selectedNotification.title}
-                  </h4>
-
-                  <p
-                    className={`mt-1 text-xs ${
-                      darkMode ? "text-slate-500" : "text-slate-400"
-                    }`}
-                  >
-                    {selectedNotification.time}
-                  </p>
-                </div>
-              </div>
-
-              <p
-                className={`text-sm leading-6 ${
-                  darkMode ? "text-slate-300" : "text-slate-600"
-                }`}
-              >
-                {selectedNotification.message}
-              </p>
-            </div>
-
-            <div
-              className={`border-t px-5 py-3 text-right ${
-                darkMode ? "border-slate-800" : "border-slate-100"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closeNotificationModal}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =====================================================
           LOGOUT CONFIRMATION MODAL

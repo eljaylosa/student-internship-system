@@ -32,16 +32,11 @@ export default function Evaluation() {
 
   const [student, setStudent] = useState(null);
 
-  // All completed assignments
   const [assignments, setAssignments] = useState([]);
-
-  // Currently selected completed assignment
   const [assignment, setAssignment] = useState(null);
 
-  // Companies belonging to completed assignments
   const [companies, setCompanies] = useState([]);
 
-  // Search / filter
   const [companySearch, setCompanySearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("All");
 
@@ -184,19 +179,19 @@ export default function Evaluation() {
         .from("students")
         .select(
           `
+            id,
+            student_id,
+            program,
+            year_level,
+            department,
+            users (
               id,
-              student_id,
-              program,
-              year_level,
-              department,
-              users (
-                id,
-                email,
-                first_name,
-                middle_name,
-                last_name
-              )
-            `
+              email,
+              first_name,
+              middle_name,
+              last_name
+            )
+          `
         )
         .eq("id", userId)
         .maybeSingle();
@@ -254,6 +249,11 @@ export default function Evaluation() {
         setCompany(null);
         setCompanyEvaluation(null);
         setStudentCompanyEvaluation(null);
+        setTemplate(null);
+        setSections([]);
+        setCompanyRatings({});
+        setCompanyComments("");
+        setCompanySubmitted(false);
         setLoading(false);
         return;
       }
@@ -317,16 +317,16 @@ export default function Evaluation() {
           .from("opportunities")
           .select(
             `
-                id,
-                title,
-                description,
-                location,
-                position_type,
-                internship_start_date,
-                internship_end_date,
-                internship_start,
-                internship_end
-              `
+              id,
+              title,
+              description,
+              location,
+              position_type,
+              internship_start_date,
+              internship_end_date,
+              internship_start,
+              internship_end
+            `
           )
           .in("id", opportunityIds);
 
@@ -352,23 +352,12 @@ export default function Evaluation() {
       setAssignments(mappedAssignments);
 
       // =====================================================
-      // SELECT FIRST ASSIGNMENT
-      // =====================================================
-
-      const firstAssignment = mappedAssignments[0];
-
-      setAssignment(firstAssignment);
-
-      // =====================================================
-      // LOAD SELECTED ASSIGNMENT DATA
-      // =====================================================
-
-      await loadSelectedAssignmentData(firstAssignment, userId, companyRows);
-
-      // =====================================================
-      // LOAD PUBLISHED STUDENT → COMPANY TEMPLATE
+      // LOAD PUBLISHED STUDENT → COMPANY TEMPLATE FIRST
       //
-      // This template is ONLY for the student's own evaluation.
+      // IMPORTANT:
+      // We load the template BEFORE initializing ratings.
+      // This prevents the previous bug where `sections` was still
+      // empty when loadSelectedAssignmentData() ran.
       // =====================================================
 
       const { data: templateData, error: templateError } = await supabaseStudent
@@ -426,6 +415,29 @@ export default function Evaluation() {
         }));
 
       setSections(sortedSections);
+
+      // =====================================================
+      // SELECT FIRST ASSIGNMENT
+      // =====================================================
+
+      const firstAssignment = mappedAssignments[0];
+
+      setAssignment(firstAssignment);
+
+      // =====================================================
+      // LOAD SELECTED ASSIGNMENT DATA
+      //
+      // Pass sortedSections directly because React state updates
+      // are asynchronous. This guarantees the current template
+      // criteria are available immediately.
+      // =====================================================
+
+      await loadSelectedAssignmentData(
+        firstAssignment,
+        userId,
+        companyRows,
+        sortedSections
+      );
     } catch (err) {
       console.error("Evaluation load error:", err);
 
@@ -436,13 +448,59 @@ export default function Evaluation() {
   }
 
   // =========================================================
+  // INITIALIZE STUDENT RATINGS
+  // =========================================================
+  //
+  // IMPORTANT FIX:
+  //
+  // Every criterion gets an actual value in companyRatings.
+  //
+  // Previously the UI displayed 3 through:
+  //
+  //   companyRatings[id] || 3
+  //
+  // but the actual state remained empty.
+  //
+  // Now the state itself contains:
+  //
+  //   { criterionId: 3 }
+  //
+  // so submitting without touching the dropdown works.
+  // =========================================================
+
+  const initializeStudentRatings = (
+    evaluationSections,
+    existingEvaluation = null
+  ) => {
+    const initialRatings = {};
+
+    (evaluationSections || []).forEach((section) => {
+      (section.evaluation_criteria || []).forEach((criterion) => {
+        const savedValue = existingEvaluation?.responses?.[criterion.id];
+
+        const numericSavedValue = Number(savedValue);
+
+        initialRatings[criterion.id] =
+          Number.isFinite(numericSavedValue) &&
+          numericSavedValue >= 1 &&
+          numericSavedValue <= 5
+            ? numericSavedValue
+            : 3;
+      });
+    });
+
+    setCompanyRatings(initialRatings);
+  };
+
+  // =========================================================
   // LOAD SELECTED ASSIGNMENT
   // =========================================================
 
   async function loadSelectedAssignmentData(
     selectedAssignment,
     userId,
-    companyRows = companies
+    companyRows = companies,
+    studentEvaluationSections = sections
   ) {
     try {
       setError("");
@@ -527,10 +585,6 @@ export default function Evaluation() {
 
       // =====================================================
       // LOAD COMPANY → STUDENT TEMPLATE
-      //
-      // IMPORTANT:
-      // Uses the template that was actually used when the
-      // company submitted the evaluation.
       // =====================================================
 
       if (companyEval?.template_id) {
@@ -592,18 +646,14 @@ export default function Evaluation() {
       // =====================================================
       // INITIAL STUDENT RATINGS
       // =====================================================
+      //
+      // FIX:
+      // Use the actual template sections passed into this
+      // function instead of relying on possibly stale React
+      // state.
+      // =====================================================
 
-      const initialRatings = {};
-
-      sections.forEach((section) => {
-        (section.evaluation_criteria || []).forEach((criterion) => {
-          initialRatings[criterion.id] = Number(
-            studentEval?.responses?.[criterion.id] || 3
-          );
-        });
-      });
-
-      setCompanyRatings(initialRatings);
+      initializeStudentRatings(studentEvaluationSections, studentEval);
 
       setCompanyComments(studentEval?.comments || "");
 
@@ -658,7 +708,7 @@ export default function Evaluation() {
       return;
     }
 
-    await loadSelectedAssignmentData(selected, user.id, companies);
+    await loadSelectedAssignmentData(selected, user.id, companies, sections);
   };
 
   // =========================================================
@@ -824,11 +874,11 @@ export default function Evaluation() {
     // MAKE SURE EVERY CRITERION HAS A RATING
     // =======================================================
 
-    const missingCriteria = allCriteria.filter(
-      (criterion) =>
-        !companyRatings[criterion.id] ||
-        Number(companyRatings[criterion.id]) < 1
-    );
+    const missingCriteria = allCriteria.filter((criterion) => {
+      const value = Number(companyRatings[criterion.id]);
+
+      return !Number.isFinite(value) || value < 1 || value > 5;
+    });
 
     if (missingCriteria.length > 0) {
       alert("Please rate all evaluation criteria before submitting.");
@@ -879,40 +929,13 @@ export default function Evaluation() {
       // =====================================================
 
       const { data: insertedEvaluation, error: insertError } =
-        await supabaseStudent
-          .from("evaluations")
-          .insert({
-            assignment_id: assignment.id,
-            template_id: template.id,
-            evaluator_id: user.id,
-            evaluated_student_id: assignment.student_id,
-            evaluated_company_id: assignment.company_id,
-            evaluator_role: "student",
-            status: STATUS.evaluation.SUBMITTED,
-            responses: companyRatings,
-            overall_rating: overallRating,
-            comments: companyComments.trim(),
-            submitted_at: new Date().toISOString(),
-          })
-          .select(
-            `
-            id,
-            assignment_id,
-            template_id,
-            evaluator_id,
-            evaluated_student_id,
-            evaluated_company_id,
-            evaluator_role,
-            status,
-            responses,
-            overall_rating,
-            comments,
-            submitted_at,
-            finalized_at,
-            created_at
-          `
-          )
-          .single();
+        await supabaseStudent.rpc("submit_student_company_evaluation", {
+          p_assignment_id: assignment.id,
+          p_template_id: template.id,
+          p_responses: companyRatings,
+          p_overall_rating: overallRating,
+          p_comments: companyComments.trim(),
+        });
 
       if (insertError) {
         // ===================================================
@@ -1092,8 +1115,6 @@ export default function Evaluation() {
 
       <section className={`border rounded-2xl p-5 mb-5 ${card}`}>
         <div className="flex flex-col lg:flex-row gap-4">
-          {/* SEARCH */}
-
           <div className="flex-1">
             <label className={`block text-xs font-bold mb-2 ${pageText}`}>
               Search Company
@@ -1116,8 +1137,6 @@ export default function Evaluation() {
             </div>
           </div>
 
-          {/* COMPANY FILTER */}
-
           <div className="w-full lg:w-64">
             <label className={`block text-xs font-bold mb-2 ${pageText}`}>
               Company
@@ -1138,8 +1157,6 @@ export default function Evaluation() {
             </select>
           </div>
         </div>
-
-        {/* RESULT COUNT */}
 
         <div
           className={`mt-4 pt-3 border-t text-xs ${
@@ -1266,7 +1283,7 @@ export default function Evaluation() {
       {assignment && (
         <>
           {/* =================================================
-              ERROR FOR SELECTED ASSIGNMENT
+              ERROR
           ================================================= */}
 
           {error && (
@@ -1328,10 +1345,6 @@ export default function Evaluation() {
                 <p className={`text-xs uppercase tracking-wide ${mutedText}`}>
                   Internship Assignment
                 </p>
-
-                {/* FIXED:
-                    Do NOT show assignment.id as the title.
-                */}
 
                 <h2 className="font-bold text-lg mt-1">
                   {company?.company_name || "Internship Company"}
@@ -1724,14 +1737,13 @@ export default function Evaluation() {
                                 </span>
 
                                 <span className="text-xs font-bold text-slate-400">
-                                  {companyRatings[criterion.id] || 3}
-                                  /5
+                                  {companyRatings[criterion.id] ?? 3}/5
                                 </span>
                               </div>
 
                               <select
                                 className={`block w-full border rounded-lg mt-3 px-2 py-2 text-sm ${inputClass}`}
-                                value={companyRatings[criterion.id] || 3}
+                                value={companyRatings[criterion.id] ?? 3}
                                 onChange={(event) =>
                                   updateRating(criterion.id, event.target.value)
                                 }

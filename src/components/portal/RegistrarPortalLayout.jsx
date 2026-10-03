@@ -3,43 +3,6 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabaseRegistrar } from "../../supabaseClient";
 
 // =========================================================
-// TEMPORARY FRONTEND NOTIFICATIONS
-// =========================================================
-
-const initialNotifications = [
-  {
-    id: "NOT-001",
-    title: "Internship Application Submitted",
-    message:
-      "A student has successfully submitted an internship application and it is awaiting registrar review.",
-    relatedEntityType: "InternshipApplication",
-    relatedEntityId: "APP-001",
-    createdAt: "2026-08-18T08:30:00.000Z",
-    readAt: null,
-  },
-  {
-    id: "NOT-002",
-    title: "Document Submission Received",
-    message:
-      "A student has submitted internship documents that are ready for registrar review.",
-    relatedEntityType: "DocumentSubmission",
-    relatedEntityId: "DOC-001",
-    createdAt: "2026-08-17T14:15:00.000Z",
-    readAt: null,
-  },
-  {
-    id: "NOT-003",
-    title: "Student Record Updated",
-    message:
-      "A student record has been updated and is available for review in the Student Records section.",
-    relatedEntityType: "StudentRecord",
-    relatedEntityId: "STU-001",
-    createdAt: "2026-08-16T09:00:00.000Z",
-    readAt: "2026-08-16T10:00:00.000Z",
-  },
-];
-
-// =========================================================
 // COMPONENT
 // =========================================================
 
@@ -184,9 +147,7 @@ const RegistrarPortalLayout = () => {
 
   const getRegistrarFullName = () => {
     const firstName = registrarProfile.first_name?.trim() || "";
-
     const middleName = registrarProfile.middle_name?.trim() || "";
-
     const lastName = registrarProfile.last_name?.trim() || "";
 
     return [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
@@ -200,7 +161,6 @@ const RegistrarPortalLayout = () => {
 
   const getRegistrarInitials = () => {
     const firstName = registrarProfile.first_name?.trim() || "";
-
     const lastName = registrarProfile.last_name?.trim() || "";
 
     if (firstName && lastName) {
@@ -303,9 +263,7 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const [sidebarWidth, setSidebarWidth] = useState(280);
-
   const [isResizing, setIsResizing] = useState(false);
-
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // =========================================================
@@ -328,9 +286,9 @@ const RegistrarPortalLayout = () => {
   // NOTIFICATION STATE
   // =========================================================
 
-  const [notifications, setNotifications] = useState(initialNotifications);
-
+  const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // =========================================================
   // LOGOUT CONFIRMATION
@@ -341,6 +299,259 @@ const RegistrarPortalLayout = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // =========================================================
+  // LOAD NOTIFICATIONS
+  // =========================================================
+
+  const mapNotification = (notification) => ({
+    id: notification.id,
+    recipientId: notification.recipient_id,
+    recipientRole: notification.recipient_role,
+    type: notification.type,
+    category: notification.category,
+    title: notification.title,
+    message: notification.message,
+    relatedEntityType: notification.related_entity_type,
+    relatedEntityId: notification.related_entity_id,
+    actionPath: notification.action_path,
+    createdBy: notification.created_by,
+    readAt: notification.read_at,
+    createdAt: notification.created_at,
+  });
+
+  const loadNotifications = async (userId = null) => {
+    try {
+      setNotificationsLoading(true);
+
+      let currentUserId = userId;
+
+      if (!currentUserId) {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (authError) {
+          console.error("Error getting user for notifications:", authError);
+          return;
+        }
+
+        currentUserId = user?.id;
+      }
+
+      if (!currentUserId) {
+        setNotifications([]);
+        return;
+      }
+
+      const { data, error } = await supabaseRegistrar
+        .from("notifications")
+        .select(
+          `
+            id,
+            recipient_id,
+            recipient_role,
+            type,
+            category,
+            title,
+            message,
+            related_entity_type,
+            related_entity_id,
+            action_path,
+            created_by,
+            read_at,
+            created_at
+          `
+        )
+        .eq("recipient_id", currentUserId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error loading registrar notifications:", error);
+
+        setNotifications([]);
+        return;
+      }
+
+      setNotifications((data || []).map(mapNotification));
+    } catch (error) {
+      console.error("Unexpected notification loading error:", error);
+
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  // =========================================================
+  // INITIAL NOTIFICATION LOAD
+  // =========================================================
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeNotifications = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (error) {
+          console.error("Notification auth error:", error);
+          return;
+        }
+
+        if (!user || !isMounted) {
+          return;
+        }
+
+        await loadNotifications(user.id);
+      } catch (error) {
+        console.error("Notification initialization error:", error);
+      }
+    };
+
+    initializeNotifications();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // REALTIME NOTIFICATIONS
+  // =========================================================
+  //
+  // New notifications inserted for this registrar will
+  // automatically appear in the dropdown.
+  //
+  // Supabase Postgres Changes supports INSERT/UPDATE/DELETE
+  // listeners with row filters.
+  // =========================================================
+
+  useEffect(() => {
+    let channel = null;
+    let isMounted = true;
+
+    const subscribeToNotifications = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (error) {
+          console.error("Realtime notification auth error:", error);
+          return;
+        }
+
+        if (!user || !isMounted) {
+          return;
+        }
+
+        channel = supabaseRegistrar
+          .channel(`registrar-notifications-${user.id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "notifications",
+              filter: `recipient_id=eq.${user.id}`,
+            },
+            (payload) => {
+              console.log(
+                "[Registrar Notifications] Database change:",
+                payload
+              );
+
+              // -------------------------------------------------
+              // INSERT
+              // -------------------------------------------------
+
+              if (payload.eventType === "INSERT") {
+                const newNotification = mapNotification(payload.new);
+
+                setNotifications((previous) => {
+                  const alreadyExists = previous.some(
+                    (notification) => notification.id === newNotification.id
+                  );
+
+                  if (alreadyExists) {
+                    return previous;
+                  }
+
+                  return [newNotification, ...previous].sort(
+                    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+                  );
+                });
+              }
+
+              // -------------------------------------------------
+              // UPDATE
+              // -------------------------------------------------
+
+              if (payload.eventType === "UPDATE") {
+                const updatedNotification = mapNotification(payload.new);
+
+                setNotifications((previous) =>
+                  previous
+                    .map((notification) =>
+                      notification.id === updatedNotification.id
+                        ? updatedNotification
+                        : notification
+                    )
+                    .sort(
+                      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+                    )
+                );
+
+                setSelectedNotification((previous) =>
+                  previous?.id === updatedNotification.id
+                    ? updatedNotification
+                    : previous
+                );
+              }
+
+              // -------------------------------------------------
+              // DELETE
+              // -------------------------------------------------
+
+              if (payload.eventType === "DELETE") {
+                const deletedId = payload.old?.id;
+
+                setNotifications((previous) =>
+                  previous.filter(
+                    (notification) => notification.id !== deletedId
+                  )
+                );
+
+                setSelectedNotification((previous) =>
+                  previous?.id === deletedId ? null : previous
+                );
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log("[Registrar Notifications] Realtime status:", status);
+          });
+      } catch (error) {
+        console.error("Unexpected realtime notification error:", error);
+      }
+    };
+
+    subscribeToNotifications();
+
+    return () => {
+      isMounted = false;
+
+      if (channel) {
+        supabaseRegistrar.removeChannel(channel);
+      }
+    };
+  }, []);
+
+  // =========================================================
   // NOTIFICATION CONTROLS
   // =========================================================
 
@@ -348,21 +559,96 @@ const RegistrarPortalLayout = () => {
     (notification) => !notification.readAt
   ).length;
 
-  const markNotificationRead = (notificationId) => {
+  // =========================================================
+  // MARK SINGLE NOTIFICATION AS READ
+  // =========================================================
+
+  const markNotificationRead = async (notificationId) => {
+    const notification = notifications.find(
+      (item) => item.id === notificationId
+    );
+
+    if (!notification || notification.readAt) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    // -------------------------------------------------------
+    // OPTIMISTIC UI
+    // -------------------------------------------------------
+
     setNotifications((previous) =>
-      previous.map((notification) =>
-        notification.id === notificationId
+      previous.map((item) =>
+        item.id === notificationId
           ? {
-              ...notification,
-              readAt: notification.readAt || new Date().toISOString(),
+              ...item,
+              readAt: now,
             }
-          : notification
+          : item
       )
     );
+
+    setSelectedNotification((previous) =>
+      previous?.id === notificationId
+        ? {
+            ...previous,
+            readAt: now,
+          }
+        : previous
+    );
+
+    // -------------------------------------------------------
+    // DATABASE
+    // -------------------------------------------------------
+
+    const { error } = await supabaseRegistrar
+      .from("notifications")
+      .update({
+        read_at: now,
+      })
+      .eq("id", notificationId);
+
+    if (error) {
+      console.error("Error marking notification as read:", error);
+
+      // Revert optimistic update
+      setNotifications((previous) =>
+        previous.map((item) =>
+          item.id === notificationId
+            ? {
+                ...item,
+                readAt: notification.readAt,
+              }
+            : item
+        )
+      );
+
+      setSelectedNotification((previous) =>
+        previous?.id === notificationId
+          ? {
+              ...previous,
+              readAt: notification.readAt,
+            }
+          : previous
+      );
+    }
   };
 
-  const markAllNotificationsRead = () => {
+  // =========================================================
+  // MARK ALL NOTIFICATIONS AS READ
+  // =========================================================
+
+  const markAllNotificationsRead = async () => {
+    if (unreadCount === 0) {
+      return;
+    }
+
     const now = new Date().toISOString();
+
+    // -------------------------------------------------------
+    // OPTIMISTIC UI
+    // -------------------------------------------------------
 
     setNotifications((previous) =>
       previous.map((notification) => ({
@@ -370,30 +656,98 @@ const RegistrarPortalLayout = () => {
         readAt: notification.readAt || now,
       }))
     );
+
+    // -------------------------------------------------------
+    // CURRENT USER
+    // -------------------------------------------------------
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseRegistrar.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Unable to get current user:", authError);
+
+      loadNotifications();
+      return;
+    }
+
+    // -------------------------------------------------------
+    // DATABASE
+    // -------------------------------------------------------
+
+    const { error } = await supabaseRegistrar
+      .from("notifications")
+      .update({
+        read_at: now,
+      })
+      .eq("recipient_id", user.id)
+      .is("read_at", null);
+
+    if (error) {
+      console.error("Error marking all notifications as read:", error);
+
+      loadNotifications(user.id);
+    }
   };
+
+  // =========================================================
+  // DELETE NOTIFICATION
+  // =========================================================
+  //
+  // IMPORTANT:
+  // Your current RLS allows DELETE only for admins.
+  //
+  // Therefore we do NOT attempt to delete the database row
+  // from the registrar client.
+  //
+  // The dropdown simply does not expose delete anymore.
+  // =========================================================
 
   const deleteNotification = (notificationId) => {
-    setNotifications((previous) =>
-      previous.filter((notification) => notification.id !== notificationId)
-    );
-
-    setSelectedNotification((current) =>
-      current?.id === notificationId ? null : current
+    console.warn(
+      "Registrars cannot delete notifications. Notification:",
+      notificationId
     );
   };
 
-  const openNotification = (notification) => {
-    const updatedNotification = {
-      ...notification,
-      readAt: notification.readAt || new Date().toISOString(),
-    };
+  // =========================================================
+  // OPEN NOTIFICATION
+  // =========================================================
 
-    markNotificationRead(notification.id);
+  const openNotification = async (notification) => {
+    if (!notification) {
+      return;
+    }
 
-    setSelectedNotification(updatedNotification);
+    // -------------------------------------------------------
+    // MARK AS READ
+    // -------------------------------------------------------
+
+    if (!notification.readAt) {
+      await markNotificationRead(notification.id);
+    }
+
+    // -------------------------------------------------------
+    // CLOSE DROPDOWN
+    // -------------------------------------------------------
 
     setIsNotificationOpen(false);
+
+    // -------------------------------------------------------
+    // OPEN MODAL
+    // -------------------------------------------------------
+
+    setSelectedNotification({
+      ...notification,
+      readAt: notification.readAt || new Date().toISOString(),
+    });
   };
+
+  // =========================================================
+  // CLOSE NOTIFICATION MODAL
+  // =========================================================
 
   const closeNotificationModal = () => {
     setSelectedNotification(null);
@@ -714,6 +1068,7 @@ const RegistrarPortalLayout = () => {
 
       if (signOutError) {
         console.error("Logout error:", signOutError);
+
         setIsLoggingOut(false);
         return;
       }
@@ -835,8 +1190,6 @@ const RegistrarPortalLayout = () => {
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
-                  {/* ACTIVE INDICATOR */}
-
                   {active && (
                     <span
                       className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full ${
@@ -938,7 +1291,6 @@ const RegistrarPortalLayout = () => {
 
       {/* ===================================================
           LOGOUT
-          FIXED INSIDE SIDEBAR
       =================================================== */}
 
       <div
@@ -976,7 +1328,6 @@ const RegistrarPortalLayout = () => {
     >
       {/* =====================================================
           DESKTOP SIDEBAR
-          FIXED TO VIEWPORT
       ===================================================== */}
 
       <aside
@@ -991,9 +1342,7 @@ const RegistrarPortalLayout = () => {
       >
         {renderSidebarContent(false)}
 
-        {/* =================================================
-            RESIZE HANDLE
-        ================================================= */}
+        {/* RESIZE HANDLE */}
 
         <div
           role="separator"
@@ -1013,13 +1362,7 @@ const RegistrarPortalLayout = () => {
         />
       </aside>
 
-      {/* =====================================================
-          DESKTOP SPACER
-
-          IMPORTANT:
-          This reserves the same width as the fixed sidebar.
-          The parent MUST be flex.
-      ===================================================== */}
+      {/* DESKTOP SPACER */}
 
       <div
         className="hidden flex-shrink-0 lg:block"
@@ -1031,8 +1374,6 @@ const RegistrarPortalLayout = () => {
 
       {/* =====================================================
           MAIN AREA
-
-          flex-1 prevents sidebar overlap.
       ===================================================== */}
 
       <div className="min-h-screen min-w-0 flex-1">
@@ -1047,9 +1388,7 @@ const RegistrarPortalLayout = () => {
               : "bg-white border-slate-200 text-slate-900"
           }`}
         >
-          {/* =================================================
-              LEFT
-          ================================================= */}
+          {/* LEFT */}
 
           <div className="flex items-center min-w-0 gap-3">
             {/* MOBILE MENU */}
@@ -1080,14 +1419,10 @@ const RegistrarPortalLayout = () => {
             </div>
           </div>
 
-          {/* =================================================
-              RIGHT
-          ================================================= */}
+          {/* RIGHT */}
 
           <div className="flex items-center gap-1 sm:gap-3 ml-auto flex-shrink-0">
-            {/* =================================================
-                DARK MODE
-            ================================================= */}
+            {/* DARK MODE */}
 
             <button
               type="button"
@@ -1168,7 +1503,9 @@ const RegistrarPortalLayout = () => {
                           darkMode ? "text-slate-400" : "text-slate-500"
                         }`}
                       >
-                        {unreadCount > 0
+                        {notificationsLoading
+                          ? "Loading..."
+                          : unreadCount > 0
                           ? `${unreadCount} unread`
                           : "All caught up"}
                       </p>
@@ -1199,7 +1536,19 @@ const RegistrarPortalLayout = () => {
                       touchAction: "pan-y",
                     }}
                   >
-                    {notifications.length === 0 ? (
+                    {notificationsLoading ? (
+                      <div className="p-6 text-center">
+                        <div className="text-2xl mb-2 animate-pulse">🔔</div>
+
+                        <p
+                          className={`text-xs ${
+                            darkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
+                          Loading notifications...
+                        </p>
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <div className="p-6 text-center">
                         <div className="text-2xl mb-2">🔔</div>
 
@@ -1224,7 +1573,7 @@ const RegistrarPortalLayout = () => {
                           <button
                             type="button"
                             onClick={() => openNotification(notification)}
-                            className="w-full text-left px-4 py-3 pr-12"
+                            className="w-full text-left px-4 py-3"
                           >
                             <div className="flex gap-3">
                               <div className="pt-1.5 flex-shrink-0">
@@ -1269,29 +1618,6 @@ const RegistrarPortalLayout = () => {
                                 </p>
                               </div>
                             </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => deleteNotification(notification.id)}
-                            aria-label="Delete notification"
-                            className={`
-                                absolute right-3 top-3
-                                flex h-7 w-7
-                                items-center justify-center
-                                rounded-lg
-                                text-xs
-                                opacity-100
-                                transition
-                                sm:opacity-0 sm:group-hover:opacity-100
-                                ${
-                                  darkMode
-                                    ? "text-slate-400 hover:bg-red-500/10 hover:text-red-400"
-                                    : "text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                }
-                              `}
-                          >
-                            ✕
                           </button>
                         </div>
                       ))
@@ -1379,9 +1705,7 @@ const RegistrarPortalLayout = () => {
                 </span>
               </button>
 
-              {/* =================================================
-                  PROFILE DROPDOWN
-              ================================================= */}
+              {/* PROFILE DROPDOWN */}
 
               {isProfileOpen && (
                 <div
@@ -1630,41 +1954,61 @@ const RegistrarPortalLayout = () => {
 
               {/* RELATED RECORD */}
 
-              <div
-                className={`mt-5 p-4 rounded-xl border ${
-                  darkMode
-                    ? "bg-slate-800 border-slate-700"
-                    : "bg-slate-50 border-slate-100"
-                }`}
-              >
-                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                  Related Record
-                </p>
-
-                <p className="text-sm font-semibold mt-1 break-words">
-                  {selectedNotification.relatedEntityType}
-                </p>
-
-                <p
-                  className={`text-xs mt-1 break-all ${
-                    darkMode ? "text-slate-400" : "text-slate-500"
+              {selectedNotification.relatedEntityType && (
+                <div
+                  className={`mt-5 p-4 rounded-xl border ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700"
+                      : "bg-slate-50 border-slate-100"
                   }`}
                 >
-                  ID: {selectedNotification.relatedEntityId}
-                </p>
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                    Related Record
+                  </p>
 
-                <p
-                  className={`text-xs mt-2 ${
-                    darkMode ? "text-slate-500" : "text-slate-400"
-                  }`}
-                >
-                  {new Date(selectedNotification.createdAt).toLocaleString()}
-                </p>
-              </div>
+                  <p className="text-sm font-semibold mt-1 break-words">
+                    {selectedNotification.relatedEntityType}
+                  </p>
+
+                  {selectedNotification.relatedEntityId && (
+                    <p
+                      className={`text-xs mt-1 break-all ${
+                        darkMode ? "text-slate-400" : "text-slate-500"
+                      }`}
+                    >
+                      ID: {selectedNotification.relatedEntityId}
+                    </p>
+                  )}
+
+                  <p
+                    className={`text-xs mt-2 ${
+                      darkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
+                    {new Date(selectedNotification.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              )}
 
               {/* CONTROLS */}
 
               <div className="mt-6 flex flex-wrap justify-end gap-2">
+                {/* PLACEMENT CONFIRMED */}
+                {selectedNotification.type === "placement_confirmed" &&
+                  selectedNotification.relatedEntityType ===
+                    "InternshipApplication" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeNotificationModal();
+
+                        navigateTo("/registrar/deployment");
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
+                    >
+                      Deploy this student
+                    </button>
+                  )}
                 {/* APPLICATION */}
 
                 {selectedNotification.relatedEntityType ===
@@ -1720,20 +2064,9 @@ const RegistrarPortalLayout = () => {
                 {!selectedNotification.readAt && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const now = new Date().toISOString();
-
-                      markNotificationRead(selectedNotification.id);
-
-                      setSelectedNotification((previous) =>
-                        previous
-                          ? {
-                              ...previous,
-                              readAt: now,
-                            }
-                          : previous
-                      );
-                    }}
+                    onClick={() =>
+                      markNotificationRead(selectedNotification.id)
+                    }
                     className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                       darkMode
                         ? "border-slate-700 text-slate-300 hover:bg-slate-800"
@@ -1744,20 +2077,18 @@ const RegistrarPortalLayout = () => {
                   </button>
                 )}
 
-                {/* DELETE */}
+                {/* CLOSE */}
 
                 <button
                   type="button"
-                  onClick={() => {
-                    deleteNotification(selectedNotification.id);
-                  }}
+                  onClick={closeNotificationModal}
                   className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition ${
                     darkMode
-                      ? "border-red-900 text-red-400 hover:bg-red-950"
-                      : "border-red-200 text-red-500 hover:bg-red-50"
+                      ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                      : "border-slate-200 text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  Delete
+                  Close
                 </button>
               </div>
             </div>

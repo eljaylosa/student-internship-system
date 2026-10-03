@@ -17,6 +17,7 @@ import { supabaseCompany } from "../../supabaseClient";
 // - Position
 // - Year level
 // - Internship assignment information
+// - Internship period progress
 // - Mark internship as completed
 // - Evaluate completed interns
 //
@@ -120,6 +121,89 @@ export default function Interns() {
   };
 
   // =========================================================
+  // CALCULATE INTERNSHIP PERIOD PROGRESS
+  // =========================================================
+  //
+  // Progress is based ONLY on the internship period:
+  //
+  // Before start date:
+  // 0%
+  //
+  // During internship:
+  // elapsed time / total internship duration
+  //
+  // On or after end date:
+  // 100%
+  //
+  // Completed assignments:
+  // 100%
+  //
+  // This does NOT represent attendance or daily work progress.
+  //
+  // =========================================================
+
+  const getInternshipProgress = (assignment) => {
+    if (!assignment?.start_date || !assignment?.end_date) {
+      return {
+        percentage: null,
+        status: "Unavailable",
+      };
+    }
+
+    const start = new Date(assignment.start_date);
+    const end = new Date(assignment.end_date);
+    const now = new Date();
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      end.getTime() <= start.getTime()
+    ) {
+      return {
+        percentage: null,
+        status: "Unavailable",
+      };
+    }
+
+    // Completed internships are always 100%.
+    if (assignment.status === ASSIGNMENT_STATUS.COMPLETED) {
+      return {
+        percentage: 100,
+        status: "Completed",
+      };
+    }
+
+    // Before the internship starts.
+    if (now.getTime() <= start.getTime()) {
+      return {
+        percentage: 0,
+        status: "Not Started",
+      };
+    }
+
+    // Internship period has ended.
+    if (now.getTime() >= end.getTime()) {
+      return {
+        percentage: 100,
+        status: "Period Ended",
+      };
+    }
+
+    const totalDuration = end.getTime() - start.getTime();
+    const elapsedDuration = now.getTime() - start.getTime();
+
+    const percentage = Math.min(
+      100,
+      Math.max(0, Math.round((elapsedDuration / totalDuration) * 100))
+    );
+
+    return {
+      percentage,
+      status: "In Progress",
+    };
+  };
+
+  // =========================================================
   // LOAD ASSIGNED INTERNS
   // =========================================================
 
@@ -188,6 +272,7 @@ export default function Interns() {
       //
       // deployed_at must exist because this page is specifically
       // for officially deployed interns.
+      //
       // -------------------------------------------------------
 
       const { data: assignmentRows, error: assignmentError } =
@@ -646,25 +731,10 @@ export default function Interns() {
       // UPDATE REAL DATABASE ASSIGNMENT
       // -------------------------------------------------------
 
-      const now = new Date().toISOString();
-
       const { data: updatedAssignment, error: updateError } =
-        await supabaseCompany
-          .from("assignments")
-          .update({
-            status: COMPLETED_STATUS,
-            updated_at: now,
-          })
-          .eq("id", assignmentId)
-          .eq("status", ASSIGNMENT_STATUS.ACTIVE)
-          .select(
-            `
-            id,
-            status,
-            updated_at
-          `
-          )
-          .maybeSingle();
+        await supabaseCompany.rpc("complete_internship_assignment", {
+          p_assignment_id: assignmentId,
+        });
 
       if (updateError) {
         throw updateError;
@@ -869,9 +939,7 @@ export default function Interns() {
                   {totalCount}
                 </p>
 
-                <p className={`text-xs mt-1 ${muted}`}>
-                  Officially deployed
-                </p>
+                <p className={`text-xs mt-1 ${muted}`}>Officially deployed</p>
               </div>
 
               <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
@@ -893,9 +961,7 @@ export default function Interns() {
                   {activeCount}
                 </p>
 
-                <p className={`text-xs mt-1 ${muted}`}>
-                  Currently accepted
-                </p>
+                <p className={`text-xs mt-1 ${muted}`}>Currently accepted</p>
               </div>
 
               <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
@@ -915,9 +981,7 @@ export default function Interns() {
                   {completedCount}
                 </p>
 
-                <p className={`text-xs mt-1 ${muted}`}>
-                  Finished internships
-                </p>
+                <p className={`text-xs mt-1 ${muted}`}>Finished internships</p>
               </div>
 
               <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-xl">
@@ -1016,9 +1080,7 @@ export default function Interns() {
               {filteredAssignments.length}
             </span>{" "}
             of{" "}
-            <span className={`font-bold ${heading}`}>
-              {assignments.length}
-            </span>{" "}
+            <span className={`font-bold ${heading}`}>{assignments.length}</span>{" "}
             assigned interns
           </div>
         </section>
@@ -1037,9 +1099,8 @@ export default function Interns() {
               </p>
 
               <p className={`text-sm mt-1 max-w-md mx-auto ${muted}`}>
-                Students will appear here after the registrar officially
-                deploys them and your company accepts their internship
-                placement.
+                Students will appear here after the registrar officially deploys
+                them and your company accepts their internship placement.
               </p>
             </div>
           </section>
@@ -1120,13 +1181,13 @@ export default function Interns() {
 
                 const isProcessing = processingId === assignment.id;
 
+                const internshipProgress = getInternshipProgress(assignment);
+
                 return (
                   <div
                     key={assignment.id}
                     className={`p-5 transition ${
-                      darkMode
-                        ? "hover:bg-slate-800/60"
-                        : "hover:bg-slate-50"
+                      darkMode ? "hover:bg-slate-800/60" : "hover:bg-slate-50"
                     }`}
                   >
                     <div className="flex flex-col xl:flex-row xl:items-center gap-6">
@@ -1172,7 +1233,9 @@ export default function Interns() {
                           }}
                           aria-label={
                             student?.profilePhotoUrl
-                              ? `View ${student.fullName || "student"} profile photo`
+                              ? `View ${
+                                  student.fullName || "student"
+                                } profile photo`
                               : undefined
                           }
                         >
@@ -1236,9 +1299,7 @@ export default function Interns() {
                           School
                         </p>
 
-                        <p
-                          className={`text-sm font-semibold mt-1 ${heading}`}
-                        >
+                        <p className={`text-sm font-semibold mt-1 ${heading}`}>
                           {school?.name || "School not specified"}
                         </p>
 
@@ -1260,9 +1321,7 @@ export default function Interns() {
                           Position
                         </p>
 
-                        <p
-                          className={`text-sm font-semibold mt-1 ${heading}`}
-                        >
+                        <p className={`text-sm font-semibold mt-1 ${heading}`}>
                           {opportunity?.title || "Position not specified"}
                         </p>
 
@@ -1284,9 +1343,7 @@ export default function Interns() {
                           Year Level
                         </p>
 
-                        <p
-                          className={`text-sm font-semibold mt-1 ${heading}`}
-                        >
+                        <p className={`text-sm font-semibold mt-1 ${heading}`}>
                           {student?.yearLevel || "Not specified"}
                         </p>
 
@@ -1298,19 +1355,17 @@ export default function Interns() {
                       </div>
 
                       {/* =========================================
-                          INTERNSHIP PERIOD
+                          INTERNSHIP PERIOD + PROGRESS
                       ========================================= */}
 
-                      <div className="xl:flex-1 xl:min-w-[190px]">
+                      <div className="xl:flex-1 xl:min-w-[220px]">
                         <p
                           className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
                         >
                           Internship Period
                         </p>
 
-                        <p
-                          className={`text-sm font-semibold mt-1 ${heading}`}
-                        >
+                        <p className={`text-sm font-semibold mt-1 ${heading}`}>
                           {assignment.start_date
                             ? new Date(
                                 assignment.start_date
@@ -1321,11 +1376,81 @@ export default function Interns() {
                         <p className={`text-xs ${muted}`}>
                           to{" "}
                           {assignment.end_date
-                            ? new Date(
-                                assignment.end_date
-                              ).toLocaleDateString()
+                            ? new Date(assignment.end_date).toLocaleDateString()
                             : "N/A"}
                         </p>
+
+                        {/* -----------------------------------------
+                            PROGRESS LABEL
+                        ----------------------------------------- */}
+
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p
+                              className={`text-[10px] uppercase tracking-wide font-bold ${muted}`}
+                            >
+                              Internship Progress
+                            </p>
+
+                            <p
+                              className={`text-xs font-bold ${
+                                internshipProgress.percentage === 100
+                                  ? "text-blue-600"
+                                  : internshipProgress.percentage !== null
+                                  ? "text-emerald-600"
+                                  : muted
+                              }`}
+                            >
+                              {internshipProgress.percentage !== null
+                                ? `${internshipProgress.percentage}%`
+                                : "N/A"}
+                            </p>
+                          </div>
+
+                          {/* -----------------------------------------
+                              PROGRESS BAR
+                          ----------------------------------------- */}
+
+                          <div
+                            className={`w-full h-2.5 rounded-full overflow-hidden ${
+                              darkMode ? "bg-slate-700" : "bg-slate-200"
+                            }`}
+                            role="progressbar"
+                            aria-valuenow={internshipProgress.percentage ?? 0}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-label={`Internship progress for ${
+                              student?.fullName || "student"
+                            }`}
+                          >
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                internshipProgress.percentage === 100
+                                  ? "bg-blue-600"
+                                  : "bg-emerald-500"
+                              }`}
+                              style={{
+                                width: `${internshipProgress.percentage ?? 0}%`,
+                              }}
+                            />
+                          </div>
+
+                          {/* -----------------------------------------
+                              PROGRESS STATUS
+                          ----------------------------------------- */}
+
+                          <p className={`text-[10px] mt-1.5 ${muted}`}>
+                            {internshipProgress.status === "Not Started"
+                              ? "Internship has not started yet."
+                              : internshipProgress.status === "Period Ended"
+                              ? "Internship period has ended."
+                              : internshipProgress.status === "Completed"
+                              ? "Internship completed."
+                              : internshipProgress.status === "In Progress"
+                              ? "Based on the scheduled internship period."
+                              : "Internship period is unavailable."}
+                          </p>
+                        </div>
                       </div>
 
                       {/* =========================================
@@ -1361,9 +1486,7 @@ export default function Interns() {
                                 : "bg-blue-600 hover:bg-blue-700"
                             }`}
                           >
-                            {isProcessing
-                              ? "Updating..."
-                              : "Mark as Completed"}
+                            {isProcessing ? "Updating..." : "Mark as Completed"}
                           </button>
                         )}
                       </div>
@@ -1407,23 +1530,23 @@ export default function Interns() {
         )}
 
         {/* =====================================================
-            LIMITATION NOTICE
+            PROGRESS INFORMATION
         ===================================================== */}
 
         <div
           className={`mt-5 p-4 rounded-xl border text-xs ${
             darkMode
-              ? "bg-amber-950/30 border-amber-900 text-amber-300"
-              : "bg-amber-50 border-amber-200 text-amber-700"
+              ? "bg-slate-900/60 border-slate-700 text-slate-400"
+              : "bg-slate-50 border-slate-200 text-slate-500"
           }`}
         >
-          <p className="font-bold mb-1">ℹ️ Current System Limitation</p>
+          <p className={`font-bold mb-1 ${heading}`}>ℹ️ Internship Progress</p>
 
           <p>
-            Attendance and daily internship progress are not tracked by the
-            company portal in the current version of the system. This page is
-            limited to viewing officially deployed interns and managing
-            internship completion status.
+            The progress bar shows the percentage of the scheduled internship
+            period that has elapsed based on the assigned start and end dates.
+            It does not track attendance, hours worked, or daily internship
+            activities.
           </p>
         </div>
       </div>
@@ -1474,4 +1597,3 @@ export default function Interns() {
     </>
   );
 }
-
