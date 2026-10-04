@@ -427,18 +427,18 @@ export default function Application() {
           .from("assignments")
           .select(
             `
-              id,
-              application_id,
-              student_id,
-              opportunity_id,
-              company_id,
-              status,
-              start_date,
-              end_date,
-              deployed_at,
-              created_at,
-              updated_at
-            `
+            id,
+            application_id,
+            student_id,
+            opportunity_id,
+            company_id,
+            status,
+            start_date,
+            end_date,
+            deployed_at,
+            created_at,
+            updated_at
+          `
           )
           .eq("student_id", user.id)
           .order("created_at", { ascending: false });
@@ -476,6 +476,10 @@ export default function Application() {
         ),
       ];
 
+      // -------------------------------------------------------
+      // EXISTING OPPORTUNITIES FROM ASSIGNMENTS
+      // -------------------------------------------------------
+
       const assignmentOpportunityIds = [
         ...new Set(
           (assignmentData || [])
@@ -483,6 +487,10 @@ export default function Application() {
             .filter(Boolean)
         ),
       ];
+
+      // -------------------------------------------------------
+      // ALL EXISTING OPPORTUNITY IDS
+      // -------------------------------------------------------
 
       const existingOpportunityIds = [
         ...new Set([...applicationOpportunityIds, ...assignmentOpportunityIds]),
@@ -504,12 +512,66 @@ export default function Application() {
       }
 
       // -------------------------------------------------------
-      // MERGE OPPORTUNITIES
+      // COMPANIES
+      // -------------------------------------------------------
+
+      const allOpportunityRows = [
+        ...(activeOpportunities || []),
+        ...existingOpportunities,
+      ];
+
+      const companyIds = [
+        ...new Set(
+          allOpportunityRows
+            .map((opportunity) => opportunity.company_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      let companyMap = new Map();
+
+      if (companyIds.length > 0) {
+        const { data: companyData, error: companyError } = await supabaseStudent
+          .from("companies")
+          .select(
+            `
+              id,
+              company_name,
+              company_address,
+              industry,
+              status
+            `
+          )
+          .in("id", companyIds);
+
+        if (companyError) {
+          throw companyError;
+        }
+
+        companyMap = new Map(
+          (companyData || []).map((company) => [company.id, company])
+        );
+      }
+
+      // -------------------------------------------------------
+      // ONLY SHOW ACTIVE-COMPANY OPPORTUNITIES IN BROWSE
+      // -------------------------------------------------------
+
+      const visibleActiveOpportunities = (activeOpportunities || []).filter(
+        (opportunity) => {
+          const company = companyMap.get(opportunity.company_id);
+
+          return company?.status === "active";
+        }
+      );
+
+      // -------------------------------------------------------
+      // MERGE BROWSE OPPORTUNITIES + EXISTING STUDENT OPPORTUNITIES
       // -------------------------------------------------------
 
       const opportunityMap = new Map();
 
-      [...(activeOpportunities || []), ...existingOpportunities].forEach(
+      [...visibleActiveOpportunities, ...existingOpportunities].forEach(
         (opportunity) => {
           opportunityMap.set(opportunity.id, opportunity);
         }
@@ -525,41 +587,8 @@ export default function Application() {
       );
 
       // -------------------------------------------------------
-      // COMPANIES
+      // ATTACH COMPANY DATA
       // -------------------------------------------------------
-
-      const companyIds = [
-        ...new Set(
-          mergedOpportunities
-            .map((opportunity) => opportunity.company_id)
-            .filter(Boolean)
-        ),
-      ];
-
-      let companyMap = new Map();
-
-      if (companyIds.length > 0) {
-        const { data: companyData, error: companyError } = await supabaseStudent
-          .from("companies")
-          .select(
-            `
-                id,
-                company_name,
-                company_address,
-                industry,
-                status
-              `
-          )
-          .in("id", companyIds);
-
-        if (companyError) {
-          throw companyError;
-        }
-
-        companyMap = new Map(
-          (companyData || []).map((company) => [company.id, company])
-        );
-      }
 
       const opportunitiesWithCompanies = mergedOpportunities.map(
         (opportunity) => ({
@@ -609,7 +638,9 @@ export default function Application() {
       // -------------------------------------------------------
 
       const firstActiveOpportunity = opportunitiesWithCompanies.find(
-        (opportunity) => opportunity.status === STATUS.opportunity.ACTIVE
+        (opportunity) =>
+          opportunity.status === STATUS.opportunity.ACTIVE &&
+          opportunity.companies?.status === "active"
       );
 
       const firstExistingOpportunity = opportunitiesWithCompanies.find(

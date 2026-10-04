@@ -551,16 +551,16 @@ export default function UserManagement() {
         .from("users")
         .select(
           `
-            id,
-            email,
-            role,
-            first_name,
-            middle_name,
-            last_name,
-            status,
-            created_at,
-            updated_at
-          `
+              id,
+              email,
+              role,
+              first_name,
+              middle_name,
+              last_name,
+              status,
+              created_at,
+              updated_at
+            `
         )
         .order("created_at", { ascending: false });
 
@@ -1123,13 +1123,13 @@ export default function UserManagement() {
         .from("users")
         .select(
           `
-            id,
-            email,
-            role,
-            first_name,
-            middle_name,
-            last_name
-          `
+              id,
+              email,
+              role,
+              first_name,
+              middle_name,
+              last_name
+            `
         )
         .eq("id", selectedUser.id)
         .maybeSingle();
@@ -1336,18 +1336,87 @@ export default function UserManagement() {
       }
 
       const previousStatus = user.status;
+      const now = new Date().toISOString();
 
-      const { error } = await supabase
+      // =========================================================
+      // ACTIVATE USER
+      // =========================================================
+
+      const { error: userUpdateError } = await supabase
         .from("users")
         .update({
           status: STATUS.ACTIVE,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         })
         .eq("id", user.id);
 
-      if (error) {
-        throw error;
+      if (userUpdateError) {
+        throw userUpdateError;
       }
+
+      // =========================================================
+      // ACTIVATE COMPANY PROFILE
+      // =========================================================
+      //
+      // Company accounts have:
+      // companies.user_id = users.id
+      //
+      // Keep non-company users unchanged.
+      // =========================================================
+
+      let companyWasActivated = false;
+
+      if (user.role === "company") {
+        const { data: companyRecord, error: companyLookupError } =
+          await supabase
+            .from("companies")
+            .select("id, company_name, status")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+        if (companyLookupError) {
+          // Roll the user back because the company state
+          // could not be checked safely.
+          await supabase
+            .from("users")
+            .update({
+              status: previousStatus,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+
+          throw companyLookupError;
+        }
+
+        if (companyRecord) {
+          const { error: companyUpdateError } = await supabase
+            .from("companies")
+            .update({
+              status: STATUS.ACTIVE,
+              updated_at: now,
+            })
+            .eq("id", companyRecord.id);
+
+          if (companyUpdateError) {
+            // Roll the user back so both records remain synchronized.
+            await supabase
+              .from("users")
+              .update({
+                status: previousStatus,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", user.id);
+
+            throw companyUpdateError;
+          }
+
+          companyWasActivated = true;
+        }
+      }
+
+      // =========================================================
+      // AUDIT LOG
+      // =========================================================
 
       const { error: auditError } = await supabase.functions.invoke(
         "create-audit-log",
@@ -1363,6 +1432,7 @@ export default function UserManagement() {
               email: user.email || null,
               previous_status: previousStatus,
               new_status: STATUS.ACTIVE,
+              company_activated: companyWasActivated,
             },
           },
         }
@@ -1371,6 +1441,10 @@ export default function UserManagement() {
       if (auditError) {
         console.error("Activate audit log error:", auditError);
       }
+
+      // =========================================================
+      // REFRESH USER LIST
+      // =========================================================
 
       await loadData();
 
@@ -1735,8 +1809,8 @@ export default function UserManagement() {
           ) : (
             <>
               {/* =================================================
-                  DESKTOP TABLE
-              ================================================== */}
+                    DESKTOP TABLE
+                ================================================== */}
 
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
@@ -1961,8 +2035,8 @@ export default function UserManagement() {
               </div>
 
               {/* =================================================
-                  MOBILE CARDS
-              ================================================== */}
+                    MOBILE CARDS
+                ================================================== */}
 
               <div className="md:hidden divide-y">
                 {paginatedUsers.map((user) => (
@@ -2196,8 +2270,8 @@ export default function UserManagement() {
       </div>
 
       {/* =======================================================
-          EDIT MODAL
-      ======================================================== */}
+            EDIT MODAL
+        ======================================================== */}
 
       {showEditModal && selectedUser && (
         <div
@@ -2423,8 +2497,8 @@ export default function UserManagement() {
       )}
 
       {/* =======================================================
-          DEACTIVATE / SOFT DELETE MODAL
-      ======================================================== */}
+            DEACTIVATE / SOFT DELETE MODAL
+        ======================================================== */}
 
       {showDeactivateModal && userToDeactivate && (
         <div
