@@ -1,127 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseRegistrar } from "../../supabaseClient";
 
 const Messages = () => {
   const { darkMode } = useOutletContext();
 
   // =========================================================
-  // CONTACTS
-  // =========================================================
-
-  const contacts = [
-    {
-      id: 1,
-      name: "John Doe",
-      role: "Student",
-      unread: 2,
-    },
-    {
-      id: 2,
-      name: "Prof. Davis",
-      role: "Registrar Adviser",
-      unread: 0,
-    },
-    {
-      id: 3,
-      name: "ABC Corp",
-      role: "Company Supervisor",
-      unread: 1,
-    },
-    {
-      id: 4,
-      name: "Sarah Lee",
-      role: "Student",
-      unread: 0,
-    },
-    {
-      id: 5,
-      name: "XYZ Ltd",
-      role: "Company Supervisor",
-      unread: 0,
-    },
-  ];
-
-  // =========================================================
-  // INITIAL MESSAGES
-  // =========================================================
-
-  const initialMessages = {
-    1: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Good morning, Professor. I wanted to ask about my internship evaluation.",
-        time: "9:20 AM",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Good morning, John. Sure, what would you like to know?",
-        time: "9:24 AM",
-      },
-      {
-        id: 3,
-        sender: "received",
-        text: "I wanted to know if I need to submit any additional documents.",
-        time: "9:26 AM",
-      },
-      {
-        id: 4,
-        sender: "sent",
-        text: "I'll check your records and let you know if anything is missing.",
-        time: "9:30 AM",
-      },
-    ],
-
-    2: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Have you already reviewed the latest student submissions?",
-        time: "Yesterday",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Yes. I'm currently checking the remaining applications.",
-        time: "Yesterday",
-      },
-    ],
-
-    3: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Good day. We would like to provide an update regarding John's internship.",
-        time: "10:15 AM",
-      },
-    ],
-
-    4: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Professor, I have already uploaded my evaluation documents.",
-        time: "Monday",
-      },
-    ],
-
-    5: [
-      {
-        id: 1,
-        sender: "received",
-        text: "We have received the internship documents for your assigned student.",
-        time: "Friday",
-      },
-    ],
-  };
-
-  // =========================================================
   // STATE
   // =========================================================
 
-  const [selectedContact, setSelectedContact] = useState(contacts[0]);
-  const [messages, setMessages] = useState(initialMessages);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [selectedContact, setSelectedContact] = useState(null);
+
+  const [messages, setMessages] = useState({});
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -186,6 +79,215 @@ const Messages = () => {
   };
 
   // =========================================================
+  // GET FULL NAME
+  // =========================================================
+
+  const buildName = (user) => {
+    return [user?.first_name, user?.middle_name, user?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  };
+
+  // =========================================================
+  // GET INITIALS
+  // =========================================================
+
+  const getInitials = (name) => {
+    if (!name) return "?";
+
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  };
+
+  // =========================================================
+  // GET PROFILE PHOTO URL
+  // =========================================================
+
+  const getProfilePhotoUrl = (storedPath) => {
+    if (!storedPath) return null;
+
+    const normalizedPath = storedPath.startsWith("profile-photos/")
+      ? storedPath
+      : `profile-photos/${storedPath}`;
+
+    const { data } = supabaseRegistrar.storage
+      .from("profile-photos")
+      .getPublicUrl(normalizedPath);
+
+    return data?.publicUrl || null;
+  };
+
+  // =========================================================
+  // LOAD CURRENT USER
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCurrentUser = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (error) {
+          console.error("[Registrar Messages] Auth user error:", error);
+          return;
+        }
+
+        if (!mounted) return;
+
+        setCurrentUser(user || null);
+
+        console.log("[Registrar Messages] Current user:", user?.id || null);
+      } catch (error) {
+        console.error(
+          "[Registrar Messages] Failed to load current user:",
+          error
+        );
+      }
+    };
+
+    loadCurrentUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // LOAD REGISTRAR CONTACTS
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadContacts = async () => {
+      setContactsLoading(true);
+
+      try {
+        const { data, error } = await supabaseRegistrar.rpc(
+          "get_registrar_message_contacts"
+        );
+
+        if (error) {
+          console.error("[Registrar Messages] Contact RPC error:", error);
+
+          if (mounted) {
+            setContacts([]);
+            setSelectedContact(null);
+          }
+
+          return;
+        }
+
+        console.log("[Registrar Messages] Contact RPC result:", data);
+
+        // =====================================================
+        // LOAD PROFILE PHOTOS
+        // =====================================================
+
+        const contactIds = (data || [])
+          .map((person) => person.id)
+          .filter(Boolean);
+
+        let profileMap = {};
+
+        if (contactIds.length > 0) {
+          const { data: profiles, error: profileError } =
+            await supabaseRegistrar
+              .from("students")
+              .select("id, profile_photo_url")
+              .in("id", contactIds);
+
+          if (profileError) {
+            console.error(
+              "[Registrar Messages] Profile photo query error:",
+              profileError
+            );
+          } else {
+            profileMap = (profiles || []).reduce((map, profile) => {
+              map[profile.id] = profile.profile_photo_url || null;
+              return map;
+            }, {});
+          }
+        }
+
+        // =====================================================
+        // FORMAT CONTACTS
+        // =====================================================
+
+        const formattedContacts = (data || []).map((person) => {
+          const storedPhoto = profileMap[person.id] || null;
+
+          return {
+            id: person.id,
+            name: buildName(person) || "Unnamed User",
+            role:
+              person.contact_type === "student"
+                ? "Student"
+                : person.role || "User",
+            unread: 0,
+            contactType: person.contact_type || "student",
+            status: person.status,
+            profilePhotoUrl: getProfilePhotoUrl(storedPhoto),
+          };
+        });
+
+        if (!mounted) return;
+
+        console.log(
+          "[Registrar Messages] Contacts with photos:",
+          formattedContacts
+        );
+
+        setContacts(formattedContacts);
+
+        setSelectedContact((previous) => {
+          if (!formattedContacts.length) {
+            return null;
+          }
+
+          if (
+            previous &&
+            formattedContacts.some((contact) => contact.id === previous.id)
+          ) {
+            return formattedContacts.find(
+              (contact) => contact.id === previous.id
+            );
+          }
+
+          return formattedContacts[0];
+        });
+      } catch (error) {
+        console.error("[Registrar Messages] Failed to load contacts:", error);
+
+        if (mounted) {
+          setContacts([]);
+          setSelectedContact(null);
+        }
+      } finally {
+        if (mounted) {
+          setContactsLoading(false);
+        }
+      }
+    };
+
+    loadContacts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
   // FILTERED CONTACTS
   // =========================================================
 
@@ -199,20 +301,9 @@ const Messages = () => {
   // CURRENT MESSAGES
   // =========================================================
 
-  const currentMessages = messages[selectedContact.id] || [];
-
-  // =========================================================
-  // GET INITIALS
-  // =========================================================
-
-  const getInitials = (name) => {
-    return name
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
-  };
+  const currentMessages = selectedContact
+    ? messages[selectedContact.id] || []
+    : [];
 
   // =========================================================
   // SCROLL TO LATEST MESSAGE
@@ -227,14 +318,20 @@ const Messages = () => {
       top: container.scrollHeight,
       behavior: "smooth",
     });
-  }, [currentMessages.length, selectedContact.id]);
+  }, [currentMessages.length, selectedContact?.id]);
 
   // =========================================================
   // SEND MESSAGE
   // =========================================================
+  // NOTE:
+  // This is still local-only for now.
+  // Real Supabase messaging comes in the next phase.
+  // =========================================================
 
   const handleSendMessage = (e) => {
     e.preventDefault();
+
+    if (!selectedContact) return;
 
     const trimmedMessage = messageInput.trim();
 
@@ -250,9 +347,12 @@ const Messages = () => {
       }),
     };
 
-    setMessages((prev) => ({
-      ...prev,
-      [selectedContact.id]: [...(prev[selectedContact.id] || []), newMessage],
+    setMessages((previous) => ({
+      ...previous,
+      [selectedContact.id]: [
+        ...(previous[selectedContact.id] || []),
+        newMessage,
+      ],
     }));
 
     setMessageInput("");
@@ -265,6 +365,48 @@ const Messages = () => {
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
     setMessageInput("");
+  };
+
+  // =========================================================
+  // AVATAR COMPONENT
+  // =========================================================
+
+  const ContactAvatar = ({ contact, active, size = "normal" }) => {
+    const sizeClass =
+      size === "small"
+        ? "w-9 h-9 text-[10px]"
+        : size === "large"
+        ? "w-10 h-10 text-xs"
+        : "w-10 h-10 text-xs";
+
+    return (
+      <div
+        className={`
+          ${sizeClass}
+          flex-shrink-0
+          rounded-lg
+          overflow-hidden
+          flex
+          items-center
+          justify-center
+          font-bold
+          ${getAvatarClass(active)}
+        `}
+      >
+        {contact.profilePhotoUrl ? (
+          <img
+            src={contact.profilePhotoUrl}
+            alt={contact.name}
+            className="w-full h-full object-cover"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        ) : (
+          getInitials(contact.name)
+        )}
+      </div>
+    );
   };
 
   // =========================================================
@@ -292,7 +434,7 @@ const Messages = () => {
           </h1>
 
           <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
-            Communicate with students, registrar, and company supervisors.
+            Communicate with students and internship-related contacts.
           </p>
         </div>
 
@@ -345,7 +487,9 @@ const Messages = () => {
                 `}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className={`text-sm font-bold ${headingClass}`}>Inbox</h2>
+                  <h2 className={`text-sm font-bold ${headingClass}`}>
+                    Students
+                  </h2>
 
                   <span className={`text-xs ${mutedClass}`}>
                     {contacts.length}
@@ -402,9 +546,15 @@ const Messages = () => {
                   ${panelClass}
                 `}
               >
-                {filteredContacts.length > 0 ? (
+                {contactsLoading ? (
+                  <div className="py-8 text-center">
+                    <p className={`text-xs ${mutedClass}`}>
+                      Loading contacts...
+                    </p>
+                  </div>
+                ) : filteredContacts.length > 0 ? (
                   filteredContacts.map((contact) => {
-                    const active = selectedContact.id === contact.id;
+                    const active = selectedContact?.id === contact.id;
 
                     return (
                       <button
@@ -425,22 +575,7 @@ const Messages = () => {
                         <div className="flex items-center gap-3">
                           {/* AVATAR */}
 
-                          <div
-                            className={`
-                              w-10
-                              h-10
-                              flex-shrink-0
-                              rounded-lg
-                              flex
-                              items-center
-                              justify-center
-                              text-xs
-                              font-bold
-                              ${getAvatarClass(active)}
-                            `}
-                          >
-                            {getInitials(contact.name)}
-                          </div>
+                          <ContactAvatar contact={contact} active={active} />
 
                           {/* CONTACT INFO */}
 
@@ -512,7 +647,7 @@ const Messages = () => {
                 ) : (
                   <div className="py-8 text-center">
                     <p className={`text-xs ${mutedClass}`}>
-                      No contacts found.
+                      No students found.
                     </p>
                   </div>
                 )}
@@ -534,7 +669,7 @@ const Messages = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className={`text-sm font-bold ${headingClass}`}>
-                      Inbox
+                      Students
                     </h2>
 
                     <p className={`text-[10px] mt-0.5 ${mutedClass}`}>
@@ -601,9 +736,15 @@ const Messages = () => {
                   overscroll-x-contain
                 "
               >
-                {filteredContacts.length > 0 ? (
+                {contactsLoading ? (
+                  <div className="w-full py-4 text-center">
+                    <p className={`text-xs ${mutedClass}`}>
+                      Loading contacts...
+                    </p>
+                  </div>
+                ) : filteredContacts.length > 0 ? (
                   filteredContacts.map((contact) => {
-                    const active = selectedContact.id === contact.id;
+                    const active = selectedContact?.id === contact.id;
 
                     return (
                       <button
@@ -627,22 +768,11 @@ const Messages = () => {
                         <div className="flex items-center gap-2.5">
                           {/* AVATAR */}
 
-                          <div
-                            className={`
-                              w-9
-                              h-9
-                              flex-shrink-0
-                              rounded-lg
-                              flex
-                              items-center
-                              justify-center
-                              text-[10px]
-                              font-bold
-                              ${getAvatarClass(active)}
-                            `}
-                          >
-                            {getInitials(contact.name)}
-                          </div>
+                          <ContactAvatar
+                            contact={contact}
+                            active={active}
+                            size="small"
+                          />
 
                           {/* CONTACT INFO */}
 
@@ -714,7 +844,7 @@ const Messages = () => {
                 ) : (
                   <div className="w-full py-4 text-center">
                     <p className={`text-xs ${mutedClass}`}>
-                      No contacts found.
+                      No students found.
                     </p>
                   </div>
                 )}
@@ -757,71 +887,70 @@ const Messages = () => {
                   }
                 `}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  {/* AVATAR */}
+                {selectedContact ? (
+                  <>
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* AVATAR */}
 
-                  <div
-                    className={`
-                      w-10
-                      h-10
-                      flex-shrink-0
-                      rounded-lg
-                      flex
-                      items-center
-                      justify-center
-                      text-xs
-                      font-bold
-                      ${
-                        darkMode
-                          ? "bg-slate-700 text-slate-100"
-                          : "bg-slate-800 text-white"
-                      }
-                    `}
-                  >
-                    {getInitials(selectedContact.name)}
-                  </div>
+                      <ContactAvatar
+                        contact={selectedContact}
+                        active={true}
+                        size="large"
+                      />
 
-                  {/* NAME */}
+                      {/* NAME */}
 
-                  <div className="min-w-0">
-                    <h2
+                      <div className="min-w-0">
+                        <h2
+                          className={`
+                            text-sm
+                            font-bold
+                            truncate
+                            ${headingClass}
+                          `}
+                        >
+                          {selectedContact.name}
+                        </h2>
+
+                        <p className={`text-[10px] truncate ${mutedClass}`}>
+                          {selectedContact.role}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* MORE OPTIONS */}
+
+                    <button
+                      type="button"
                       className={`
-                        text-sm
-                        font-bold
-                        truncate
-                        ${headingClass}
+                        w-9
+                        h-9
+                        flex-shrink-0
+                        rounded-lg
+                        border
+                        transition
+                        ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        }
                       `}
+                      title="More options"
                     >
-                      {selectedContact.name}
+                      ⋮
+                    </button>
+                  </>
+                ) : (
+                  <div>
+                    <h2 className={`text-sm font-bold ${headingClass}`}>
+                      No contact selected
                     </h2>
 
-                    <p className={`text-[10px] truncate ${mutedClass}`}>
-                      {selectedContact.role}
+                    <p className={`text-[10px] mt-1 ${mutedClass}`}>
+                      Select a student to start a conversation.
                     </p>
                   </div>
-                </div>
-
-                {/* MORE OPTIONS */}
-
-                <button
-                  type="button"
-                  className={`
-                    w-9
-                    h-9
-                    flex-shrink-0
-                    rounded-lg
-                    border
-                    transition
-                    ${
-                      darkMode
-                        ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                    }
-                  `}
-                  title="More options"
-                >
-                  ⋮
-                </button>
+                )}
               </div>
 
               {/* =================================================
@@ -842,7 +971,7 @@ const Messages = () => {
                 `}
               >
                 <div className="space-y-4">
-                  {currentMessages.length > 0 ? (
+                  {selectedContact && currentMessages.length > 0 ? (
                     currentMessages.map((message) => {
                       const isSent = message.sender === "sent";
 
@@ -862,8 +991,6 @@ const Messages = () => {
                               flex-col
                             `}
                           >
-                            {/* MESSAGE BUBBLE */}
-
                             <div
                               className={`
                                 px-3
@@ -887,8 +1014,6 @@ const Messages = () => {
                               {message.text}
                             </div>
 
-                            {/* TIME */}
-
                             <span
                               className={`
                                 text-[9px]
@@ -906,7 +1031,9 @@ const Messages = () => {
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       <p className={`text-xs ${mutedClass}`}>
-                        No messages yet.
+                        {selectedContact
+                          ? "No messages yet."
+                          : "Select a contact to view messages."}
                       </p>
                     </div>
                   )}
@@ -938,8 +1065,13 @@ const Messages = () => {
                     type="text"
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder={`Message ${selectedContact.name}...`}
+                    placeholder={
+                      selectedContact
+                        ? `Message ${selectedContact.name}...`
+                        : "Select a contact..."
+                    }
                     autoComplete="off"
+                    disabled={!selectedContact}
                     className={`
                       flex-1
                       min-w-0
@@ -951,13 +1083,15 @@ const Messages = () => {
                       text-xs
                       outline-none
                       transition
+                      disabled:opacity-50
+                      disabled:cursor-not-allowed
                       ${inputClass}
                     `}
                   />
 
                   <button
                     type="submit"
-                    disabled={!messageInput.trim()}
+                    disabled={!selectedContact || !messageInput.trim()}
                     className="
                       h-11
                       px-4

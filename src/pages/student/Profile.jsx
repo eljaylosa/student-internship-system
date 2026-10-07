@@ -46,8 +46,7 @@ const Profile = () => {
     department: "",
   };
 
-  const [academicRecords, setAcademicRecords] =
-    useState(emptyAcademicRecords);
+  const [academicRecords, setAcademicRecords] = useState(emptyAcademicRecords);
 
   const [originalAcademicRecords, setOriginalAcademicRecords] =
     useState(emptyAcademicRecords);
@@ -116,11 +115,10 @@ const Profile = () => {
       // GET STUDENT INFORMATION
       // -----------------------------------------
 
-      const { data: studentData, error: studentError } =
-        await supabaseStudent
-          .from("students")
-          .select(
-            `
+      const { data: studentData, error: studentError } = await supabaseStudent
+        .from("students")
+        .select(
+          `
               id,
               student_id,
               school_id,
@@ -141,9 +139,9 @@ const Profile = () => {
                 code
               )
             `
-          )
-          .eq("id", user.id)
-          .maybeSingle();
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (studentError) {
         throw studentError;
@@ -270,12 +268,28 @@ const Profile = () => {
     try {
       if (!path) return;
 
-      const bucket =
-        type === "profile" ? PROFILE_PHOTO_BUCKET : RESUME_BUCKET;
+      const bucket = type === "profile" ? PROFILE_PHOTO_BUCKET : RESUME_BUCKET;
 
-      const storagePath = getStoragePath(path, bucket);
+      let storagePath = getStoragePath(path, bucket);
 
       if (!storagePath) return;
+
+      // The database stores the bucket name as part of the profile path.
+      // .from(bucket) already selects the bucket, so remove that prefix.
+
+
+      // profile-photos is a public bucket, so use its public URL directly.
+      if (type === "profile") {
+        const { data } = supabaseStudent.storage
+          .from(bucket)
+          .getPublicUrl(storagePath);
+
+        if (data?.publicUrl) {
+          setProfilePhoto(data.publicUrl);
+        }
+
+        return;
+      }
 
       const { data, error } = await supabaseStudent.storage
         .from(bucket)
@@ -466,11 +480,9 @@ const Profile = () => {
     try {
       setIsSaving(true);
 
-      const extension =
-        file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
 
-      const storagePath =
-        `profile-photos/${userId}/profile-photo.${extension}`;
+      const storagePath = `profile-photos/${userId}/profile-photo.${extension}`;
 
       // -----------------------------------------
       // UPLOAD PROFILE PHOTO
@@ -506,16 +518,23 @@ const Profile = () => {
       setProfilePhotoPath(storagePath);
 
       // -----------------------------------------
-      // REFRESH SIGNED PREVIEW
+      // REFRESH PROFILE PHOTO PREVIEW
       // -----------------------------------------
 
-      const { data: signedData, error: signedError } =
-        await supabaseStudent.storage
-          .from(PROFILE_PHOTO_BUCKET)
-          .createSignedUrl(storagePath, 60 * 60);
+      // profile-photos is public, and storagePath already contains the
+      // bucket prefix. Remove it before calling getPublicUrl().
+      const publicStoragePath = storagePath.startsWith(
+        `${PROFILE_PHOTO_BUCKET}/`
+      )
+        ? storagePath.substring(`${PROFILE_PHOTO_BUCKET}/`.length)
+        : storagePath;
 
-      if (!signedError && signedData?.signedUrl) {
-        setProfilePhoto(signedData.signedUrl);
+      const { data: publicData } = supabaseStudent.storage
+        .from(PROFILE_PHOTO_BUCKET)
+        .getPublicUrl(publicStoragePath);
+
+      if (publicData?.publicUrl) {
+        setProfilePhoto(publicData.publicUrl);
       }
 
       alert("Profile photo updated successfully.");
@@ -563,8 +582,7 @@ const Profile = () => {
     try {
       setIsSaving(true);
 
-      const extension =
-        file.name.split(".").pop()?.toLowerCase() || "pdf";
+      const extension = file.name.split(".").pop()?.toLowerCase() || "pdf";
 
       const storagePath = `resumes/${userId}/resume.${extension}`;
 
@@ -581,10 +599,7 @@ const Profile = () => {
             .remove([oldPath]);
 
           if (removeError) {
-            console.warn(
-              "Unable to remove old resume:",
-              removeError.message
-            );
+            console.warn("Unable to remove old resume:", removeError.message);
           }
         }
       }
@@ -832,8 +847,7 @@ const Profile = () => {
       console.error("COR upload error:", error);
 
       alert(
-        error.message ||
-          "Unable to upload your Certificate of Registration."
+        error.message || "Unable to upload your Certificate of Registration."
       );
     } finally {
       setIsSaving(false);
@@ -892,8 +906,7 @@ const Profile = () => {
       console.error("Open COR error:", error);
 
       alert(
-        error.message ||
-          "Unable to open your Certificate of Registration."
+        error.message || "Unable to open your Certificate of Registration."
       );
     } finally {
       setIsCorOpening(false);
@@ -957,8 +970,7 @@ const Profile = () => {
       console.error("Download COR error:", error);
 
       alert(
-        error.message ||
-          "Unable to download your Certificate of Registration."
+        error.message || "Unable to download your Certificate of Registration."
       );
     } finally {
       setIsCorOpening(false);
@@ -1144,9 +1156,7 @@ const Profile = () => {
               Profile Photo
             </h2>
 
-            <p className={`text-xs mt-1 ${mutedClass}`}>
-              Your profile picture
-            </p>
+            <p className={`text-xs mt-1 ${mutedClass}`}>Your profile picture</p>
           </div>
 
           <div className="flex flex-col items-center">
@@ -1173,9 +1183,7 @@ const Profile = () => {
                     👤
                   </div>
 
-                  <p className={`text-[10px] mt-2 ${mutedClass}`}>
-                    No Photo
-                  </p>
+                  <p className={`text-[10px] mt-2 ${mutedClass}`}>No Photo</p>
                 </div>
               )}
             </div>
@@ -1304,9 +1312,7 @@ const Profile = () => {
                 type="text"
                 value={profile.phone}
                 disabled={!isEditing}
-                onChange={(e) =>
-                  handleProfileChange("phone", e.target.value)
-                }
+                onChange={(e) => handleProfileChange("phone", e.target.value)}
                 className={inputClass(isEditing)}
               />
             </div>
@@ -1322,9 +1328,7 @@ const Profile = () => {
                 type="text"
                 value={profile.address}
                 disabled={!isEditing}
-                onChange={(e) =>
-                  handleProfileChange("address", e.target.value)
-                }
+                onChange={(e) => handleProfileChange("address", e.target.value)}
                 className={inputClass(isEditing)}
               />
             </div>
@@ -1341,10 +1345,7 @@ const Profile = () => {
                 value={profile.emergencyContact}
                 disabled={!isEditing}
                 onChange={(e) =>
-                  handleProfileChange(
-                    "emergencyContact",
-                    e.target.value
-                  )
+                  handleProfileChange("emergencyContact", e.target.value)
                 }
                 className={inputClass(isEditing)}
               />
@@ -1493,9 +1494,7 @@ const Profile = () => {
 
       <section className={`border rounded-2xl p-6 ${cardClass}`}>
         <div className="mb-6">
-          <h2 className={`font-bold text-lg ${headingClass}`}>
-            Documents
-          </h2>
+          <h2 className={`font-bold text-lg ${headingClass}`}>Documents</h2>
 
           <p className={`text-xs mt-1 ${mutedClass}`}>
             Manage your resume and Certificate of Registration.
@@ -1589,9 +1588,7 @@ const Profile = () => {
                     📄
                   </div>
 
-                  <p
-                    className={`font-semibold text-sm ${headingClass}`}
-                  >
+                  <p className={`font-semibold text-sm ${headingClass}`}>
                     Drag & Drop to Upload
                   </p>
 
@@ -1734,9 +1731,7 @@ const Profile = () => {
                   )}
 
                   {cor.existing && (
-                    <p className={`text-xs mt-1 ${mutedClass}`}>
-                      Uploaded COR
-                    </p>
+                    <p className={`text-xs mt-1 ${mutedClass}`}>Uploaded COR</p>
                   )}
 
                   <p className="text-xs text-blue-500 font-semibold mt-3">
@@ -1753,9 +1748,7 @@ const Profile = () => {
                     📜
                   </div>
 
-                  <p
-                    className={`font-semibold text-sm ${headingClass}`}
-                  >
+                  <p className={`font-semibold text-sm ${headingClass}`}>
                     Drag & Drop to Upload
                   </p>
 
@@ -1837,4 +1830,3 @@ const Profile = () => {
 };
 
 export default Profile;
-

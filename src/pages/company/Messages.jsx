@@ -1,124 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import { supabaseCompany } from "../../supabaseClient";
 
 const Messages = () => {
   const { darkMode } = useOutletContext();
 
   // =========================================================
-  // CONTACTS
-  // =========================================================
-
-  const contacts = [
-    {
-      id: 1,
-      name: "John Doe",
-      role: "Intern",
-      unread: 2,
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      role: "Intern",
-      unread: 0,
-    },
-    {
-      id: 3,
-      name: "Mike Wilson",
-      role: "Intern",
-      unread: 1,
-    },
-    {
-      id: 4,
-      name: "Prof. Davis",
-      role: "Registrar Adviser",
-      unread: 0,
-    },
-  ];
-
-  // =========================================================
-  // INITIAL MESSAGES
-  // =========================================================
-
-  const initialMessages = {
-    1: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Good morning, sir. I wanted to ask about my assigned tasks for today.",
-        time: "9:20 AM",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Good morning, John. Please continue working on the documentation we discussed yesterday.",
-        time: "9:24 AM",
-      },
-      {
-        id: 3,
-        sender: "received",
-        text: "Alright, sir. Should I submit the updated documentation before the end of the day?",
-        time: "9:26 AM",
-      },
-      {
-        id: 4,
-        sender: "sent",
-        text: "Yes. Please send it to me once you're finished so I can review it.",
-        time: "9:30 AM",
-      },
-    ],
-
-    2: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Good morning. I have completed the task assigned to me yesterday.",
-        time: "8:45 AM",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Great. Please send the completed file so I can check your work.",
-        time: "8:50 AM",
-      },
-    ],
-
-    3: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Sir, I would like to confirm the schedule for my assigned tasks this week.",
-        time: "10:15 AM",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Your current schedule is already updated. Please check the internship schedule and let me know if you have any concerns.",
-        time: "10:20 AM",
-      },
-    ],
-
-    4: [
-      {
-        id: 1,
-        sender: "received",
-        text: "Good day. I wanted to ask for an update regarding the interns' performance.",
-        time: "Yesterday",
-      },
-      {
-        id: 2,
-        sender: "sent",
-        text: "Good day, Professor. The interns are progressing well. I will submit their performance updates once the evaluation period is completed.",
-        time: "Yesterday",
-      },
-    ],
-  };
-
-  // =========================================================
   // STATE
   // =========================================================
 
-  const [selectedContact, setSelectedContact] = useState(contacts[0]);
-  const [messages, setMessages] = useState(initialMessages);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
+
+  const [selectedContact, setSelectedContact] = useState(null);
+
+  const [messages, setMessages] = useState({});
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -127,6 +24,178 @@ const Messages = () => {
   // =========================================================
 
   const messagesContainerRef = useRef(null);
+
+  // =========================================================
+  // AUTH
+  // =========================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCurrentUser = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabaseCompany.auth.getUser();
+
+      if (error) {
+        console.error("[Company Messages] Auth error:", error);
+        if (mounted) {
+          setCurrentUser(null);
+          setContactsLoading(false);
+        }
+        return;
+      }
+
+      if (mounted) {
+        setCurrentUser(user || null);
+      }
+    };
+
+    loadCurrentUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // =========================================================
+  // BUILD NAME
+  // =========================================================
+
+  const buildName = (user) => {
+    if (!user) return "Unknown Student";
+
+    return (
+      [user.first_name, user.middle_name, user.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "Unknown Student"
+    );
+  };
+
+  // =========================================================
+  // PROFILE PHOTO URL
+  // =========================================================
+
+  const getProfilePhotoUrl = (storedPath) => {
+    if (!storedPath) return null;
+
+    let normalizedPath = storedPath;
+
+    // Student profile photos may be stored as:
+    // profile-photos/<user-id>/profile-photo.ext
+    //
+    // Or:
+    // <user-id>/profile-photo.ext
+    //
+    // If the prefix is missing, add it.
+
+    if (!normalizedPath.startsWith("profile-photos/")) {
+      normalizedPath = `profile-photos/${normalizedPath}`;
+    }
+
+    const { data } = supabaseCompany.storage
+      .from("profile-photos")
+      .getPublicUrl(normalizedPath);
+
+    console.log("[Company Messages] Profile Photo:", {
+      storedPath,
+      normalizedPath,
+      publicUrl: data?.publicUrl,
+    });
+
+    return data?.publicUrl || null;
+  };
+
+  // =========================================================
+  // GET COMPANY MESSAGE CONTACTS
+  // =========================================================
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    let mounted = true;
+
+    const loadContacts = async () => {
+      setContactsLoading(true);
+
+      try {
+        const { data, error } = await supabaseCompany.rpc(
+          "get_company_message_contacts"
+        );
+
+        if (error) {
+          console.error("[Company Messages] Contact RPC error:", error);
+
+          if (mounted) {
+            setContacts([]);
+            setSelectedContact(null);
+          }
+
+          return;
+        }
+
+        const companyContacts = (data || []).map((student) => ({
+          id: student.id,
+          name: buildName(student),
+          role: "Intern",
+          roleValue: "student",
+          status: student.status || "active",
+          contactType: "student",
+          profilePhotoUrl: getProfilePhotoUrl(student.profile_photo_url),
+          unread: 0,
+        }));
+
+        if (!mounted) return;
+
+        setContacts(companyContacts);
+
+        console.log(
+          "[Company Messages] Contacts:",
+          companyContacts.map((contact) => ({
+            id: contact.id,
+            name: contact.name,
+            role: contact.role,
+            contactType: contact.contactType,
+          }))
+        );
+
+        // Keep the currently selected student if they still exist.
+        setSelectedContact((previousSelected) => {
+          if (
+            previousSelected &&
+            companyContacts.some(
+              (contact) => contact.id === previousSelected.id
+            )
+          ) {
+            return companyContacts.find(
+              (contact) => contact.id === previousSelected.id
+            );
+          }
+
+          return companyContacts[0] || null;
+        });
+      } catch (error) {
+        console.error("[Company Messages] Unexpected contact error:", error);
+
+        if (mounted) {
+          setContacts([]);
+          setSelectedContact(null);
+        }
+      } finally {
+        if (mounted) {
+          setContactsLoading(false);
+        }
+      }
+    };
+
+    loadContacts();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser?.id]);
 
   // =========================================================
   // THEME CLASSES
@@ -196,19 +265,60 @@ const Messages = () => {
   // CURRENT MESSAGES
   // =========================================================
 
-  const currentMessages = messages[selectedContact.id] || [];
+  const currentMessages = selectedContact
+    ? messages[selectedContact.id] || []
+    : [];
 
   // =========================================================
   // GET INITIALS
   // =========================================================
 
   const getInitials = (name) => {
+    if (!name) return "?";
+
     return name
       .split(" ")
+      .filter(Boolean)
       .map((word) => word[0])
       .join("")
       .slice(0, 2)
       .toUpperCase();
+  };
+
+  // =========================================================
+  // RENDER AVATAR
+  // =========================================================
+
+  const renderAvatar = (contact, sizeClass = "w-10 h-10", active = false) => {
+    return (
+      <div
+        className={`
+        ${sizeClass}
+        flex-shrink-0
+        rounded-lg
+        overflow-hidden
+        flex
+        items-center
+        justify-center
+        text-xs
+        font-bold
+        ${getAvatarClass(active)}
+      `}
+      >
+        {contact?.profilePhotoUrl ? (
+          <img
+            src={contact.profilePhotoUrl}
+            alt={contact.name || "Student"}
+            className="w-full h-full object-cover"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        ) : (
+          getInitials(contact?.name)
+        )}
+      </div>
+    );
   };
 
   // =========================================================
@@ -224,7 +334,7 @@ const Messages = () => {
       top: container.scrollHeight,
       behavior: "smooth",
     });
-  }, [currentMessages.length, selectedContact.id]);
+  }, [currentMessages.length, selectedContact?.id]);
 
   // =========================================================
   // SEND MESSAGE
@@ -232,6 +342,8 @@ const Messages = () => {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
+
+    if (!selectedContact) return;
 
     const trimmedMessage = messageInput.trim();
 
@@ -399,9 +511,15 @@ const Messages = () => {
                   ${panelClass}
                 `}
               >
-                {filteredContacts.length > 0 ? (
+                {contactsLoading ? (
+                  <div className="py-8 text-center">
+                    <p className={`text-xs ${mutedClass}`}>
+                      Loading interns...
+                    </p>
+                  </div>
+                ) : filteredContacts.length > 0 ? (
                   filteredContacts.map((contact) => {
-                    const active = selectedContact.id === contact.id;
+                    const active = selectedContact?.id === contact.id;
 
                     return (
                       <button
@@ -436,7 +554,7 @@ const Messages = () => {
                               ${getAvatarClass(active)}
                             `}
                           >
-                            {getInitials(contact.name)}
+                            {renderAvatar(contact, "w-10 h-10", active)}
                           </div>
 
                           {/* CONTACT INFO */}
@@ -507,9 +625,16 @@ const Messages = () => {
                     );
                   })
                 ) : (
-                  <div className="py-8 text-center">
+                  <div className="py-8 text-center px-3">
                     <p className={`text-xs ${mutedClass}`}>
-                      No contacts found.
+                      No accepted interns yet.
+                    </p>
+
+                    <p
+                      className={`text-[10px] mt-1 leading-relaxed ${mutedClass}`}
+                    >
+                      Students will appear here after they accept their
+                      internship assignment.
                     </p>
                   </div>
                 )}
@@ -598,9 +723,15 @@ const Messages = () => {
                   overscroll-x-contain
                 "
               >
-                {filteredContacts.length > 0 ? (
+                {contactsLoading ? (
+                  <div className="w-full py-4 text-center">
+                    <p className={`text-xs ${mutedClass}`}>
+                      Loading interns...
+                    </p>
+                  </div>
+                ) : filteredContacts.length > 0 ? (
                   filteredContacts.map((contact) => {
-                    const active = selectedContact.id === contact.id;
+                    const active = selectedContact?.id === contact.id;
 
                     return (
                       <button
@@ -638,7 +769,7 @@ const Messages = () => {
                               ${getAvatarClass(active)}
                             `}
                           >
-                            {getInitials(contact.name)}
+                            {renderAvatar(contact, "w-9 h-9", active)}
                           </div>
 
                           {/* CONTACT INFO */}
@@ -711,7 +842,7 @@ const Messages = () => {
                 ) : (
                   <div className="w-full py-4 text-center">
                     <p className={`text-xs ${mutedClass}`}>
-                      No contacts found.
+                      No accepted interns yet.
                     </p>
                   </div>
                 )}
@@ -734,247 +865,276 @@ const Messages = () => {
                 ${chatClass}
               `}
             >
-              {/* CHAT HEADER */}
-
-              <div
-                className={`
-                  h-[64px]
-                  sm:h-[72px]
-                  px-4
-                  sm:px-5
-                  border-b
-                  flex
-                  items-center
-                  justify-between
-                  flex-shrink-0
-                  ${
-                    darkMode
-                      ? "border-slate-700 bg-slate-900"
-                      : "border-slate-200 bg-white"
-                  }
-                `}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  {/* AVATAR */}
+              {selectedContact ? (
+                <>
+                  {/* CHAT HEADER */}
 
                   <div
                     className={`
-                      w-10
-                      h-10
-                      flex-shrink-0
-                      rounded-lg
+                      h-[64px]
+                      sm:h-[72px]
+                      px-4
+                      sm:px-5
+                      border-b
                       flex
                       items-center
-                      justify-center
-                      text-xs
-                      font-bold
+                      justify-between
+                      flex-shrink-0
                       ${
                         darkMode
-                          ? "bg-slate-700 text-slate-100"
-                          : "bg-slate-800 text-white"
+                          ? "border-slate-700 bg-slate-900"
+                          : "border-slate-200 bg-white"
                       }
                     `}
                   >
-                    {getInitials(selectedContact.name)}
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* AVATAR */}
+
+                      <div
+                        className={`
+                          w-10
+                          h-10
+                          flex-shrink-0
+                          rounded-lg
+                          flex
+                          items-center
+                          justify-center
+                          text-xs
+                          font-bold
+                          ${
+                            darkMode
+                              ? "bg-slate-700 text-slate-100"
+                              : "bg-slate-800 text-white"
+                          }
+                        `}
+                      >
+                        {renderAvatar(selectedContact, "w-10 h-10", true)}
+                      </div>
+
+                      {/* NAME */}
+
+                      <div className="min-w-0">
+                        <h2
+                          className={`
+                            text-sm
+                            font-bold
+                            truncate
+                            ${headingClass}
+                          `}
+                        >
+                          {selectedContact.name}
+                        </h2>
+
+                        <p className={`text-[10px] truncate ${mutedClass}`}>
+                          {selectedContact.role}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* MORE OPTIONS */}
+
+                    <button
+                      type="button"
+                      className={`
+                        w-9
+                        h-9
+                        flex-shrink-0
+                        rounded-lg
+                        border
+                        transition
+                        ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        }
+                      `}
+                      title="More options"
+                    >
+                      ⋮
+                    </button>
                   </div>
 
-                  {/* NAME */}
+                  {/* MESSAGE HISTORY */}
 
-                  <div className="min-w-0">
-                    <h2
+                  <div
+                    ref={messagesContainerRef}
+                    className={`
+                      flex-1
+                      min-h-0
+                      overflow-y-auto
+                      overflow-x-hidden
+                      p-4
+                      sm:p-5
+                      overscroll-contain
+                      ${chatClass}
+                    `}
+                  >
+                    <div className="space-y-4">
+                      {currentMessages.length > 0 ? (
+                        currentMessages.map((message) => {
+                          const isSent = message.sender === "sent";
+
+                          return (
+                            <div
+                              key={message.id}
+                              className={`flex ${
+                                isSent ? "justify-end" : "justify-start"
+                              }`}
+                            >
+                              <div
+                                className={`
+                                  max-w-[88%]
+                                  sm:max-w-[75%]
+                                  ${isSent ? "items-end" : "items-start"}
+                                  flex
+                                  flex-col
+                                `}
+                              >
+                                <div
+                                  className={`
+                                    px-3
+                                    sm:px-4
+                                    py-2.5
+                                    sm:py-3
+                                    rounded-xl
+                                    text-xs
+                                    leading-relaxed
+                                    break-words
+                                    whitespace-pre-wrap
+                                    ${
+                                      isSent
+                                        ? "bg-slate-800 text-white rounded-br-sm"
+                                        : darkMode
+                                        ? "bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-sm"
+                                        : "bg-slate-100 text-slate-800 border border-slate-200 rounded-bl-sm"
+                                    }
+                                  `}
+                                >
+                                  {message.text}
+                                </div>
+
+                                <span
+                                  className={`
+                                    text-[9px]
+                                    mt-1
+                                    px-1
+                                    ${mutedClass}
+                                  `}
+                                >
+                                  {message.time}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="h-full flex items-center justify-center">
+                          <p className={`text-xs ${mutedClass}`}>
+                            No messages yet.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* MESSAGE INPUT */}
+
+                  <div
+                    className={`
+                      border-t
+                      p-3
+                      sm:p-4
+                      flex-shrink-0
+                      ${
+                        darkMode
+                          ? "border-slate-700 bg-slate-900"
+                          : "border-slate-200 bg-white"
+                      }
+                    `}
+                  >
+                    <form
+                      onSubmit={handleSendMessage}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="text"
+                        value={messageInput}
+                        onChange={(e) => setMessageInput(e.target.value)}
+                        placeholder={`Message ${selectedContact.name}...`}
+                        autoComplete="off"
+                        className={`
+                          flex-1
+                          min-w-0
+                          h-11
+                          px-3
+                          sm:px-4
+                          rounded-lg
+                          border
+                          text-xs
+                          outline-none
+                          transition
+                          ${inputClass}
+                        `}
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={!messageInput.trim()}
+                        className="
+                          h-11
+                          px-4
+                          sm:px-5
+                          flex-shrink-0
+                          rounded-lg
+                          bg-slate-800
+                          text-white
+                          text-xs
+                          font-bold
+                          hover:bg-slate-700
+                          disabled:opacity-40
+                          disabled:cursor-not-allowed
+                          transition
+                        "
+                      >
+                        Send
+                      </button>
+                    </form>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-6">
+                  <div className="text-center max-w-sm">
+                    <div
                       className={`
-                        text-sm
-                        font-bold
-                        truncate
-                        ${headingClass}
+                        w-14
+                        h-14
+                        mx-auto
+                        rounded-xl
+                        flex
+                        items-center
+                        justify-center
+                        text-xl
+                        ${
+                          darkMode
+                            ? "bg-slate-800 text-slate-400"
+                            : "bg-slate-100 text-slate-400"
+                        }
                       `}
                     >
-                      {selectedContact.name}
+                      💬
+                    </div>
+
+                    <h2 className={`text-sm font-bold mt-4 ${headingClass}`}>
+                      No interns to message
                     </h2>
 
-                    <p className={`text-[10px] truncate ${mutedClass}`}>
-                      {selectedContact.role}
+                    <p className={`text-xs mt-2 leading-relaxed ${mutedClass}`}>
+                      Students will appear here after they accept their
+                      internship assignment.
                     </p>
                   </div>
                 </div>
-
-                {/* MORE OPTIONS */}
-
-                <button
-                  type="button"
-                  className={`
-                    w-9
-                    h-9
-                    flex-shrink-0
-                    rounded-lg
-                    border
-                    transition
-                    ${
-                      darkMode
-                        ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                    }
-                  `}
-                  title="More options"
-                >
-                  ⋮
-                </button>
-              </div>
-
-              {/* =================================================
-                  MESSAGE HISTORY
-              ================================================= */}
-
-              <div
-                ref={messagesContainerRef}
-                className={`
-                  flex-1
-                  min-h-0
-                  overflow-y-auto
-                  overflow-x-hidden
-                  p-4
-                  sm:p-5
-                  overscroll-contain
-                  ${chatClass}
-                `}
-              >
-                <div className="space-y-4">
-                  {currentMessages.length > 0 ? (
-                    currentMessages.map((message) => {
-                      const isSent = message.sender === "sent";
-
-                      return (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            isSent ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          <div
-                            className={`
-                              max-w-[88%]
-                              sm:max-w-[75%]
-                              ${isSent ? "items-end" : "items-start"}
-                              flex
-                              flex-col
-                            `}
-                          >
-                            {/* MESSAGE BUBBLE */}
-
-                            <div
-                              className={`
-                                px-3
-                                sm:px-4
-                                py-2.5
-                                sm:py-3
-                                rounded-xl
-                                text-xs
-                                leading-relaxed
-                                break-words
-                                whitespace-pre-wrap
-                                ${
-                                  isSent
-                                    ? "bg-slate-800 text-white rounded-br-sm"
-                                    : darkMode
-                                    ? "bg-slate-800 text-slate-100 border border-slate-700 rounded-bl-sm"
-                                    : "bg-slate-100 text-slate-800 border border-slate-200 rounded-bl-sm"
-                                }
-                              `}
-                            >
-                              {message.text}
-                            </div>
-
-                            {/* TIME */}
-
-                            <span
-                              className={`
-                                text-[9px]
-                                mt-1
-                                px-1
-                                ${mutedClass}
-                              `}
-                            >
-                              {message.time}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="h-full flex items-center justify-center">
-                      <p className={`text-xs ${mutedClass}`}>
-                        No messages yet.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* =================================================
-                  MESSAGE INPUT
-              ================================================= */}
-
-              <div
-                className={`
-                  border-t
-                  p-3
-                  sm:p-4
-                  flex-shrink-0
-                  ${
-                    darkMode
-                      ? "border-slate-700 bg-slate-900"
-                      : "border-slate-200 bg-white"
-                  }
-                `}
-              >
-                <form
-                  onSubmit={handleSendMessage}
-                  className="flex items-center gap-2"
-                >
-                  <input
-                    type="text"
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    placeholder={`Message ${selectedContact.name}...`}
-                    autoComplete="off"
-                    className={`
-                      flex-1
-                      min-w-0
-                      h-11
-                      px-3
-                      sm:px-4
-                      rounded-lg
-                      border
-                      text-xs
-                      outline-none
-                      transition
-                      ${inputClass}
-                    `}
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={!messageInput.trim()}
-                    className="
-                      h-11
-                      px-4
-                      sm:px-5
-                      flex-shrink-0
-                      rounded-lg
-                      bg-slate-800
-                      text-white
-                      text-xs
-                      font-bold
-                      hover:bg-slate-700
-                      disabled:opacity-40
-                      disabled:cursor-not-allowed
-                      transition
-                    "
-                  >
-                    Send
-                  </button>
-                </form>
-              </div>
+              )}
             </div>
           </div>
         </section>

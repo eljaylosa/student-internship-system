@@ -294,64 +294,45 @@ export default function StudentPortalLayout() {
     if (!photoPath) return null;
 
     try {
-      let cleanPath = photoPath;
+      let cleanPath = String(photoPath).trim();
 
       /*
-       * Handles cases where profile_photo_url contains:
-       *
-       * profile-photos/user-id/file.jpg
-       * /storage/v1/object/public/profile-photos/file.jpg
-       * /storage/v1/object/sign/profile-photos/file.jpg
-       * /storage/v1/object/authenticated/profile-photos/file.jpg
-       */
-      if (cleanPath.includes("/storage/v1/object/")) {
-        const marker = `/storage/v1/object/`;
-        const markerIndex = cleanPath.indexOf(marker);
-
-        if (markerIndex !== -1) {
-          let storagePart = cleanPath.substring(markerIndex + marker.length);
-
-          storagePart = storagePart
-            .replace(/^public\//, "")
-            .replace(/^sign\//, "")
-            .replace(/^authenticated\//, "");
-
-          const bucketMarker = `${STORAGE_BUCKET}/`;
-
-          if (storagePart.startsWith(bucketMarker)) {
-            cleanPath = storagePart.substring(bucketMarker.length);
-          } else {
-            cleanPath = storagePart;
-          }
-        }
-      }
-
-      cleanPath = cleanPath.replace(/^\/+/, "");
-
-      /*
-       * If the database somehow contains a full URL,
-       * return it directly.
+       * If profile_photo_url is already a full URL,
+       * use it directly.
        */
       if (/^https?:\/\//i.test(cleanPath)) {
         return cleanPath;
       }
 
-      const { data, error } = await supabaseStudent.storage
+      /*
+       * Remove only a leading slash.
+       */
+      cleanPath = cleanPath.replace(/^\/+/, "");
+
+      /*
+       * The SIMS database currently stores the profile photo
+       * path including the bucket name:
+       *
+       * profile-photos/user-id/profile-photo.jpg
+       *
+       * Since the actual Storage object uses that exact path
+       * inside the profile-photos bucket, KEEP the prefix here.
+       */
+      const { data, error } = supabaseStudent.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(cleanPath, 3600);
+        .getPublicUrl(cleanPath);
 
       if (error) {
         console.error("Error creating profile photo URL:", error);
         return null;
       }
 
-      return data?.signedUrl || null;
+      return data?.publicUrl || null;
     } catch (error) {
       console.error("Profile photo URL error:", error);
       return null;
     }
   };
-
   const loadStudentProfile = async () => {
     try {
       const {
