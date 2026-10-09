@@ -30,6 +30,7 @@ const RegistrarPortalLayout = () => {
   });
 
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
 
   // =========================================================
   // LOAD CURRENT REGISTRAR PROFILE
@@ -57,10 +58,6 @@ const RegistrarPortalLayout = () => {
           return;
         }
 
-        // -----------------------------------------------------
-        // COMMON USER INFORMATION
-        // -----------------------------------------------------
-
         const { data: userData, error: userError } = await supabaseRegistrar
           .from("users")
           .select(
@@ -80,10 +77,6 @@ const RegistrarPortalLayout = () => {
         if (userError) {
           console.error("Error loading users record:", userError);
         }
-
-        // -----------------------------------------------------
-        // REGISTRAR-SPECIFIC INFORMATION
-        // -----------------------------------------------------
 
         const { data: registrarData, error: registrarError } =
           await supabaseRegistrar
@@ -111,12 +104,10 @@ const RegistrarPortalLayout = () => {
 
         setRegistrarProfile({
           id: user.id,
-
           first_name: userData?.first_name || "",
           middle_name: userData?.middle_name || "",
           last_name: userData?.last_name || "",
           email: userData?.email || user.email || "",
-
           employee_id: registrarData?.employee_id || "",
           department: registrarData?.department || "",
           position: registrarData?.position || "",
@@ -128,9 +119,7 @@ const RegistrarPortalLayout = () => {
       } catch (error) {
         console.error("Unexpected error loading registrar profile:", error);
       } finally {
-        if (isMounted) {
-          setProfileLoading(false);
-        }
+        if (isMounted) setProfileLoading(false);
       }
     };
 
@@ -142,7 +131,7 @@ const RegistrarPortalLayout = () => {
   }, []);
 
   // =========================================================
-  // REGISTRAR DISPLAY NAME
+  // REGISTRAR DISPLAY NAME AND INITIALS
   // =========================================================
 
   const getRegistrarFullName = () => {
@@ -155,10 +144,6 @@ const RegistrarPortalLayout = () => {
 
   const registrarFullName = getRegistrarFullName() || "Registrar Admin";
 
-  // =========================================================
-  // REGISTRAR INITIALS
-  // =========================================================
-
   const getRegistrarInitials = () => {
     const firstName = registrarProfile.first_name?.trim() || "";
     const lastName = registrarProfile.last_name?.trim() || "";
@@ -167,13 +152,8 @@ const RegistrarPortalLayout = () => {
       return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
     }
 
-    if (firstName) {
-      return firstName.substring(0, 2).toUpperCase();
-    }
-
-    if (lastName) {
-      return lastName.substring(0, 2).toUpperCase();
-    }
+    if (firstName) return firstName.substring(0, 2).toUpperCase();
+    if (lastName) return lastName.substring(0, 2).toUpperCase();
 
     return "RA";
   };
@@ -184,8 +164,6 @@ const RegistrarPortalLayout = () => {
   // PROFILE PHOTO URL
   // =========================================================
 
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
-
   useEffect(() => {
     let isMounted = true;
 
@@ -193,29 +171,18 @@ const RegistrarPortalLayout = () => {
       const photoPath = registrarProfile.profile_photo_url;
 
       if (!photoPath) {
-        setProfilePhotoUrl("");
+        if (isMounted) setProfilePhotoUrl("");
         return;
       }
 
       try {
-        // -----------------------------------------------------
-        // DATABASE ALREADY CONTAINS FULL URL
-        // -----------------------------------------------------
-
         if (
           photoPath.startsWith("http://") ||
           photoPath.startsWith("https://")
         ) {
-          if (isMounted) {
-            setProfilePhotoUrl(photoPath);
-          }
-
+          if (isMounted) setProfilePhotoUrl(photoPath);
           return;
         }
-
-        // -----------------------------------------------------
-        // STORAGE PATH
-        // -----------------------------------------------------
 
         const { data, error } = await supabaseRegistrar.storage
           .from("profile-photos")
@@ -223,23 +190,14 @@ const RegistrarPortalLayout = () => {
 
         if (error) {
           console.error("Error generating profile photo URL:", error);
-
-          if (isMounted) {
-            setProfilePhotoUrl("");
-          }
-
+          if (isMounted) setProfilePhotoUrl("");
           return;
         }
 
-        if (isMounted) {
-          setProfilePhotoUrl(data?.signedUrl || "");
-        }
+        if (isMounted) setProfilePhotoUrl(data?.signedUrl || "");
       } catch (error) {
         console.error("Unexpected profile photo error:", error);
-
-        if (isMounted) {
-          setProfilePhotoUrl("");
-        }
+        if (isMounted) setProfilePhotoUrl("");
       }
     };
 
@@ -254,9 +212,9 @@ const RegistrarPortalLayout = () => {
   // LOGOUT PLACEHOLDER
   // =========================================================
 
-  const logout = (...args) => {
-    void args;
-  };
+  // const logout = (...args) => {
+  //   void args;
+  // };
 
   // =========================================================
   // SIDEBAR
@@ -267,19 +225,13 @@ const RegistrarPortalLayout = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // =========================================================
-  // PROFILE DROPDOWN
+  // PROFILE AND NOTIFICATION DROPDOWNS
   // =========================================================
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
   const profileMenuRef = useRef(null);
 
-  // =========================================================
-  // NOTIFICATION DROPDOWN
-  // =========================================================
-
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-
   const notificationRef = useRef(null);
 
   // =========================================================
@@ -291,15 +243,388 @@ const RegistrarPortalLayout = () => {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // =========================================================
+  // MESSAGES UNREAD STATE
+  // =========================================================
+
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+  // =========================================================
+  // UNREAD MESSAGE CHECK
+  // Realtime updates + polling fallback
+  // =========================================================
+
+  useEffect(() => {
+    let isMounted = true;
+    let channel = null;
+    let pollingInterval = null;
+    let refreshInProgress = false;
+    let refreshQueued = false;
+    let currentUserId = null;
+
+    const refreshUnreadMessages = async (userId) => {
+      if (!userId || !isMounted) return;
+
+      if (refreshInProgress) {
+        refreshQueued = true;
+        return;
+      }
+
+      refreshInProgress = true;
+
+      try {
+        const { data: memberships, error: membershipError } =
+          await supabaseRegistrar
+            .from("conversation_members")
+            .select("conversation_id, joined_at")
+            .eq("user_id", userId);
+
+        if (membershipError) {
+          console.error(
+            "[Registrar Messages] Membership query failed:",
+            membershipError
+          );
+          return;
+        }
+
+        if (!isMounted) return;
+
+        if (!memberships?.length) {
+          setHasUnreadMessages(false);
+          return;
+        }
+
+        const joinedAtByConversation = new Map();
+
+        memberships.forEach((membership) => {
+          if (membership.conversation_id) {
+            joinedAtByConversation.set(
+              membership.conversation_id,
+              membership.joined_at || null
+            );
+          }
+        });
+
+        const conversationIds = [...joinedAtByConversation.keys()];
+
+        if (!conversationIds.length) {
+          setHasUnreadMessages(false);
+          return;
+        }
+
+        const { data: readStates, error: readStateError } =
+          await supabaseRegistrar
+            .from("message_reads")
+            .select(
+              "conversation_id, user_id, last_read_message_id, last_read_at"
+            )
+            .eq("user_id", userId)
+            .in("conversation_id", conversationIds);
+
+        if (readStateError) {
+          console.error(
+            "[Registrar Messages] Read-state query failed:",
+            readStateError
+          );
+          return;
+        }
+
+        if (!isMounted) return;
+
+        const readStateByConversation = new Map();
+
+        (readStates || []).forEach((state) => {
+          readStateByConversation.set(state.conversation_id, state);
+        });
+
+        const readMessageIds = [
+          ...new Set(
+            (readStates || [])
+              .map((state) => state.last_read_message_id)
+              .filter(Boolean)
+          ),
+        ];
+
+        let readPositionByMessageId = new Map();
+
+        if (readMessageIds.length) {
+          const { data: readPositionMessages, error: readPositionError } =
+            await supabaseRegistrar
+              .from("messages")
+              .select("id, conversation_id, created_at")
+              .in("id", readMessageIds);
+
+          if (readPositionError) {
+            console.error(
+              "[Registrar Messages] Read-position query failed:",
+              readPositionError
+            );
+            return;
+          }
+
+          readPositionByMessageId = new Map(
+            (readPositionMessages || []).map((message) => [message.id, message])
+          );
+        }
+
+        if (!isMounted) return;
+
+        const { data: messages, error: messagesError } = await supabaseRegistrar
+          .from("messages")
+          .select("id, conversation_id, sender_id, created_at, is_deleted")
+          .in("conversation_id", conversationIds)
+          .neq("sender_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+
+        if (messagesError) {
+          console.error(
+            "[Registrar Messages] Incoming-message query failed:",
+            messagesError
+          );
+          return;
+        }
+
+        if (!isMounted) return;
+
+        const incomingMessages = (messages || []).filter((message) => {
+          if (message.is_deleted) return false;
+
+          const joinedAt = joinedAtByConversation.get(message.conversation_id);
+
+          if (!joinedAt || !message.created_at) return true;
+
+          const messageTime = new Date(message.created_at).getTime();
+          const joinedTime = new Date(joinedAt).getTime();
+
+          if (!Number.isFinite(messageTime) || !Number.isFinite(joinedTime)) {
+            return true;
+          }
+
+          return messageTime >= joinedTime;
+        });
+
+        const unreadMessages = incomingMessages.filter((message) => {
+          const readState = readStateByConversation.get(
+            message.conversation_id
+          );
+
+          if (!readState) return true;
+
+          const readMessageId = readState.last_read_message_id;
+
+          if (readMessageId) {
+            const readPosition = readPositionByMessageId.get(readMessageId);
+
+            if (!readPosition?.created_at) {
+              return true;
+            }
+
+            const messageTime = new Date(message.created_at).getTime();
+            const readPositionTime = new Date(
+              readPosition.created_at
+            ).getTime();
+
+            if (
+              !Number.isFinite(messageTime) ||
+              !Number.isFinite(readPositionTime)
+            ) {
+              return true;
+            }
+
+            return messageTime > readPositionTime;
+          }
+
+          if (!readState.last_read_at) return true;
+
+          const messageTime = new Date(message.created_at).getTime();
+          const lastReadTime = new Date(readState.last_read_at).getTime();
+
+          if (!Number.isFinite(messageTime) || !Number.isFinite(lastReadTime)) {
+            return true;
+          }
+
+          return messageTime > lastReadTime;
+        });
+
+        if (!isMounted) return;
+
+        setHasUnreadMessages(unreadMessages.length > 0);
+
+        console.log("[Registrar Messages] Unread check:", {
+          conversations: conversationIds.length,
+          incomingMessages: incomingMessages.length,
+          unreadMessages: unreadMessages.length,
+          unreadMessageIds: unreadMessages.map((message) => message.id),
+          hasUnread: unreadMessages.length > 0,
+        });
+      } catch (error) {
+        console.error(
+          "[Registrar Messages] Unexpected unread-check error:",
+          error
+        );
+      } finally {
+        refreshInProgress = false;
+
+        if (refreshQueued && isMounted && currentUserId) {
+          refreshQueued = false;
+          queueMicrotask(() => {
+            if (isMounted && currentUserId) {
+              void refreshUnreadMessages(currentUserId);
+            }
+          });
+        } else {
+          refreshQueued = false;
+        }
+      }
+    };
+
+    const initializeUnreadMessages = async () => {
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabaseRegistrar.auth.getUser();
+
+        if (error) {
+          console.error("[Registrar Messages] Authentication failed:", error);
+          return;
+        }
+
+        // Important: don't create a channel if this effect was cleaned up
+        // while getUser() was still pending.
+        if (!isMounted) return;
+
+        if (!user) {
+          setHasUnreadMessages(false);
+          return;
+        }
+
+        currentUserId = user.id;
+
+        // Use a unique name for each effect initialization.
+        // This prevents a new effect from reusing an old channel name.
+        const channelName = `registrar-unread-messages-${
+          user.id
+        }-${Date.now()}`;
+
+        const unreadChannel = supabaseRegistrar.channel(channelName);
+
+        // Register ALL listeners before subscribe().
+        unreadChannel
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "messages",
+            },
+            (payload) => {
+              if (!isMounted) return;
+
+              console.log(
+                "[Registrar Messages] Message database event:",
+                payload.eventType
+              );
+
+              void refreshUnreadMessages(user.id);
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "message_reads",
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              if (!isMounted) return;
+
+              console.log(
+                "[Registrar Messages] Read-state database event:",
+                payload.eventType
+              );
+
+              void refreshUnreadMessages(user.id);
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "conversation_members",
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              if (!isMounted) return;
+              void refreshUnreadMessages(user.id);
+            }
+          );
+
+        // Assign before subscribing so cleanup can find this channel.
+        channel = unreadChannel;
+
+        unreadChannel.subscribe((status, error) => {
+          if (!isMounted) return;
+
+          console.log("[Registrar Messages] Unread realtime status:", status);
+
+          if (error) {
+            console.error(
+              "[Registrar Messages] Realtime subscription error:",
+              error
+            );
+          }
+
+          if (status === "SUBSCRIBED") {
+            void refreshUnreadMessages(user.id);
+          }
+        });
+
+        void refreshUnreadMessages(user.id);
+
+        pollingInterval = setInterval(() => {
+          if (isMounted && currentUserId) {
+            void refreshUnreadMessages(currentUserId);
+          }
+        }, 10000);
+      } catch (error) {
+        console.error("[Registrar Messages] Initialization error:", error);
+      }
+    };
+
+    void initializeUnreadMessages();
+
+    return () => {
+      isMounted = false;
+      currentUserId = null;
+
+      if (pollingInterval !== null) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+
+      if (channel) {
+        const channelToRemove = channel;
+        channel = null;
+
+        void supabaseRegistrar.removeChannel(channelToRemove).catch((error) => {
+          console.error("[Registrar Messages] Channel cleanup error:", error);
+        });
+      }
+    };
+  }, []);
+
+  // =========================================================
   // LOGOUT CONFIRMATION
   // =========================================================
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // =========================================================
-  // LOAD NOTIFICATIONS
+  // MAP NOTIFICATIONS
   // =========================================================
 
   const mapNotification = (notification) => ({
@@ -317,6 +642,10 @@ const RegistrarPortalLayout = () => {
     readAt: notification.read_at,
     createdAt: notification.created_at,
   });
+
+  // =========================================================
+  // LOAD NOTIFICATIONS
+  // =========================================================
 
   const loadNotifications = async (userId = null) => {
     try {
@@ -367,7 +696,6 @@ const RegistrarPortalLayout = () => {
 
       if (error) {
         console.error("Error loading registrar notifications:", error);
-
         setNotifications([]);
         return;
       }
@@ -375,7 +703,6 @@ const RegistrarPortalLayout = () => {
       setNotifications((data || []).map(mapNotification));
     } catch (error) {
       console.error("Unexpected notification loading error:", error);
-
       setNotifications([]);
     } finally {
       setNotificationsLoading(false);
@@ -401,9 +728,7 @@ const RegistrarPortalLayout = () => {
           return;
         }
 
-        if (!user || !isMounted) {
-          return;
-        }
+        if (!user || !isMounted) return;
 
         await loadNotifications(user.id);
       } catch (error) {
@@ -420,13 +745,6 @@ const RegistrarPortalLayout = () => {
 
   // =========================================================
   // REALTIME NOTIFICATIONS
-  // =========================================================
-  //
-  // New notifications inserted for this registrar will
-  // automatically appear in the dropdown.
-  //
-  // Supabase Postgres Changes supports INSERT/UPDATE/DELETE
-  // listeners with row filters.
   // =========================================================
 
   useEffect(() => {
@@ -445,9 +763,7 @@ const RegistrarPortalLayout = () => {
           return;
         }
 
-        if (!user || !isMounted) {
-          return;
-        }
+        if (!user || !isMounted) return;
 
         channel = supabaseRegistrar
           .channel(`registrar-notifications-${user.id}`)
@@ -465,10 +781,6 @@ const RegistrarPortalLayout = () => {
                 payload
               );
 
-              // -------------------------------------------------
-              // INSERT
-              // -------------------------------------------------
-
               if (payload.eventType === "INSERT") {
                 const newNotification = mapNotification(payload.new);
 
@@ -477,19 +789,13 @@ const RegistrarPortalLayout = () => {
                     (notification) => notification.id === newNotification.id
                   );
 
-                  if (alreadyExists) {
-                    return previous;
-                  }
+                  if (alreadyExists) return previous;
 
                   return [newNotification, ...previous].sort(
                     (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
                   );
                 });
               }
-
-              // -------------------------------------------------
-              // UPDATE
-              // -------------------------------------------------
 
               if (payload.eventType === "UPDATE") {
                 const updatedNotification = mapNotification(payload.new);
@@ -512,10 +818,6 @@ const RegistrarPortalLayout = () => {
                     : previous
                 );
               }
-
-              // -------------------------------------------------
-              // DELETE
-              // -------------------------------------------------
 
               if (payload.eventType === "DELETE") {
                 const deletedId = payload.old?.id;
@@ -568,68 +870,39 @@ const RegistrarPortalLayout = () => {
       (item) => item.id === notificationId
     );
 
-    if (!notification || notification.readAt) {
-      return;
-    }
+    if (!notification || notification.readAt) return;
 
     const now = new Date().toISOString();
 
-    // -------------------------------------------------------
-    // OPTIMISTIC UI
-    // -------------------------------------------------------
-
     setNotifications((previous) =>
       previous.map((item) =>
-        item.id === notificationId
-          ? {
-              ...item,
-              readAt: now,
-            }
-          : item
+        item.id === notificationId ? { ...item, readAt: now } : item
       )
     );
 
     setSelectedNotification((previous) =>
-      previous?.id === notificationId
-        ? {
-            ...previous,
-            readAt: now,
-          }
-        : previous
+      previous?.id === notificationId ? { ...previous, readAt: now } : previous
     );
-
-    // -------------------------------------------------------
-    // DATABASE
-    // -------------------------------------------------------
 
     const { error } = await supabaseRegistrar
       .from("notifications")
-      .update({
-        read_at: now,
-      })
+      .update({ read_at: now })
       .eq("id", notificationId);
 
     if (error) {
       console.error("Error marking notification as read:", error);
 
-      // Revert optimistic update
       setNotifications((previous) =>
         previous.map((item) =>
           item.id === notificationId
-            ? {
-                ...item,
-                readAt: notification.readAt,
-              }
+            ? { ...item, readAt: notification.readAt }
             : item
         )
       );
 
       setSelectedNotification((previous) =>
         previous?.id === notificationId
-          ? {
-              ...previous,
-              readAt: notification.readAt,
-            }
+          ? { ...previous, readAt: notification.readAt }
           : previous
       );
     }
@@ -640,15 +913,9 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const markAllNotificationsRead = async () => {
-    if (unreadCount === 0) {
-      return;
-    }
+    if (unreadCount === 0) return;
 
     const now = new Date().toISOString();
-
-    // -------------------------------------------------------
-    // OPTIMISTIC UI
-    // -------------------------------------------------------
 
     setNotifications((previous) =>
       previous.map((notification) => ({
@@ -657,10 +924,6 @@ const RegistrarPortalLayout = () => {
       }))
     );
 
-    // -------------------------------------------------------
-    // CURRENT USER
-    // -------------------------------------------------------
-
     const {
       data: { user },
       error: authError,
@@ -668,41 +931,24 @@ const RegistrarPortalLayout = () => {
 
     if (authError || !user) {
       console.error("Unable to get current user:", authError);
-
       loadNotifications();
       return;
     }
 
-    // -------------------------------------------------------
-    // DATABASE
-    // -------------------------------------------------------
-
     const { error } = await supabaseRegistrar
       .from("notifications")
-      .update({
-        read_at: now,
-      })
+      .update({ read_at: now })
       .eq("recipient_id", user.id)
       .is("read_at", null);
 
     if (error) {
       console.error("Error marking all notifications as read:", error);
-
       loadNotifications(user.id);
     }
   };
 
   // =========================================================
   // DELETE NOTIFICATION
-  // =========================================================
-  //
-  // IMPORTANT:
-  // Your current RLS allows DELETE only for admins.
-  //
-  // Therefore we do NOT attempt to delete the database row
-  // from the registrar client.
-  //
-  // The dropdown simply does not expose delete anymore.
   // =========================================================
 
   const deleteNotification = (notificationId) => {
@@ -717,37 +963,19 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const openNotification = async (notification) => {
-    if (!notification) {
-      return;
-    }
-
-    // -------------------------------------------------------
-    // MARK AS READ
-    // -------------------------------------------------------
+    if (!notification) return;
 
     if (!notification.readAt) {
       await markNotificationRead(notification.id);
     }
 
-    // -------------------------------------------------------
-    // CLOSE DROPDOWN
-    // -------------------------------------------------------
-
     setIsNotificationOpen(false);
-
-    // -------------------------------------------------------
-    // OPEN MODAL
-    // -------------------------------------------------------
 
     setSelectedNotification({
       ...notification,
       readAt: notification.readAt || new Date().toISOString(),
     });
   };
-
-  // =========================================================
-  // CLOSE NOTIFICATION MODAL
-  // =========================================================
 
   const closeNotificationModal = () => {
     setSelectedNotification(null);
@@ -758,17 +986,24 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("registrarPortalDarkMode") === "true";
+    try {
+      return localStorage.getItem("registrarPortalDarkMode") === "true";
+    } catch (error) {
+      console.warn("[Registrar Portal] Unable to read dark mode:", error);
+      return false;
+    }
   });
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+    try {
+      document.documentElement.classList.toggle("dark", darkMode);
+      localStorage.setItem("registrarPortalDarkMode", String(darkMode));
+    } catch (error) {
+      console.warn(
+        "[Registrar Portal] Unable to apply or save dark mode:",
+        error
+      );
     }
-
-    localStorage.setItem("registrarPortalDarkMode", darkMode.toString());
   }, [darkMode]);
 
   const toggleDarkMode = () => {
@@ -812,11 +1047,7 @@ const RegistrarPortalLayout = () => {
   // =========================================================
 
   useEffect(() => {
-    if (isMobileSidebarOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    document.body.style.overflow = isMobileSidebarOpen ? "hidden" : "";
 
     return () => {
       document.body.style.overflow = "";
@@ -876,11 +1107,6 @@ const RegistrarPortalLayout = () => {
       icon: "📋",
       path: "/registrar/applications",
     },
-    // {
-    //   name: "Review Documents",
-    //   icon: "📁",
-    //   path: "/registrar/documents",
-    // },
     {
       name: "Manage Deployment",
       icon: "🚀",
@@ -901,6 +1127,7 @@ const RegistrarPortalLayout = () => {
       name: "Messages",
       icon: "💬",
       path: "/registrar/messages",
+      badge: hasUnreadMessages,
     },
     {
       name: "Settings",
@@ -921,9 +1148,7 @@ const RegistrarPortalLayout = () => {
 
   const handleSidebarResizeStart = (e) => {
     e.preventDefault();
-
     setIsResizing(true);
-
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
@@ -932,7 +1157,6 @@ const RegistrarPortalLayout = () => {
 
     const minWidth = 240;
     const maxWidth = 360;
-
     const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
 
     setSidebarWidth(newWidth);
@@ -954,7 +1178,6 @@ const RegistrarPortalLayout = () => {
 
   const navigateTo = (path) => {
     navigate(path);
-
     setIsProfileOpen(false);
     setIsNotificationOpen(false);
     setIsMobileSidebarOpen(false);
@@ -967,13 +1190,10 @@ const RegistrarPortalLayout = () => {
     }));
   };
 
-  const isPathActive = (path) => {
-    return location.pathname === path;
-  };
+  const isPathActive = (path) => location.pathname === path;
 
-  const isChildActive = (children) => {
-    return children?.some((child) => location.pathname === child.path);
-  };
+  const isChildActive = (children) =>
+    children?.some((child) => location.pathname === child.path);
 
   // =========================================================
   // PAGE TITLE
@@ -981,16 +1201,12 @@ const RegistrarPortalLayout = () => {
 
   const getPageTitle = () => {
     const currentItem = sidebarItems.find((item) => {
-      if (item.path === location.pathname) {
-        return true;
-      }
+      if (item.path === location.pathname) return true;
 
       return item.children?.some((child) => child.path === location.pathname);
     });
 
-    if (!currentItem) {
-      return "Registrar Portal";
-    }
+    if (!currentItem) return "Registrar Portal";
 
     const child = currentItem.children?.find(
       (child) => child.path === location.pathname
@@ -1012,7 +1228,6 @@ const RegistrarPortalLayout = () => {
 
   const cancelLogout = () => {
     if (isLoggingOut) return;
-
     setShowLogoutConfirm(false);
   };
 
@@ -1021,10 +1236,6 @@ const RegistrarPortalLayout = () => {
 
     try {
       setIsLoggingOut(true);
-
-      // -----------------------------------------------------
-      // LOG AUDIT EVENT BEFORE SIGNING OUT
-      // -----------------------------------------------------
 
       const {
         data: { user },
@@ -1060,20 +1271,15 @@ const RegistrarPortalLayout = () => {
         }
       }
 
-      // -----------------------------------------------------
-      // SIGN OUT
-      // -----------------------------------------------------
-
       const { error: signOutError } = await supabaseRegistrar.auth.signOut();
 
       if (signOutError) {
         console.error("Logout error:", signOutError);
-
         setIsLoggingOut(false);
         return;
       }
 
-      logout();
+      // logout();
 
       setIsProfileOpen(false);
       setIsNotificationOpen(false);
@@ -1081,12 +1287,9 @@ const RegistrarPortalLayout = () => {
       setShowLogoutConfirm(false);
       setIsMobileSidebarOpen(false);
 
-      navigate("/login", {
-        replace: true,
-      });
+      navigate("/login", { replace: true });
     } catch (error) {
       console.error("Logout error:", error);
-
       setIsLoggingOut(false);
     }
   };
@@ -1097,10 +1300,6 @@ const RegistrarPortalLayout = () => {
 
   const renderSidebarContent = (mobile = false) => (
     <>
-      {/* ===================================================
-          SIDEBAR HEADER
-      =================================================== */}
-
       <div
         className={`h-20 flex-shrink-0 px-6 flex items-center border-b ${
           darkMode ? "border-slate-700" : "border-slate-100"
@@ -1112,9 +1311,7 @@ const RegistrarPortalLayout = () => {
               src={profilePhotoUrl}
               alt={`${registrarFullName} profile`}
               className="w-full h-full object-cover"
-              onError={() => {
-                setProfilePhotoUrl("");
-              }}
+              onError={() => setProfilePhotoUrl("")}
             />
           ) : (
             <span>{profileLoading ? "..." : registrarInitials}</span>
@@ -1123,7 +1320,6 @@ const RegistrarPortalLayout = () => {
 
         <div className="ml-3 min-w-0">
           <h1 className="font-bold text-lg tracking-tight">SIMS</h1>
-
           <p
             className={`text-xs truncate ${
               darkMode ? "text-slate-400" : "text-slate-400"
@@ -1132,8 +1328,6 @@ const RegistrarPortalLayout = () => {
             Registrar Portal
           </p>
         </div>
-
-        {/* MOBILE CLOSE */}
 
         {mobile && (
           <button
@@ -1149,10 +1343,6 @@ const RegistrarPortalLayout = () => {
         )}
       </div>
 
-      {/* ===================================================
-          SIDEBAR NAVIGATION
-      =================================================== */}
-
       <div
         className="flex-1 min-h-0 overflow-y-auto overscroll-y-auto px-3 py-4 pb-28"
         style={{
@@ -1163,9 +1353,7 @@ const RegistrarPortalLayout = () => {
         <nav className="space-y-1">
           {sidebarItems.map((item) => {
             const hasChildren = item.children?.length > 0;
-
             const isExpanded = expandedMenus[item.name];
-
             const active =
               isPathActive(item.path) || isChildActive(item.children);
 
@@ -1220,8 +1408,18 @@ const RegistrarPortalLayout = () => {
                     {item.badge && (
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          active ? "bg-current" : "bg-emerald-500"
+                          active ? "bg-current" : "bg-red-500"
                         }`}
+                        aria-label={
+                          item.name === "Messages"
+                            ? "Unread messages"
+                            : "Unread notifications"
+                        }
+                        title={
+                          item.name === "Messages"
+                            ? "Unread messages"
+                            : "Unread notifications"
+                        }
                       />
                     )}
 
@@ -1289,10 +1487,6 @@ const RegistrarPortalLayout = () => {
         </nav>
       </div>
 
-      {/* ===================================================
-          LOGOUT
-      =================================================== */}
-
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 p-4 border-t ${
           darkMode
@@ -1326,14 +1520,10 @@ const RegistrarPortalLayout = () => {
         darkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
       }`}
     >
-      {/* =====================================================
-          DESKTOP SIDEBAR
-      ===================================================== */}
+      {/* DESKTOP SIDEBAR */}
 
       <aside
-        style={{
-          width: `${sidebarWidth}px`,
-        }}
+        style={{ width: `${sidebarWidth}px` }}
         className={`fixed inset-y-0 left-0 z-[90] hidden h-screen flex-col overflow-hidden border-r transition-colors duration-300 lg:flex ${
           darkMode
             ? "bg-slate-900 border-slate-700"
@@ -1341,8 +1531,6 @@ const RegistrarPortalLayout = () => {
         } ${isResizing ? "select-none" : ""}`}
       >
         {renderSidebarContent(false)}
-
-        {/* RESIZE HANDLE */}
 
         <div
           role="separator"
@@ -1362,24 +1550,16 @@ const RegistrarPortalLayout = () => {
         />
       </aside>
 
-      {/* DESKTOP SPACER */}
-
       <div
         className="hidden flex-shrink-0 lg:block"
-        style={{
-          width: `${sidebarWidth}px`,
-        }}
+        style={{ width: `${sidebarWidth}px` }}
         aria-hidden="true"
       />
 
-      {/* =====================================================
-          MAIN AREA
-      ===================================================== */}
+      {/* MAIN AREA */}
 
       <div className="min-h-screen min-w-0 flex-1">
-        {/* ===================================================
-            NAVBAR
-        =================================================== */}
+        {/* NAVBAR */}
 
         <header
           className={`sticky top-0 z-50 h-20 border-b flex items-center justify-between px-4 sm:px-6 lg:px-8 ${
@@ -1388,11 +1568,7 @@ const RegistrarPortalLayout = () => {
               : "bg-white border-slate-200 text-slate-900"
           }`}
         >
-          {/* LEFT */}
-
           <div className="flex items-center min-w-0 gap-3">
-            {/* MOBILE MENU */}
-
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -1412,14 +1588,11 @@ const RegistrarPortalLayout = () => {
               >
                 Registrar Portal
               </p>
-
               <h2 className="font-bold text-base sm:text-lg truncate">
                 {getPageTitle()}
               </h2>
             </div>
           </div>
-
-          {/* RIGHT */}
 
           <div className="flex items-center gap-1 sm:gap-3 ml-auto flex-shrink-0">
             {/* DARK MODE */}
@@ -1438,16 +1611,13 @@ const RegistrarPortalLayout = () => {
               {darkMode ? "☀️" : "🌙"}
             </button>
 
-            {/* =================================================
-                NOTIFICATIONS
-            ================================================= */}
+            {/* NOTIFICATIONS */}
 
             <div className="relative" ref={notificationRef}>
               <button
                 type="button"
                 onClick={() => {
                   setIsNotificationOpen((previous) => !previous);
-
                   setIsProfileOpen(false);
                 }}
                 aria-label="Notifications"
@@ -1468,28 +1638,14 @@ const RegistrarPortalLayout = () => {
                 )}
               </button>
 
-              {/* =================================================
-                  NOTIFICATION DROPDOWN
-              ================================================= */}
-
               {isNotificationOpen && (
                 <div
-                  className={`
-                    fixed left-4 right-4 top-[84px]
-                    z-[100]
-                    w-auto max-w-none
-                    overflow-hidden rounded-2xl border shadow-xl
-                    sm:absolute sm:left-auto sm:right-0 sm:top-12
-                    sm:w-[340px] sm:max-w-[calc(100vw-2rem)]
-                    ${
-                      darkMode
-                        ? "bg-slate-800 border-slate-700"
-                        : "bg-white border-slate-200"
-                    }
-                  `}
+                  className={`fixed left-4 right-4 top-[84px] z-[100] w-auto max-w-none overflow-hidden rounded-2xl border shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[340px] sm:max-w-[calc(100vw-2rem)] ${
+                    darkMode
+                      ? "bg-slate-800 border-slate-700"
+                      : "bg-white border-slate-200"
+                  }`}
                 >
-                  {/* HEADER */}
-
                   <div
                     className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${
                       darkMode ? "border-slate-700" : "border-slate-200"
@@ -1497,7 +1653,6 @@ const RegistrarPortalLayout = () => {
                   >
                     <div className="min-w-0">
                       <h3 className="text-sm font-bold">Notifications</h3>
-
                       <p
                         className={`text-xs mt-0.5 ${
                           darkMode ? "text-slate-400" : "text-slate-500"
@@ -1522,15 +1677,8 @@ const RegistrarPortalLayout = () => {
                     )}
                   </div>
 
-                  {/* LIST */}
-
                   <div
-                    className="
-                      max-h-[calc(100vh-210px)]
-                      overflow-y-auto
-                      overscroll-y-auto
-                      sm:max-h-[380px]
-                    "
+                    className="max-h-[calc(100vh-210px)] overflow-y-auto overscroll-y-auto sm:max-h-[380px]"
                     style={{
                       WebkitOverflowScrolling: "touch",
                       touchAction: "pan-y",
@@ -1539,7 +1687,6 @@ const RegistrarPortalLayout = () => {
                     {notificationsLoading ? (
                       <div className="p-6 text-center">
                         <div className="text-2xl mb-2 animate-pulse">🔔</div>
-
                         <p
                           className={`text-xs ${
                             darkMode ? "text-slate-400" : "text-slate-500"
@@ -1551,7 +1698,6 @@ const RegistrarPortalLayout = () => {
                     ) : notifications.length === 0 ? (
                       <div className="p-6 text-center">
                         <div className="text-2xl mb-2">🔔</div>
-
                         <p
                           className={`text-xs ${
                             darkMode ? "text-slate-400" : "text-slate-500"
@@ -1593,7 +1739,6 @@ const RegistrarPortalLayout = () => {
                                   <p className="text-xs font-bold break-words min-w-0 flex-1">
                                     {notification.title}
                                   </p>
-
                                   <span
                                     className={`text-[10px] whitespace-nowrap flex-shrink-0 ${
                                       darkMode
@@ -1624,8 +1769,6 @@ const RegistrarPortalLayout = () => {
                     )}
                   </div>
 
-                  {/* VIEW ALL */}
-
                   <div
                     className={`border-t ${
                       darkMode ? "border-slate-700" : "border-slate-100"
@@ -1647,46 +1790,36 @@ const RegistrarPortalLayout = () => {
               )}
             </div>
 
-            {/* =================================================
-                PROFILE
-            ================================================= */}
+            {/* PROFILE */}
 
             <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
                 onClick={() => {
                   setIsProfileOpen((previous) => !previous);
-
                   setIsNotificationOpen(false);
                 }}
                 className={`flex items-center gap-3 px-2 py-1.5 rounded-xl ${
                   darkMode ? "hover:bg-slate-800" : "hover:bg-slate-100"
                 }`}
               >
-                {/* PHOTO */}
-
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
                   {profilePhotoUrl ? (
                     <img
                       src={profilePhotoUrl}
                       alt={registrarFullName}
                       className="w-full h-full object-cover"
-                      onError={() => {
-                        setProfilePhotoUrl("");
-                      }}
+                      onError={() => setProfilePhotoUrl("")}
                     />
                   ) : (
                     <span>{profileLoading ? "..." : registrarInitials}</span>
                   )}
                 </div>
 
-                {/* NAME */}
-
                 <div className="hidden sm:block text-left max-w-44">
                   <p className="text-sm font-semibold truncate">
                     {profileLoading ? "Loading..." : registrarFullName}
                   </p>
-
                   <p
                     className={`text-xs truncate ${
                       darkMode ? "text-slate-400" : "text-slate-400"
@@ -1705,8 +1838,6 @@ const RegistrarPortalLayout = () => {
                 </span>
               </button>
 
-              {/* PROFILE DROPDOWN */}
-
               {isProfileOpen && (
                 <div
                   className={`absolute right-0 top-14 w-64 max-w-[calc(100vw-1rem)] rounded-xl border shadow-xl z-50 overflow-hidden ${
@@ -1715,8 +1846,6 @@ const RegistrarPortalLayout = () => {
                       : "bg-white border-slate-200"
                   }`}
                 >
-                  {/* PROFILE INFO */}
-
                   <div
                     className={`px-4 py-4 border-b ${
                       darkMode ? "border-slate-700" : "border-slate-200"
@@ -1729,9 +1858,7 @@ const RegistrarPortalLayout = () => {
                             src={profilePhotoUrl}
                             alt={registrarFullName}
                             className="w-full h-full object-cover"
-                            onError={() => {
-                              setProfilePhotoUrl("");
-                            }}
+                            onError={() => setProfilePhotoUrl("")}
                           />
                         ) : (
                           <span>{registrarInitials}</span>
@@ -1742,7 +1869,6 @@ const RegistrarPortalLayout = () => {
                         <p className="text-sm font-bold truncate">
                           {registrarFullName}
                         </p>
-
                         <p
                           className={`text-xs mt-1 truncate ${
                             darkMode ? "text-slate-400" : "text-slate-500"
@@ -1767,8 +1893,6 @@ const RegistrarPortalLayout = () => {
                     )}
                   </div>
 
-                  {/* MY PROFILE */}
-
                   <button
                     type="button"
                     onClick={() => navigateTo("/registrar/profile")}
@@ -1780,8 +1904,6 @@ const RegistrarPortalLayout = () => {
                     <span>My Profile</span>
                   </button>
 
-                  {/* SETTINGS */}
-
                   <button
                     type="button"
                     onClick={() => navigateTo("/registrar/settings")}
@@ -1792,8 +1914,6 @@ const RegistrarPortalLayout = () => {
                     <span>⚙️</span>
                     <span>Settings</span>
                   </button>
-
-                  {/* LOGOUT */}
 
                   <div
                     className={`border-t ${
@@ -1819,9 +1939,7 @@ const RegistrarPortalLayout = () => {
           </div>
         </header>
 
-        {/* ===================================================
-            PAGE CONTENT
-        =================================================== */}
+        {/* PAGE CONTENT */}
 
         <main
           className={`min-w-0 min-h-[calc(100vh-5rem)] transition-colors duration-300 ${
@@ -1831,18 +1949,14 @@ const RegistrarPortalLayout = () => {
           <Outlet
             context={{
               darkMode,
-
               notifications,
               unreadCount,
-
               markNotificationRead,
               markAllNotificationsRead,
               deleteNotification,
-
               selectedNotification,
               openNotification,
               closeNotificationModal,
-
               registrarProfile,
               profilePhotoUrl,
               registrarFullName,
@@ -1851,9 +1965,7 @@ const RegistrarPortalLayout = () => {
         </main>
       </div>
 
-      {/* =====================================================
-          MOBILE SIDEBAR OVERLAY
-      ===================================================== */}
+      {/* MOBILE SIDEBAR OVERLAY */}
 
       {isMobileSidebarOpen && (
         <div
@@ -1864,9 +1976,7 @@ const RegistrarPortalLayout = () => {
         </div>
       )}
 
-      {/* =====================================================
-          MOBILE SIDEBAR
-      ===================================================== */}
+      {/* MOBILE SIDEBAR */}
 
       <aside
         className={`fixed inset-y-0 left-0 z-[90] w-[280px] max-w-[85vw] h-screen flex flex-col overflow-hidden border-r shadow-2xl transform transition-transform duration-300 lg:hidden ${
@@ -1880,9 +1990,7 @@ const RegistrarPortalLayout = () => {
         {renderSidebarContent(true)}
       </aside>
 
-      {/* =====================================================
-          NOTIFICATION MODAL
-      ===================================================== */}
+      {/* NOTIFICATION MODAL */}
 
       {selectedNotification && (
         <div
@@ -1901,8 +2009,6 @@ const RegistrarPortalLayout = () => {
               touchAction: "pan-y",
             }}
           >
-            {/* HEADER */}
-
             <div
               className={`px-5 sm:px-6 py-5 border-b flex items-start justify-between gap-4 ${
                 darkMode ? "border-slate-700" : "border-slate-200"
@@ -1923,7 +2029,6 @@ const RegistrarPortalLayout = () => {
                   <p className="text-xs uppercase tracking-wider font-bold text-slate-400">
                     Notification
                   </p>
-
                   <h2 className="text-lg font-black break-words">
                     {selectedNotification.title}
                   </h2>
@@ -1941,8 +2046,6 @@ const RegistrarPortalLayout = () => {
               </button>
             </div>
 
-            {/* CONTENT */}
-
             <div className="px-5 sm:px-6 py-6">
               <p
                 className={`text-sm leading-relaxed break-words ${
@@ -1951,8 +2054,6 @@ const RegistrarPortalLayout = () => {
               >
                 {selectedNotification.message}
               </p>
-
-              {/* RELATED RECORD */}
 
               {selectedNotification.relatedEntityType && (
                 <div
@@ -1965,7 +2066,6 @@ const RegistrarPortalLayout = () => {
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
                     Related Record
                   </p>
-
                   <p className="text-sm font-semibold mt-1 break-words">
                     {selectedNotification.relatedEntityType}
                   </p>
@@ -1990,10 +2090,7 @@ const RegistrarPortalLayout = () => {
                 </div>
               )}
 
-              {/* CONTROLS */}
-
               <div className="mt-6 flex flex-wrap justify-end gap-2">
-                {/* PLACEMENT CONFIRMED */}
                 {selectedNotification.type === "placement_confirmed" &&
                   selectedNotification.relatedEntityType ===
                     "InternshipApplication" && (
@@ -2001,7 +2098,6 @@ const RegistrarPortalLayout = () => {
                       type="button"
                       onClick={() => {
                         closeNotificationModal();
-
                         navigateTo("/registrar/deployment");
                       }}
                       className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
@@ -2009,7 +2105,6 @@ const RegistrarPortalLayout = () => {
                       Deploy this student
                     </button>
                   )}
-                {/* APPLICATION */}
 
                 {selectedNotification.relatedEntityType ===
                   "InternshipApplication" && (
@@ -2017,7 +2112,6 @@ const RegistrarPortalLayout = () => {
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-
                       navigateTo("/registrar/applications");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
@@ -2026,15 +2120,12 @@ const RegistrarPortalLayout = () => {
                   </button>
                 )}
 
-                {/* DOCUMENTS */}
-
                 {selectedNotification.relatedEntityType ===
                   "DocumentSubmission" && (
                   <button
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-
                       navigateTo("/registrar/documents");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
@@ -2043,14 +2134,11 @@ const RegistrarPortalLayout = () => {
                   </button>
                 )}
 
-                {/* STUDENT RECORD */}
-
                 {selectedNotification.relatedEntityType === "StudentRecord" && (
                   <button
                     type="button"
                     onClick={() => {
                       closeNotificationModal();
-
                       navigateTo("/registrar/students");
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold shadow-md hover:from-emerald-600 hover:to-teal-700 transition"
@@ -2058,8 +2146,6 @@ const RegistrarPortalLayout = () => {
                     View Student Record
                   </button>
                 )}
-
-                {/* MARK AS READ */}
 
                 {!selectedNotification.readAt && (
                   <button
@@ -2076,8 +2162,6 @@ const RegistrarPortalLayout = () => {
                     Mark as Read
                   </button>
                 )}
-
-                {/* CLOSE */}
 
                 <button
                   type="button"
@@ -2096,9 +2180,7 @@ const RegistrarPortalLayout = () => {
         </div>
       )}
 
-      {/* =====================================================
-          LOGOUT CONFIRMATION MODAL
-      ===================================================== */}
+      {/* LOGOUT CONFIRMATION MODAL */}
 
       {showLogoutConfirm && (
         <div
@@ -2113,8 +2195,6 @@ const RegistrarPortalLayout = () => {
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            {/* ICON */}
-
             <div className="px-6 pt-6">
               <div
                 className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${
@@ -2127,11 +2207,8 @@ const RegistrarPortalLayout = () => {
               </div>
             </div>
 
-            {/* CONTENT */}
-
             <div className="px-6 pt-4">
               <h2 className="text-lg font-bold">Logout?</h2>
-
               <p
                 className={`mt-2 text-sm leading-relaxed ${
                   darkMode ? "text-slate-400" : "text-slate-500"
@@ -2140,8 +2217,6 @@ const RegistrarPortalLayout = () => {
                 Are you sure you want to logout from your Registrar account?
               </p>
             </div>
-
-            {/* ACTIONS */}
 
             <div className="px-6 py-5 mt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <button

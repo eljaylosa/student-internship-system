@@ -12,6 +12,16 @@ const Profile = () => {
   const resumeInputRef = useRef(null);
   const corInputRef = useRef(null);
 
+  // =========================================================
+  // PROFILE PHOTO BLOB / REQUEST TRACKING
+  // =========================================================
+  //
+  // This prevents an older Storage download from overwriting
+  // a newer photo that the user has just uploaded.
+  //
+  const profilePhotoBlobRef = useRef(null);
+  const profilePhotoRequestRef = useRef(0);
+
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -133,6 +143,7 @@ const Profile = () => {
               resume_name,
               cor_url,
               cor_name,
+              updated_at,
               schools (
                 id,
                 name,
@@ -194,6 +205,12 @@ const Profile = () => {
         setProfilePhotoPath(studentData.profile_photo_url);
 
         await loadStoragePreview(studentData.profile_photo_url, "profile");
+      } else {
+        // Invalidate any previous profile photo request.
+        profilePhotoRequestRef.current += 1;
+
+        setProfilePhoto(null);
+        setProfilePhotoPath(null);
       }
 
       // -----------------------------------------
@@ -209,6 +226,9 @@ const Profile = () => {
           type: "",
           existing: true,
         });
+      } else {
+        setResumePath(null);
+        setResume(null);
       }
 
       // -----------------------------------------
@@ -224,6 +244,9 @@ const Profile = () => {
           type: "application/pdf",
           existing: true,
         });
+      } else {
+        setCorPath(null);
+        setCor(null);
       }
     } catch (error) {
       console.error("Error loading student profile:", error);
@@ -274,22 +297,100 @@ const Profile = () => {
 
       if (!storagePath) return;
 
-      // The database stores the bucket name as part of the profile path.
-      // .from(bucket) already selects the bucket, so remove that prefix.
+      // =========================================================
+      // PROFILE PHOTO
+      // =========================================================
 
-
-      // profile-photos is a public bucket, so use its public URL directly.
       if (type === "profile") {
-        const { data } = supabaseStudent.storage
-          .from(bucket)
-          .getPublicUrl(storagePath);
+        /*
+         * IMPORTANT:
+         *
+         * Every profile-photo load gets its own request ID.
+         * If a newer upload starts while this download is still
+         * running, this request becomes stale and its result
+         * will NOT be allowed to replace the newer photo.
+         */
+        const requestId = ++profilePhotoRequestRef.current;
 
-        if (data?.publicUrl) {
-          setProfilePhoto(data.publicUrl);
+        console.log(
+          "[Profile Photo] Download path:",
+          storagePath,
+          "request:",
+          requestId
+        );
+
+        const { data, error } = await supabaseStudent.storage
+          .from(bucket)
+          .download(storagePath);
+
+        if (error) {
+          console.error(
+            "[Profile Photo] Error downloading profile photo:",
+            error
+          );
+
+          /*
+           * Do not erase a newer photo if this request became stale.
+           */
+          if (requestId === profilePhotoRequestRef.current) {
+            setProfilePhoto(null);
+          }
+
+          return;
         }
+
+        if (!data) {
+          console.error("[Profile Photo] Download returned no data.");
+
+          if (requestId === profilePhotoRequestRef.current) {
+            setProfilePhoto(null);
+          }
+
+          return;
+        }
+
+        const blobUrl = URL.createObjectURL(data);
+
+        // =======================================================
+        // STALE REQUEST PROTECTION
+        // =======================================================
+
+        if (requestId !== profilePhotoRequestRef.current) {
+          console.log(
+            "[Profile Photo] Ignoring stale Storage result:",
+            requestId
+          );
+
+          URL.revokeObjectURL(blobUrl);
+
+          return;
+        }
+
+        // =======================================================
+        // REPLACE CURRENT BLOB SAFELY
+        // =======================================================
+
+        if (profilePhotoBlobRef.current) {
+          URL.revokeObjectURL(profilePhotoBlobRef.current);
+        }
+
+        profilePhotoBlobRef.current = blobUrl;
+
+        setProfilePhoto(blobUrl);
+
+        console.log(
+          "[Profile Photo] Loaded current Storage object:",
+          storagePath,
+          "request:",
+          requestId
+        );
 
         return;
       }
+
+      // =========================================================
+      // OTHER STORAGE PREVIEWS
+      // =========================================================
 
       const { data, error } = await supabaseStudent.storage
         .from(bucket)
@@ -297,16 +398,33 @@ const Profile = () => {
 
       if (error) {
         console.error("Error creating signed URL:", error);
+
         return;
       }
 
-      if (type === "profile" && data?.signedUrl) {
-        setProfilePhoto(data.signedUrl);
+      if (data?.signedUrl) {
+        console.log("[Storage Preview] Signed URL created:", storagePath);
       }
     } catch (error) {
       console.error("Storage preview error:", error);
     }
   };
+
+  // =========================================
+  // CLEAN UP PROFILE PHOTO BLOB
+  // =========================================
+
+  useEffect(() => {
+    return () => {
+      profilePhotoRequestRef.current += 1;
+
+      if (profilePhotoBlobRef.current) {
+        URL.revokeObjectURL(profilePhotoBlobRef.current);
+
+        profilePhotoBlobRef.current = null;
+      }
+    };
+  }, []);
 
   // =========================================
   // PROFILE HANDLERS
@@ -376,29 +494,17 @@ const Profile = () => {
 
       const studentPayload = {
         student_id: profile.studentId || null,
-
         phone: profile.phone || null,
-
         address: profile.address || null,
-
         emergency_contact: profile.emergencyContact || null,
-
         program: academicRecords.program || null,
-
         year_level: academicRecords.yearLevel || null,
-
         department: academicRecords.department || null,
-
         profile_photo_url: profilePhotoPath || null,
-
         resume_url: resumePath || null,
-
         resume_name: resume?.name || null,
-
         cor_url: corPath || null,
-
         cor_name: cor?.name || null,
-
         updated_at: new Date().toISOString(),
       };
 
@@ -480,28 +586,67 @@ const Profile = () => {
     try {
       setIsSaving(true);
 
+      // =========================================================
+      // INVALIDATE ALL PREVIOUS STORAGE PHOTO REQUESTS
+      // =========================================================
+      //
+      // This is the important race-condition fix.
+      //
+      // Any old download that is still running is now stale and
+      // will not be allowed to overwrite this new local preview.
+      //
+      const uploadRequestId = ++profilePhotoRequestRef.current;
+
+      console.log(
+        "[Profile Photo] Starting new photo upload. Request:",
+        uploadRequestId
+      );
+
+      // =========================================================
+      // SHOW THE NEW PHOTO IMMEDIATELY
+      // =========================================================
+
+      const localPreviewUrl = URL.createObjectURL(file);
+
+      if (profilePhotoBlobRef.current) {
+        URL.revokeObjectURL(profilePhotoBlobRef.current);
+      }
+
+      profilePhotoBlobRef.current = localPreviewUrl;
+
+      setProfilePhoto(localPreviewUrl);
+
+      // =========================================
+      // FILE EXTENSION
+      // =========================================
+
       const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
 
       const storagePath = `profile-photos/${userId}/profile-photo.${extension}`;
 
-      // -----------------------------------------
+      console.log("[Profile Photo] Upload path:", storagePath);
+
+      // =========================================
       // UPLOAD PROFILE PHOTO
-      // -----------------------------------------
+      // =========================================
 
       const { error: uploadError } = await supabaseStudent.storage
         .from(PROFILE_PHOTO_BUCKET)
         .upload(storagePath, file, {
           upsert: true,
           contentType: file.type,
+          cacheControl: "0",
         });
 
       if (uploadError) {
         throw uploadError;
       }
 
-      // -----------------------------------------
+      console.log("[Profile Photo] Storage upload completed:", storagePath);
+
+      // =========================================
       // SAVE STORAGE PATH
-      // -----------------------------------------
+      // =========================================
 
       const { error: updateError } = await supabaseStudent
         .from("students")
@@ -515,27 +660,33 @@ const Profile = () => {
         throw updateError;
       }
 
+      console.log("[Profile Photo] Database path updated:", storagePath);
+
+      // =========================================
+      // UPDATE LOCAL PATH
+      // =========================================
+
       setProfilePhotoPath(storagePath);
 
-      // -----------------------------------------
-      // REFRESH PROFILE PHOTO PREVIEW
-      // -----------------------------------------
+      /*
+       * IMPORTANT:
+       *
+       * We intentionally DO NOT call loadStoragePreview()
+       * here.
+       *
+       * The localPreviewUrl is the exact File selected by
+       * the user, so it is already guaranteed to be the image
+       * they just uploaded.
+       *
+       * Calling Storage immediately after upsert could introduce
+       * another race where an older Storage response replaces
+       * the correct local preview.
+       */
 
-      // profile-photos is public, and storagePath already contains the
-      // bucket prefix. Remove it before calling getPublicUrl().
-      const publicStoragePath = storagePath.startsWith(
-        `${PROFILE_PHOTO_BUCKET}/`
-      )
-        ? storagePath.substring(`${PROFILE_PHOTO_BUCKET}/`.length)
-        : storagePath;
-
-      const { data: publicData } = supabaseStudent.storage
-        .from(PROFILE_PHOTO_BUCKET)
-        .getPublicUrl(publicStoragePath);
-
-      if (publicData?.publicUrl) {
-        setProfilePhoto(publicData.publicUrl);
-      }
+      console.log(
+        "[Profile Photo] New photo is now the active local preview:",
+        uploadRequestId
+      );
 
       alert("Profile photo updated successfully.");
     } catch (error) {
@@ -957,6 +1108,7 @@ const Profile = () => {
       const link = document.createElement("a");
 
       link.href = blobUrl;
+
       link.download = cor?.name || "certificate-of-registration.pdf";
 
       document.body.appendChild(link);
@@ -1502,9 +1654,7 @@ const Profile = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* =========================================
-              RESUME / CV
-          ========================================= */}
+          {/* RESUME / CV */}
 
           <div
             className={`border rounded-2xl p-5 ${
@@ -1664,9 +1814,7 @@ const Profile = () => {
             )}
           </div>
 
-          {/* =========================================
-              CERTIFICATE OF REGISTRATION
-          ========================================= */}
+          {/* CERTIFICATE OF REGISTRATION */}
 
           <div
             className={`border rounded-2xl p-5 ${

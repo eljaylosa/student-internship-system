@@ -43,6 +43,11 @@ export default function StudentPortalLayout() {
     useState(false);
 
   /* =========================================================
+     UNREAD CHAT MESSAGES
+     ========================================================= */
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+  /* =========================================================
      DARK MODE
      ========================================================= */
   const [darkMode, setDarkMode] = useState(() => {
@@ -290,46 +295,152 @@ export default function StudentPortalLayout() {
     };
   }, []);
 
+  /* =========================================================
+     UNREAD CHAT DOT — REALTIME + FALLBACK SYNC
+     ========================================================= */
+  useEffect(() => {
+    let active = true;
+    let channel;
+    let timer;
+
+    const refresh = async (userId) => {
+      try {
+        const { data: memberships, error: memberError } = await supabaseStudent
+          .from("conversation_members")
+          .select("conversation_id")
+          .eq("user_id", userId);
+
+        if (memberError) throw memberError;
+
+        const ids = [
+          ...new Set(
+            (memberships || []).map((m) => m.conversation_id).filter(Boolean)
+          ),
+        ];
+
+        if (!ids.length) {
+          if (active) setHasUnreadMessages(false);
+          return;
+        }
+
+        const { data: messages, error: messageError } = await supabaseStudent
+          .from("messages")
+          .select("id, conversation_id, sender_id, created_at")
+          .in("conversation_id", ids)
+          .neq("sender_id", userId)
+          .eq("is_deleted", false)
+          .order("created_at", { ascending: false });
+
+        if (messageError) throw messageError;
+
+        const { data: reads, error: readError } = await supabaseStudent
+          .from("message_reads")
+          .select("conversation_id, last_read_at")
+          .eq("user_id", userId)
+          .in("conversation_id", ids);
+
+        if (readError) throw readError;
+
+        const readTimes = new Map(
+          (reads || []).map((r) => [
+            r.conversation_id,
+            new Date(r.last_read_at).getTime(),
+          ])
+        );
+
+        const unread = (messages || []).some((m) => {
+          const lastRead = readTimes.get(m.conversation_id) || 0;
+          return new Date(m.created_at).getTime() > lastRead;
+        });
+
+        if (active) setHasUnreadMessages(unread);
+      } catch (error) {
+        console.error("[Student Messages] Unread check failed:", error);
+      }
+    };
+
+    const initialize = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabaseStudent.auth.getUser();
+
+      if (error || !user || !active) return;
+
+      await refresh(user.id);
+
+      channel = supabaseStudent
+        .channel(`student-unread-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "messages",
+          },
+          () => refresh(user.id)
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "message_reads",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => refresh(user.id)
+        )
+        .subscribe();
+
+      timer = window.setInterval(() => refresh(user.id), 5000);
+    };
+
+    initialize();
+
+    return () => {
+      active = false;
+      if (timer) window.clearInterval(timer);
+      if (channel) supabaseStudent.removeChannel(channel);
+    };
+  }, []);
   const getProfilePhotoUrl = async (photoPath) => {
     if (!photoPath) return null;
 
     try {
       let cleanPath = String(photoPath).trim();
 
-      /*
-       * If profile_photo_url is already a full URL,
-       * use it directly.
-       */
-      if (/^https?:\/\//i.test(cleanPath)) {
-        return cleanPath;
-      }
+      if (!cleanPath) return null;
 
-      /*
-       * Remove only a leading slash.
-       */
       cleanPath = cleanPath.replace(/^\/+/, "");
 
-      /*
-       * The SIMS database currently stores the profile photo
-       * path including the bucket name:
-       *
-       * profile-photos/user-id/profile-photo.jpg
-       *
-       * Since the actual Storage object uses that exact path
-       * inside the profile-photos bucket, KEEP the prefix here.
-       */
-      const { data, error } = supabaseStudent.storage
+      console.log("[Student Portal] Downloading profile photo:", cleanPath);
+
+      const { data, error } = await supabaseStudent.storage
         .from(STORAGE_BUCKET)
-        .getPublicUrl(cleanPath);
+        .download(cleanPath);
 
       if (error) {
-        console.error("Error creating profile photo URL:", error);
+        console.error("[Student Portal] Profile photo download error:", error);
+
         return null;
       }
 
-      return data?.publicUrl || null;
+      if (!data) {
+        console.error(
+          "[Student Portal] Profile photo download returned no data."
+        );
+
+        return null;
+      }
+
+      const blobUrl = URL.createObjectURL(data);
+
+      console.log("[Student Portal] Profile photo Blob loaded:", cleanPath);
+
+      return blobUrl;
     } catch (error) {
-      console.error("Profile photo URL error:", error);
+      console.error("[Student Portal] Profile photo loading error:", error);
+
       return null;
     }
   };
@@ -403,11 +514,21 @@ export default function StudentPortalLayout() {
         }
 
         if (studentData.profile_photo_url) {
-          const signedUrl = await getProfilePhotoUrl(
+          const photoUrl = await getProfilePhotoUrl(
             studentData.profile_photo_url
           );
 
-          setProfilePhoto(signedUrl);
+          console.log("[Student Portal] PHOTO URL RESULT:", photoUrl);
+          console.log(
+            "[Student Portal] PHOTO PATH FROM DB:",
+            studentData.profile_photo_url
+          );
+
+          if (photoUrl) {
+            setProfilePhoto(photoUrl);
+          } else {
+            setProfilePhoto(null);
+          }
         } else {
           setProfilePhoto(null);
         }
@@ -1257,6 +1378,14 @@ export default function StudentPortalLayout() {
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
                     </span>
+
+                    {item.label === "Messages" && hasUnreadMessages && (
+                      <span
+                        className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900"
+                        aria-label="Unread messages"
+                        title="Unread messages"
+                      />
+                    )}
 
                     {hasChildren && (
                       <span className="text-xs">

@@ -173,6 +173,7 @@ export default function CompanyPortalLayout() {
 
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   const unreadCount = notifications.filter(
     (notification) => !notification.readAt
@@ -219,7 +220,93 @@ export default function CompanyPortalLayout() {
      ========================================================= */
 
   useEffect(() => {
-    loadCompanyProfile();
+    let isMounted = true;
+
+    const loadCompanyProfile = async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseCompany.auth.getUser();
+
+        if (!isMounted) return;
+
+        if (authError) {
+          console.error("[Company Profile] Auth error:", authError);
+          return;
+        }
+
+        if (!user) {
+          setCompanyUserId(null);
+          setCompanyName("Company Account");
+          setCompanyLogoUrl(null);
+          return;
+        }
+
+        setCompanyUserId(user.id);
+
+        const { data, error } = await supabaseCompany
+          .from("companies")
+          .select("company_name")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error("[Company Profile] Profile error:", error);
+        }
+
+        setCompanyName(data?.company_name || "Company Account");
+
+        const logoPath =
+          user.user_metadata?.company_logo_url ||
+          user.user_metadata?.companyLogoUrl ||
+          null;
+
+        if (!logoPath) {
+          setCompanyLogoUrl(null);
+          return;
+        }
+
+        if (/^https?:\/\//i.test(logoPath)) {
+          setCompanyLogoUrl(logoPath);
+          return;
+        }
+
+        const { data: signedData, error: signedError } =
+          await supabaseCompany.storage
+            .from(COMPANY_LOGO_BUCKET)
+            .createSignedUrl(logoPath, 60 * 60);
+
+        if (!isMounted) return;
+
+        if (signedError) {
+          console.warn(
+            "[Company Profile] Unable to load company logo:",
+            signedError
+          );
+          setCompanyLogoUrl(null);
+          return;
+        }
+
+        setCompanyLogoUrl(signedData?.signedUrl || null);
+      } catch (error) {
+        if (isMounted) {
+          console.error(
+            "[Company Profile] Failed to load company profile:",
+            error
+          );
+          setCompanyLogoUrl(null);
+        }
+      }
+    };
+
+    void loadCompanyProfile();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const loadCompanyProfile = async () => {
@@ -315,6 +402,8 @@ export default function CompanyPortalLayout() {
 
   useEffect(() => {
     if (!companyUserId) {
+      setNotifications([]);
+      setSelectedNotification(null);
       return;
     }
 
@@ -325,45 +414,33 @@ export default function CompanyPortalLayout() {
       try {
         const rows = await fetchCompanyNotifications(companyUserId);
 
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         setNotifications(rows);
 
-        /*
-          Keep currently opened notification synchronized
-          with the database.
-        */
         setSelectedNotification((current) => {
-          if (!current) {
-            return null;
-          }
+          if (!current) return null;
 
-          const updated = rows.find(
-            (notification) => notification.id === current.id
+          return (
+            rows.find((notification) => notification.id === current.id) || null
           );
-
-          return updated || null;
         });
       } catch (error) {
-        console.error("Failed to load company notifications:", error);
+        if (isMounted) {
+          console.error("[Company Notifications] Failed to refresh:", error);
+        }
       }
     };
 
     const setupRealtime = async () => {
+      // Load current notifications before starting Realtime.
       await refreshNotifications();
 
-      if (!isMounted) {
-        return;
-      }
+      if (!isMounted) return;
 
-      /*
-        Listen only to notifications belonging to
-        the currently logged-in company user.
-      */
-      notificationChannel = supabaseCompany
-        .channel(`company-notifications:${companyUserId}`)
+      // Register every callback BEFORE subscribe().
+      const channel = supabaseCompany
+        .channel(`company-notifications:${companyUserId}:${Date.now()}`)
         .on(
           "postgres_changes",
           {
@@ -373,13 +450,9 @@ export default function CompanyPortalLayout() {
             filter: `recipient_id=eq.${companyUserId}`,
           },
           async (payload) => {
-            /*
-              INSERT / UPDATE:
-              Only process company notifications.
+            if (!isMounted) return;
 
-              DELETE events do not expose the same new row,
-              so simply refresh the current list.
-            */
+            // Ignore INSERT/UPDATE events for other roles.
             if (
               payload.eventType !== "DELETE" &&
               payload.new?.recipient_role !== "company"
@@ -389,32 +462,244 @@ export default function CompanyPortalLayout() {
 
             await refreshNotifications();
           }
-        )
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            console.log("[Company Notifications] Realtime connected.");
-          }
+        );
 
-          if (status === "CHANNEL_ERROR") {
-            console.error("[Company Notifications] Realtime channel error.");
-          }
+      // Save the channel before subscribing so cleanup can find it.
+      notificationChannel = channel;
 
-          if (status === "TIMED_OUT") {
-            console.warn("[Company Notifications] Realtime channel timed out.");
-          }
-        });
+      channel.subscribe((status, error) => {
+        if (!isMounted) return;
+
+        if (status === "SUBSCRIBED") {
+          console.log("[Company Notifications] Realtime connected.");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error(
+            "[Company Notifications] Realtime channel error:",
+            error
+          );
+        } else if (status === "TIMED_OUT") {
+          console.warn("[Company Notifications] Realtime channel timed out.");
+        } else if (status === "CLOSED") {
+          console.log("[Company Notifications] Realtime channel closed.");
+        }
+      });
     };
 
-    setupRealtime();
+    void setupRealtime();
 
     return () => {
       isMounted = false;
 
-      if (notificationChannel) {
-        supabaseCompany.removeChannel(notificationChannel);
+      const channelToRemove = notificationChannel;
+      notificationChannel = null;
+
+      if (channelToRemove) {
+        void supabaseCompany.removeChannel(channelToRemove).catch((error) => {
+          console.warn(
+            "[Company Notifications] Channel cleanup failed:",
+            error
+          );
+        });
       }
     };
   }, [companyUserId]);
+
+  /* =========================================================
+   GLOBAL UNREAD MESSAGES INDICATOR
+   ========================================================= */
+
+  useEffect(() => {
+    let isMounted = true;
+    let channel = null;
+    let pollInterval = null;
+
+    const setupUnreadMessageListener = async () => {
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabaseCompany.auth.getUser();
+
+        if (authError) throw authError;
+        if (!isMounted || !user) return;
+
+        const userId = user.id;
+
+        const refreshUnreadMessages = async () => {
+          try {
+            // 1. Get conversations this company user belongs to.
+            const { data: memberships, error: membershipError } =
+              await supabaseCompany
+                .from("conversation_members")
+                .select("conversation_id, joined_at")
+                .eq("user_id", userId);
+
+            if (membershipError) throw membershipError;
+            if (!isMounted) return;
+
+            if (!memberships?.length) {
+              setHasUnreadMessages(false);
+              return;
+            }
+
+            const conversationIds = memberships.map(
+              (membership) => membership.conversation_id
+            );
+
+            const joinedAtByConversation = new Map(
+              memberships.map((membership) => [
+                membership.conversation_id,
+                membership.joined_at
+                  ? new Date(membership.joined_at).getTime()
+                  : 0,
+              ])
+            );
+
+            // 2. Get this user's last-read state per conversation.
+            const { data: readStates, error: readError } = await supabaseCompany
+              .from("message_reads")
+              .select("conversation_id, last_read_at")
+              .eq("user_id", userId)
+              .in("conversation_id", conversationIds);
+
+            if (readError) throw readError;
+            if (!isMounted) return;
+
+            const lastReadByConversation = new Map(
+              (readStates || []).map((state) => [
+                state.conversation_id,
+                state.last_read_at ? new Date(state.last_read_at).getTime() : 0,
+              ])
+            );
+
+            // 3. Fetch messages in those conversations.
+            const { data: messages, error: messagesError } =
+              await supabaseCompany
+                .from("messages")
+                .select(
+                  "id, conversation_id, sender_id, created_at, is_deleted"
+                )
+                .in("conversation_id", conversationIds)
+                .neq("sender_id", userId)
+                .eq("is_deleted", false)
+                .order("created_at", { ascending: false });
+
+            if (messagesError) throw messagesError;
+            if (!isMounted) return;
+
+            // 4. A message is unread if it arrived after the user's
+            //    last-read time and after they joined the conversation.
+            const hasUnread = (messages || []).some((message) => {
+              const messageTime = new Date(message.created_at).getTime();
+
+              const joinedAt =
+                joinedAtByConversation.get(message.conversation_id) || 0;
+
+              const lastReadAt =
+                lastReadByConversation.get(message.conversation_id) || 0;
+
+              return (
+                Number.isFinite(messageTime) &&
+                messageTime > joinedAt &&
+                messageTime > lastReadAt
+              );
+            });
+
+            setHasUnreadMessages(hasUnread);
+          } catch (error) {
+            // Keep the existing dot state if a refresh fails.
+            console.error(
+              "[Company Messages] Failed to refresh unread indicator:",
+              error
+            );
+          }
+        };
+
+        await refreshUnreadMessages();
+
+        if (!isMounted) return;
+
+        // Register every listener before subscribing.
+        channel = supabaseCompany
+          .channel(`company-unread-messages:${userId}:${Date.now()}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "messages",
+            },
+            () => {
+              void refreshUnreadMessages();
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "message_reads",
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              void refreshUnreadMessages();
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "conversation_members",
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              void refreshUnreadMessages();
+            }
+          );
+
+        channel.subscribe((status, error) => {
+          if (!isMounted) return;
+
+          if (status === "SUBSCRIBED") {
+            console.log("[Company Messages] Unread indicator connected.");
+            void refreshUnreadMessages();
+          } else if (status === "CHANNEL_ERROR") {
+            console.error(
+              "[Company Messages] Unread indicator channel error:",
+              error
+            );
+          }
+        });
+
+        // Fallback refresh in case a Realtime event is missed.
+        pollInterval = setInterval(() => {
+          void refreshUnreadMessages();
+        }, 10000);
+      } catch (error) {
+        if (isMounted) {
+          console.error(
+            "[Company Messages] Failed to initialize unread indicator:",
+            error
+          );
+        }
+      }
+    };
+
+    void setupUnreadMessageListener();
+
+    return () => {
+      isMounted = false;
+
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+
+      if (channel) {
+        void supabaseCompany.removeChannel(channel);
+      }
+    };
+  }, []);
 
   /* =========================================================
      DARK MODE
@@ -1247,6 +1532,14 @@ export default function CompanyPortalLayout() {
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
                     </span>
+
+                    {item.label === "Messages" && hasUnreadMessages && (
+                      <span
+                        className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-red-500"
+                        aria-label="Unread messages"
+                        title="Unread messages"
+                      />
+                    )}
 
                     {item.label === "Notifications" && unreadCount > 0 && (
                       <span className="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
