@@ -898,40 +898,40 @@ export default function useCall() {
   // UNMOUNT CLEANUP
   // =========================================================
 
-  useEffect(() => {
-    mountedRef.current = true;
+useEffect(() => {
+  mountedRef.current = true;
 
-    return () => {
-      mountedRef.current = false;
+  return () => {
+    mountedRef.current = false;
 
-      const client = activeClientRef.current || portalClient;
+    const client = activeClientRef.current || portalClient;
 
-      const statusChannel = callStatusChannelRef.current;
-      callStatusChannelRef.current = null;
+    const statusChannel = callStatusChannelRef.current;
+    callStatusChannelRef.current = null;
 
-      if (statusChannel) {
-        void client.removeChannel(statusChannel);
-      }
+    if (statusChannel) {
+      void client.removeChannel(statusChannel);
+    }
 
-      const signaling = signalingRef.current;
-      signalingRef.current = null;
+    const signaling = signalingRef.current;
+    signalingRef.current = null;
 
-      if (signaling) {
-        void signaling.disconnect();
-      }
+    if (signaling) {
+      void signaling.disconnect();
+    }
 
-      const rtc = webRTCRef.current;
-      webRTCRef.current = null;
+    const rtc = webRTCRef.current;
+    webRTCRef.current = null;
 
-      if (rtc) {
-        rtc.close();
-      }
+    if (rtc) {
+      rtc.close();
+    }
 
-      currentCallRef.current = null;
-      currentCallStatusRef.current = null;
-      activeClientRef.current = null;
-    };
-  }, [portalClient]);
+    currentCallRef.current = null;
+    currentCallStatusRef.current = null;
+    activeClientRef.current = null;
+  };
+}, []);
 
   return {
     currentCall,

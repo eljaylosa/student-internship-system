@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabaseCompany } from "../../supabaseClient";
+import { useCallContext } from "../../context/CallProvider";
 
 const MESSAGE_ATTACHMENT_BUCKET = "message-attachments";
 const ATTACHMENT_URL_EXPIRY = 60 * 60;
@@ -145,6 +146,36 @@ const Messages = () => {
   const messagesRef = useRef({});
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const { startCall, currentCall, callStatus } = useCallContext();
+
+   const handleStartCall = async (type) => {
+     const conversation = selectedContact
+       ? conversations[selectedContact.id]
+       : null;
+
+     if (!conversation?.id) {
+       console.warn(
+         "[Student Messages] No conversation available for calling."
+       );
+       return;
+     }
+
+     if (
+       currentCall ||
+       callStatus === "connecting" ||
+       callStatus === "ringing"
+     ) {
+       console.warn("[Student Messages] A call is already in progress.");
+       return;
+     }
+
+     try {
+       await startCall(conversation.id, type);
+     } catch (error) {
+       console.error("[Student Messages] Failed to start call:", error);
+     }
+   };
 
   // NEW: Keep the latest contact/selection values available to async
   // unread-count refreshes without making them depend on message polling.
@@ -2396,6 +2427,48 @@ const Messages = () => {
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleStartCall("audio")}
+                        disabled={
+                          !conversations[selectedContact.id]?.id ||
+                          !!currentCall ||
+                          callStatus === "connecting" ||
+                          callStatus === "ringing" ||
+                          blockedContactIds.has(selectedContact.id)
+                        }
+                        title="Start audio call"
+                        aria-label={`Audio call ${selectedContact.name}`}
+                        className={`rounded-lg border px-3 py-2 text-sm transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        📞
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleStartCall("video")}
+                        disabled={
+                          !conversations[selectedContact.id]?.id ||
+                          !!currentCall ||
+                          callStatus === "connecting" ||
+                          callStatus === "ringing" ||
+                          blockedContactIds.has(selectedContact.id)
+                        }
+                        title="Start video call"
+                        aria-label={`Video call ${selectedContact.name}`}
+                        className={`rounded-lg border px-3 py-2 text-sm transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        📹
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleToggleArchive(selectedContact)}
