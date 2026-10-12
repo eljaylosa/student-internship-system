@@ -22,91 +22,61 @@ export function CallProvider({ children }) {
 
   const [incomingCall, setIncomingCallState] = useState(null);
 
-  // =========================================================
-  // SYNC REALTIME INCOMING CALL
-  // =========================================================
+  const setCallIncomingCall = call.setIncomingCall;
 
+  // Keep the provider synchronized with the realtime incoming-call state.
+  // Also clear stale modal state when the incoming call disappears.
   useEffect(() => {
-    if (!realtimeIncomingCall) {
-      return;
-    }
-
-    setIncomingCallState(realtimeIncomingCall);
-
-    call.setIncomingCall(realtimeIncomingCall);
-  }, [realtimeIncomingCall, call]);
-
-  // =========================================================
-  // ACCEPT
-  // =========================================================
+    setIncomingCallState(realtimeIncomingCall ?? null);
+    setCallIncomingCall(realtimeIncomingCall ?? null);
+  }, [realtimeIncomingCall, setCallIncomingCall]);
 
   const handleAccept = useCallback(async () => {
-    if (!incomingCall) {
-      return;
-    }
+    if (!incomingCall?.id) return;
 
     try {
       await call.acceptCall(incomingCall);
 
       clearIncomingCall();
       setIncomingCallState(null);
+      setCallIncomingCall(null);
     } catch (error) {
-      console.error("Failed to accept incoming call:", error);
+      console.error("[CallProvider] Failed to accept call:", error);
     }
-  }, [incomingCall, call, clearIncomingCall]);
-
-  // =========================================================
-  // DECLINE
-  // =========================================================
+  }, [incomingCall, call.acceptCall, clearIncomingCall, setCallIncomingCall]);
 
   const handleDecline = useCallback(async () => {
-    if (!incomingCall?.id) {
-      return;
-    }
+    if (!incomingCall?.id) return;
 
     try {
       await call.declineCall(incomingCall.id);
 
       clearIncomingCall();
       setIncomingCallState(null);
+      setCallIncomingCall(null);
     } catch (error) {
-      console.error("Failed to decline incoming call:", error);
+      console.error("[CallProvider] Failed to decline call:", error);
     }
-  }, [incomingCall, call, clearIncomingCall]);
-
-  // =========================================================
-  // END ACTIVE CALL
-  // =========================================================
+  }, [incomingCall, call.declineCall, clearIncomingCall, setCallIncomingCall]);
 
   const handleEndCall = useCallback(async () => {
     try {
       await call.endCall();
     } catch (error) {
-      console.error("Failed to end call:", error);
+      console.error("[CallProvider] Failed to end call:", error);
     }
-  }, [call]);
-
-  // =========================================================
-  // CONTEXT VALUE
-  // =========================================================
+  }, [call.endCall]);
 
   const value = {
     ...call,
-
     incomingCall,
-
     acceptIncomingCall: handleAccept,
-
     declineIncomingCall: handleDecline,
   };
 
   return (
     <CallContext.Provider value={value}>
       {children}
-
-      {/* =====================================================
-          INCOMING CALL
-      ===================================================== */}
 
       {!call.currentCall && incomingCall && (
         <IncomingCallModal
@@ -115,10 +85,6 @@ export function CallProvider({ children }) {
           onDecline={handleDecline}
         />
       )}
-
-      {/* =====================================================
-          ACTIVE CALL
-      ===================================================== */}
 
       {call.currentCall && (
         <ActiveCall
@@ -137,15 +103,11 @@ export function CallProvider({ children }) {
   );
 }
 
-// ===========================================================
-// HOOK
-// ===========================================================
-
 export function useCallContext() {
   const context = useContext(CallContext);
 
   if (!context) {
-    throw new Error("useCallContext must be used inside CallProvider.");
+    throw new Error("useCallContext must be used within a CallProvider");
   }
 
   return context;

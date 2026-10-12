@@ -10,11 +10,13 @@ export class WebRTCService {
     onIceCandidate = () => {},
     onConnectionStateChange = () => {},
     onTrackEnded = () => {},
+    onIceConnectionStateChange = () => {},
   } = {}) {
     this.onRemoteStream = onRemoteStream;
     this.onIceCandidate = onIceCandidate;
     this.onConnectionStateChange = onConnectionStateChange;
     this.onTrackEnded = onTrackEnded;
+    this.onIceConnectionStateChange = onIceConnectionStateChange;
 
     this.peerConnection = null;
     this.localStream = null;
@@ -22,6 +24,7 @@ export class WebRTCService {
 
     this.isAudioEnabled = true;
     this.isVideoEnabled = true;
+    this.isClosed = false;
   }
 
   // =========================================================
@@ -33,6 +36,14 @@ export class WebRTCService {
       return this.peerConnection;
     }
 
+    if (this.isClosed) {
+      throw new Error("This WebRTC connection has already been closed.");
+    }
+
+    if (typeof RTCPeerConnection === "undefined") {
+      throw new Error("WebRTC is not supported by this browser.");
+    }
+
     const peerConnection = new RTCPeerConnection({
       iceServers: ICE_SERVERS,
     });
@@ -40,10 +51,14 @@ export class WebRTCService {
     this.peerConnection = peerConnection;
 
     // -------------------------------------------------------
-    // REMOTE TRACK
+    // REMOTE TRACKS
     // -------------------------------------------------------
 
     peerConnection.ontrack = (event) => {
+      if (this.isClosed || this.peerConnection !== peerConnection) {
+        return;
+      }
+
       if (!this.remoteStream) {
         this.remoteStream = new MediaStream();
       }
@@ -52,29 +67,21 @@ export class WebRTCService {
 
       if (incomingStream) {
         incomingStream.getTracks().forEach((track) => {
-          const alreadyExists = this.remoteStream
-            .getTracks()
-            .some((existingTrack) => existingTrack.id === track.id);
-
-          if (!alreadyExists) {
-            this.remoteStream.addTrack(track);
-          }
+          this.addRemoteTrack(track);
         });
-      } else {
-        const alreadyExists = this.remoteStream
-          .getTracks()
-          .some((track) => track.id === event.track.id);
-
-        if (!alreadyExists) {
-          this.remoteStream.addTrack(event.track);
-        }
+      } else if (event.track) {
+        this.addRemoteTrack(event.track);
       }
 
-      this.onRemoteStream(this.remoteStream);
+      this.notify(() => this.onRemoteStream(this.remoteStream));
 
-      event.track.onended = () => {
-        this.onTrackEnded(event.track);
-      };
+      if (event.track) {
+        event.track.onended = () => {
+          if (!this.isClosed) {
+            this.notify(() => this.onTrackEnded(event.track));
+          }
+        };
+      }
     };
 
     // -------------------------------------------------------
@@ -82,46 +89,178 @@ export class WebRTCService {
     // -------------------------------------------------------
 
     peerConnection.onicecandidate = (event) => {
-      if (!event.candidate) {
+      if (
+        this.isClosed ||
+        this.peerConnection !== peerConnection ||
+        !event.candidate
+      ) {
         return;
       }
 
-      this.onIceCandidate(event.candidate);
+      this.notify(() => this.onIceCandidate(event.candidate));
     };
 
     // -------------------------------------------------------
-    // CONNECTION STATE
+    // PEER CONNECTION STATE
     // -------------------------------------------------------
 
     peerConnection.onconnectionstatechange = () => {
-      this.onConnectionStateChange(peerConnection.connectionState);
+      if (this.peerConnection !== peerConnection) {
+        return;
+      }
+
+      const state = peerConnection.connectionState;
+
+      console.log("[WebRTC] Peer connection state:", state);
+
+      if (!this.isClosed) {
+        this.notify(() => this.onConnectionStateChange(state));
+      }
+    };
+
+    // -------------------------------------------------------
+    // ICE CONNECTION STATE
+    // -------------------------------------------------------
+
+    peerConnection.oniceconnectionstatechange = () => {
+      if (this.peerConnection !== peerConnection) {
+        return;
+      }
+
+      const state = peerConnection.iceConnectionState;
+
+      console.log("[WebRTC] ICE connection state:", state);
+
+      if (!this.isClosed) {
+        this.notify(() => this.onIceConnectionStateChange(state));
+      }
+    };
+
+    // -------------------------------------------------------
+    // ICE GATHERING STATE
+    // -------------------------------------------------------
+
+    peerConnection.onicegatheringstatechange = () => {
+      if (this.peerConnection !== peerConnection) {
+        return;
+      }
+
+      console.log(
+        "[WebRTC] ICE gathering state:",
+        peerConnection.iceGatheringState
+      );
     };
 
     return peerConnection;
   }
 
   // =========================================================
+  // CALLBACK SAFETY
+  // =========================================================
+
+  notify(callback) {
+    try {
+      Promise.resolve(callback()).catch((error) => {
+        console.error("[WebRTC] Callback failed:", error);
+      });
+    } catch (error) {
+      console.error("[WebRTC] Callback failed:", error);
+    }
+  }
+
+  // =========================================================
+  // ADD REMOTE TRACK
+  // =========================================================
+
+  addRemoteTrack(track) {
+    if (!track || !this.remoteStream || this.isClosed) {
+      return;
+    }
+
+    const alreadyExists = this.remoteStream
+      .getTracks()
+      .some((existingTrack) => existingTrack.id === track.id);
+
+    if (!alreadyExists) {
+      this.remoteStream.addTrack(track);
+    }
+  }
+
+  // =========================================================
   // GET LOCAL MEDIA
   // =========================================================
 
-  async getLocalStream({ audio = true, video = true } = {}) {
+  async getLocalStream({ audio = true, video = false } = {}) {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error(
-        "Your browser does not support microphone or camera access."
+        "Microphone and camera access require a supported browser and a secure context (HTTPS or localhost)."
       );
     }
 
+    if (this.isClosed) {
+      throw new Error("This WebRTC connection has already been closed.");
+    }
+
     if (this.localStream) {
+      const hasAudio = this.localStream.getAudioTracks().length > 0;
+      const hasVideo = this.localStream.getVideoTracks().length > 0;
+
+      if ((audio && !hasAudio) || (video && !hasVideo)) {
+        throw new Error(
+          "The existing media stream does not match the requested call type."
+        );
+      }
+
       return this.localStream;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio,
-      video,
-    });
+    let stream;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio,
+        video,
+      });
+    } catch (error) {
+      if (
+        error?.name === "NotAllowedError" ||
+        error?.name === "PermissionDeniedError"
+      ) {
+        throw new Error(
+          "Microphone or camera permission was denied. Allow access in your browser settings and try again."
+        );
+      }
+
+      if (
+        error?.name === "NotFoundError" ||
+        error?.name === "DevicesNotFoundError"
+      ) {
+        throw new Error(
+          "No suitable microphone or camera was found for this call."
+        );
+      }
+
+      if (
+        error?.name === "NotReadableError" ||
+        error?.name === "TrackStartError"
+      ) {
+        throw new Error(
+          "Your microphone or camera may already be in use by another application."
+        );
+      }
+
+      throw error;
+    }
+
+    // If cleanup happened while the permission prompt was open,
+    // immediately stop any media acquired afterward.
+    if (this.isClosed) {
+      stream.getTracks().forEach((track) => track.stop());
+
+      throw new Error("The call was cancelled while requesting media.");
+    }
 
     this.localStream = stream;
-
     this.isAudioEnabled = audio;
     this.isVideoEnabled = video;
 
@@ -160,18 +299,30 @@ export class WebRTCService {
   // =========================================================
 
   async createOffer() {
-    if (!this.peerConnection) {
-      this.createPeerConnection();
+    if (this.isClosed) {
+      throw new Error("Cannot create an offer after the call has closed.");
     }
 
-    const offer = await this.peerConnection.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
+    const peerConnection = this.peerConnection || this.createPeerConnection();
+
+    // Match the offer to the local media tracks.
+    // Audio-only calls won't request a video receiving transceiver.
+    const hasLocalAudio = this.localStream?.getAudioTracks().length > 0;
+
+    const hasLocalVideo = this.localStream?.getVideoTracks().length > 0;
+
+    const offer = await peerConnection.createOffer({
+      offerToReceiveAudio: hasLocalAudio,
+      offerToReceiveVideo: hasLocalVideo,
     });
 
-    await this.peerConnection.setLocalDescription(offer);
+    if (this.isClosed || this.peerConnection !== peerConnection) {
+      throw new Error("The call closed while creating the offer.");
+    }
 
-    return offer;
+    await peerConnection.setLocalDescription(offer);
+
+    return peerConnection.localDescription;
   }
 
   // =========================================================
@@ -179,11 +330,17 @@ export class WebRTCService {
   // =========================================================
 
   async setRemoteDescription(description) {
-    if (!this.peerConnection) {
-      this.createPeerConnection();
+    if (!description) {
+      throw new Error("A valid remote session description is required.");
     }
 
-    await this.peerConnection.setRemoteDescription(
+    if (this.isClosed) {
+      throw new Error("Cannot set a remote description after call cleanup.");
+    }
+
+    const peerConnection = this.peerConnection || this.createPeerConnection();
+
+    await peerConnection.setRemoteDescription(
       new RTCSessionDescription(description)
     );
   }
@@ -193,15 +350,27 @@ export class WebRTCService {
   // =========================================================
 
   async createAnswer() {
-    if (!this.peerConnection) {
-      this.createPeerConnection();
+    if (this.isClosed) {
+      throw new Error("Cannot create an answer after the call has closed.");
     }
 
-    const answer = await this.peerConnection.createAnswer();
+    const peerConnection = this.peerConnection || this.createPeerConnection();
 
-    await this.peerConnection.setLocalDescription(answer);
+    if (!peerConnection.remoteDescription) {
+      throw new Error(
+        "Cannot create an answer before receiving the caller's offer."
+      );
+    }
 
-    return answer;
+    const answer = await peerConnection.createAnswer();
+
+    if (this.isClosed || this.peerConnection !== peerConnection) {
+      throw new Error("The call closed while creating the answer.");
+    }
+
+    await peerConnection.setLocalDescription(answer);
+
+    return peerConnection.localDescription;
   }
 
   // =========================================================
@@ -213,11 +382,19 @@ export class WebRTCService {
       return;
     }
 
-    if (!this.peerConnection) {
-      this.createPeerConnection();
+    if (this.isClosed) {
+      throw new Error("Cannot add an ICE candidate after call cleanup.");
     }
 
-    await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    const peerConnection = this.peerConnection || this.createPeerConnection();
+
+    if (!peerConnection.remoteDescription) {
+      throw new Error(
+        "Cannot add an ICE candidate before setting the remote description."
+      );
+    }
+
+    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
   }
 
   // =========================================================
@@ -225,7 +402,7 @@ export class WebRTCService {
   // =========================================================
 
   toggleAudio() {
-    if (!this.localStream) {
+    if (this.isClosed || !this.localStream) {
       return false;
     }
 
@@ -251,7 +428,7 @@ export class WebRTCService {
   // =========================================================
 
   toggleVideo() {
-    if (!this.localStream) {
+    if (this.isClosed || !this.localStream) {
       return false;
     }
 
@@ -289,7 +466,7 @@ export class WebRTCService {
   }
 
   // =========================================================
-  // CONNECTION STATE
+  // GET PEER CONNECTION STATE
   // =========================================================
 
   getConnectionState() {
@@ -297,34 +474,65 @@ export class WebRTCService {
   }
 
   // =========================================================
-  // CLOSE CONNECTION
+  // GET ICE CONNECTION STATE
+  // =========================================================
+
+  getIceConnectionState() {
+    return this.peerConnection?.iceConnectionState || "new";
+  }
+
+  // =========================================================
+  // CLOSE CONNECTION AND MEDIA
   // =========================================================
 
   close() {
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
+    if (this.isClosed) {
+      return;
+    }
+
+    this.isClosed = true;
+
+    const peerConnection = this.peerConnection;
+    this.peerConnection = null;
+
+    if (peerConnection) {
+      peerConnection.ontrack = null;
+      peerConnection.onicecandidate = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.oniceconnectionstatechange = null;
+      peerConnection.onicegatheringstatechange = null;
+
+      try {
+        peerConnection.close();
+      } catch (error) {
+        console.warn("[WebRTC] Failed to close peer connection:", error);
+      }
+    }
+
+    const localStream = this.localStream;
+    this.localStream = null;
+
+    if (localStream) {
+      localStream.getTracks().forEach((track) => {
+        track.onended = null;
         track.stop();
       });
-
-      this.localStream = null;
     }
 
-    if (this.remoteStream) {
-      this.remoteStream.getTracks().forEach((track) => {
+    const remoteStream = this.remoteStream;
+    this.remoteStream = null;
+
+    if (remoteStream) {
+      remoteStream.getTracks().forEach((track) => {
+        track.onended = null;
         track.stop();
       });
-
-      this.remoteStream = null;
     }
 
-    if (this.peerConnection) {
-      this.peerConnection.ontrack = null;
-      this.peerConnection.onicecandidate = null;
-      this.peerConnection.onconnectionstatechange = null;
+    this.isAudioEnabled = false;
+    this.isVideoEnabled = false;
 
-      this.peerConnection.close();
-      this.peerConnection = null;
-    }
+    console.log("[WebRTC] Connection and media cleaned up.");
   }
 }
 

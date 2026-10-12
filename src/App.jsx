@@ -23,6 +23,8 @@ import Contact from "./pages/public/Contact.jsx";
 import Footer from "./components/layout/Footer.jsx";
 import MaintenancePage from "./pages/public/MaintenancePage.jsx";
 
+import CallProvider from "./context/CallProvider.jsx";
+
 // =========================================================
 // AUTH
 // =========================================================
@@ -453,7 +455,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <CallProvider>
+        <AppContent />
+      </CallProvider>
     </Router>
   );
 }

@@ -20,7 +20,6 @@ const MESSAGE_REACTIONS = [
 const attachmentUrlCache = new Map();
 const ATTACHMENT_URL_REFRESH_BUFFER = 5 * 60 * 1000;
 
-
 const MessageAttachments = ({ attachments = [], darkMode, formatFileSize }) => {
   if (!attachments.length) return null;
 
@@ -123,6 +122,11 @@ const Messages = () => {
 
   // NEW: Persistent unread counts, reconstructed from Supabase.
   const [unreadByContact, setUnreadByContact] = useState({});
+  const [archivedContactIds, setArchivedContactIds] = useState(() => new Set());
+  const [blockedContactIds, setBlockedContactIds] = useState(() => new Set());
+  const [contactListFilter, setContactListFilter] = useState("active");
+  const [contactActionBusy, setContactActionBusy] = useState(false);
+  const [contactActionError, setContactActionError] = useState("");
 
   const [messages, setMessages] = useState({});
   const [conversations, setConversations] = useState({});
@@ -803,6 +807,24 @@ const Messages = () => {
       throw new Error("A valid contact is required.");
     }
 
+    // Existing members can still view history after a block. Check the
+    // canonical direct conversation before asking the RPC to create one.
+    if (currentUser?.id) {
+      const directKey = [currentUser.id, otherUserId].sort().join(":");
+      const { data: existingConversation, error: existingError } =
+        await supabaseCompany
+          .from("conversations")
+          .select("*")
+          .eq("direct_key", directKey)
+          .maybeSingle();
+      if (!existingError && existingConversation) return existingConversation;
+      if (existingError)
+        console.warn(
+          "[Company Messages] Existing conversation lookup failed:",
+          existingError.message
+        );
+    }
+
     const { data: conversationId, error: conversationError } =
       await supabaseCompany.rpc("create_direct_conversation", {
         p_other_user_id: otherUserId,
@@ -1363,14 +1385,158 @@ const Messages = () => {
   ]);
 
   // =========================================================
+  // PER-USER CHAT ARCHIVE + BLOCK CONTROLS
+  // =========================================================
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    const loadChatPreferences = async () => {
+      const { data: blockedRows, error: blockedError } = await supabaseCompany
+        .from("blocked_users")
+        .select("blocked_user_id")
+        .eq("user_id", currentUser.id);
+      if (!cancelled && !blockedError)
+        setBlockedContactIds(
+          new Set((blockedRows || []).map((row) => row.blocked_user_id))
+        );
+      if (blockedError)
+        console.warn(
+          "[Company Messages] Could not load blocked contacts:",
+          blockedError.message
+        );
+
+      const { data: memberships, error: membershipError } =
+        await supabaseCompany
+          .from("conversation_members")
+          .select("conversation_id, is_archived")
+          .eq("user_id", currentUser.id);
+      if (membershipError) {
+        console.warn(
+          "[Company Messages] Could not load archived chats (run the archive SQL migration):",
+          membershipError.message
+        );
+        return;
+      }
+      const ids = (memberships || [])
+        .map((row) => row.conversation_id)
+        .filter(Boolean);
+      if (!ids.length) {
+        if (!cancelled) setArchivedContactIds(new Set());
+        return;
+      }
+      const { data: conversationRows, error: conversationsError } =
+        await supabaseCompany
+          .from("conversations")
+          .select("id, direct_key")
+          .in("id", ids);
+      if (conversationsError) {
+        console.warn(
+          "[Company Messages] Could not map archived chats:",
+          conversationsError.message
+        );
+        return;
+      }
+      const archivedConversationIds = new Set(
+        (memberships || [])
+          .filter((row) => row.is_archived)
+          .map((row) => row.conversation_id)
+      );
+      const archivedContacts = new Set();
+      for (const row of conversationRows || []) {
+        if (!archivedConversationIds.has(row.id) || !row.direct_key) continue;
+        const otherId = row.direct_key
+          .split(":")
+          .find((id) => id !== currentUser.id);
+        if (otherId) archivedContacts.add(otherId);
+      }
+      if (!cancelled) setArchivedContactIds(archivedContacts);
+    };
+    void loadChatPreferences();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
+  const handleToggleArchive = async (contact) => {
+    const conversation = conversations[contact?.id];
+    if (!currentUser?.id || !conversation?.id || contactActionBusy) {
+      setContactActionError("Open this chat once before archiving it.");
+      return;
+    }
+    const shouldArchive = !archivedContactIds.has(contact.id);
+    setContactActionBusy(true);
+    setContactActionError("");
+    try {
+      const { error } = await supabaseCompany.rpc("set_conversation_archived", {
+        p_conversation_id: conversation.id,
+        p_is_archived: shouldArchive,
+      });
+      if (error) throw error;
+      setArchivedContactIds((previous) => {
+        const next = new Set(previous);
+        if (shouldArchive) next.add(contact.id);
+        else next.delete(contact.id);
+        return next;
+      });
+      if (shouldArchive && contactListFilter === "active")
+        setSelectedContact((selected) =>
+          selected?.id === contact.id ? null : selected
+        );
+    } catch (error) {
+      console.error("[Company Messages] Archive action failed:", error);
+      setContactActionError(
+        error.message ||
+          "Could not update chat archive status. Run the archive SQL migration first."
+      );
+    } finally {
+      setContactActionBusy(false);
+    }
+  };
+
+  const handleToggleBlock = async (contact) => {
+    if (!contact?.id || contactActionBusy) return;
+    const isBlocked = blockedContactIds.has(contact.id);
+    setContactActionBusy(true);
+    setContactActionError("");
+    try {
+      const { error } = await supabaseCompany.rpc(
+        isBlocked ? "unblock_user" : "block_user",
+        { p_blocked_user_id: contact.id }
+      );
+      if (error) throw error;
+      setBlockedContactIds((previous) => {
+        const next = new Set(previous);
+        if (isBlocked) next.delete(contact.id);
+        else next.add(contact.id);
+        return next;
+      });
+      setMessageInput("");
+      setSelectedFiles([]);
+      setAttachmentError("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error) {
+      console.error("[Company Messages] Block action failed:", error);
+      setContactActionError(error.message || "Could not update block status.");
+    } finally {
+      setContactActionBusy(false);
+    }
+  };
+
+  // =========================================================
   // FILTERED CONTACTS + CURRENT MESSAGES
   // =========================================================
 
-  const filteredContacts = contacts.filter((contact) =>
-    `${contact.name} ${contact.role}`
+  const filteredContacts = contacts.filter((contact) => {
+    const matchesSearch = `${contact.name} ${contact.role}`
       .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+      .includes(searchQuery.toLowerCase());
+    const isArchived = archivedContactIds.has(contact.id);
+    return (
+      matchesSearch &&
+      (contactListFilter === "archived" ? isArchived : !isArchived)
+    );
+  });
 
   const currentMessages = selectedContact
     ? messages[selectedContact.id] || []
@@ -1473,6 +1639,13 @@ const Messages = () => {
 
     // Allow attachment-only messages.
     if (!trimmedMessage && !filesToSend.length) return;
+
+    if (blockedContactIds.has(selectedContact.id)) {
+      setAttachmentError(
+        "You blocked this contact. Unblock them before sending messages or attachments."
+      );
+      return;
+    }
 
     setUploading(true);
     setAttachmentError("");
@@ -1957,6 +2130,35 @@ const Messages = () => {
                 </div>
               </div>
 
+              <div className={`grid grid-cols-2 gap-2 px-3 pt-3 ${panelClass}`}>
+                <button
+                  type="button"
+                  onClick={() => setContactListFilter("active")}
+                  className={`rounded-lg px-3 py-2 text-[10px] font-bold border ${
+                    contactListFilter === "active"
+                      ? "bg-purple-700 text-white border-purple-700"
+                      : darkMode
+                      ? "bg-slate-900 text-slate-300 border-slate-700"
+                      : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  Chats
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactListFilter("archived")}
+                  className={`rounded-lg px-3 py-2 text-[10px] font-bold border ${
+                    contactListFilter === "archived"
+                      ? "bg-purple-700 text-white border-purple-700"
+                      : darkMode
+                      ? "bg-slate-900 text-slate-300 border-slate-700"
+                      : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  Archived
+                </button>
+              </div>
+
               <div
                 className={`flex-1 min-h-0 overflow-y-auto p-3 space-y-2 ${panelClass}`}
               >
@@ -2016,14 +2218,13 @@ const Messages = () => {
                 ) : (
                   <div className="py-8 text-center px-3">
                     <p className={`text-xs ${mutedClass}`}>
-                      No accepted interns yet.
+                      No archived interns yet.
                     </p>
 
                     <p
                       className={`text-[10px] mt-1 leading-relaxed ${mutedClass}`}
                     >
-                      Students will appear here after they accept their
-                      internship assignment.
+                      Students will appear here after you archive their chats...
                     </p>
                   </div>
                 )}
@@ -2065,6 +2266,37 @@ const Messages = () => {
                     🔍
                   </span>
                 </div>
+              </div>
+
+              <div
+                className={`grid grid-cols-2 gap-2 px-3 pt-3 ${panelClass} md:hidden`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setContactListFilter("active")}
+                  className={`rounded-lg px-3 py-2 text-[10px] font-bold border ${
+                    contactListFilter === "active"
+                      ? "bg-purple-700 text-white border-purple-700"
+                      : darkMode
+                      ? "bg-slate-900 text-slate-300 border-slate-700"
+                      : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  Chats
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContactListFilter("archived")}
+                  className={`rounded-lg px-3 py-2 text-[10px] font-bold border ${
+                    contactListFilter === "archived"
+                      ? "bg-purple-700 text-white border-purple-700"
+                      : darkMode
+                      ? "bg-slate-900 text-slate-300 border-slate-700"
+                      : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  Archived
+                </button>
               </div>
 
               <div className="flex gap-2 overflow-x-auto overflow-y-hidden px-3 pb-3 pt-1 snap-x snap-mandatory overscroll-x-contain">
@@ -2163,18 +2395,71 @@ const Messages = () => {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className={`w-9 h-9 flex-shrink-0 rounded-lg border transition ${
-                        darkMode
-                          ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                      title="More options"
-                    >
-                      ⋮
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleArchive(selectedContact)}
+                        disabled={
+                          contactActionBusy ||
+                          !conversations[selectedContact.id]
+                        }
+                        title={
+                          archivedContactIds.has(selectedContact.id)
+                            ? "Unarchive chat"
+                            : "Archive chat"
+                        }
+                        className={`rounded-lg border px-2.5 py-2 text-[10px] font-bold transition disabled:opacity-50 ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {archivedContactIds.has(selectedContact.id)
+                          ? "Unarchive"
+                          : "Archive"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBlock(selectedContact)}
+                        disabled={contactActionBusy}
+                        title={
+                          blockedContactIds.has(selectedContact.id)
+                            ? "Unblock contact"
+                            : "Block contact"
+                        }
+                        className={`rounded-lg border px-2.5 py-2 text-[10px] font-bold transition disabled:opacity-50 ${
+                          blockedContactIds.has(selectedContact.id)
+                            ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            : "border-red-200 text-red-600 hover:bg-red-50"
+                        }`}
+                      >
+                        {blockedContactIds.has(selectedContact.id)
+                          ? "Unblock"
+                          : "Block"}
+                      </button>
+                    </div>
                   </div>
+
+                  {contactActionError && (
+                    <div
+                      className="px-4 pt-2 text-[11px] text-red-500"
+                      role="alert"
+                    >
+                      {contactActionError}
+                    </div>
+                  )}
+                  {blockedContactIds.has(selectedContact.id) && (
+                    <div
+                      className={`px-4 py-2 text-[11px] border-b ${
+                        darkMode
+                          ? "border-slate-700 bg-slate-800 text-amber-300"
+                          : "border-amber-200 bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      You blocked this contact. Chat history stays available,
+                      but you cannot send messages until you unblock them.
+                    </div>
+                  )}
 
                   {/* MESSAGE HISTORY */}
 
@@ -2650,7 +2935,10 @@ const Messages = () => {
                         }
                         placeholder={`Message ${selectedContact.name}...`}
                         autoComplete="off"
-                        disabled={uploading}
+                        disabled={
+                          uploading ||
+                          blockedContactIds.has(selectedContact?.id)
+                        }
                         className={`flex-1 min-w-0 h-11 px-3 sm:px-4 rounded-lg border text-xs outline-none transition disabled:opacity-50 ${inputClass}`}
                       />
 
@@ -2660,6 +2948,7 @@ const Messages = () => {
                         type="submit"
                         disabled={
                           uploading ||
+                          blockedContactIds.has(selectedContact?.id) ||
                           (!messageInput.trim() && !selectedFiles.length)
                         }
                         className="h-11 px-4 sm:px-5 flex-shrink-0 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition"

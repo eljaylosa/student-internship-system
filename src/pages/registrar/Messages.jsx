@@ -16,6 +16,12 @@ const Messages = () => {
   const [messages, setMessages] = useState({});
   const [conversations, setConversations] = useState({});
   const [unreadByContact, setUnreadByContact] = useState({});
+  const [archivedContactIds, setArchivedContactIds] = useState(() => new Set());
+  const [blockedContactIds, setBlockedContactIds] = useState(() => new Set());
+  const [contactListFilter, setContactListFilter] = useState("active");
+  const [contactActionBusy, setContactActionBusy] = useState(false);
+  const [contactActionError, setContactActionError] = useState("");
+  const [showContactActions, setShowContactActions] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -26,25 +32,13 @@ const Messages = () => {
   const [messageActionError, setMessageActionError] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [reactionBusyId, setReactionBusyId] = useState(null);
-
   const fileInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const messagesRefForSync = useRef(messages);
-  const contactsRef = useRef(contacts);
-  const selectedContactRef = useRef(selectedContact);
-  const unreadRefreshVersionRef = useRef(0);
 
   useEffect(() => {
     messagesRefForSync.current = messages;
   }, [messages]);
-
-  useEffect(() => {
-    contactsRef.current = contacts;
-  }, [contacts]);
-
-  useEffect(() => {
-    selectedContactRef.current = selectedContact;
-  }, [selectedContact]);
 
   const headingClass = darkMode ? "text-slate-100" : "text-slate-900";
   const mutedClass = darkMode ? "text-slate-400" : "text-slate-500";
@@ -82,7 +76,6 @@ const Messages = () => {
       .filter(Boolean)
       .join(" ")
       .trim();
-
   const getInitials = (name) =>
     !name
       ? "?"
@@ -99,23 +92,22 @@ const Messages = () => {
     const normalizedPath = storedPath.startsWith("profile-photos/")
       ? storedPath
       : `profile-photos/${storedPath}`;
-
     const { data } = supabaseRegistrar.storage
       .from("profile-photos")
       .getPublicUrl(normalizedPath);
-
     return data?.publicUrl || null;
   };
 
   const normalizeMessage = useCallback(
     (message) => {
       if (!message) return null;
-
       return {
         ...message,
         id: message.id,
         sender: message.sender_id === currentUser?.id ? "sent" : "received",
         text: message.content || "",
+        // Preserve receipt state when a realtime UPDATE or polling refresh
+        // normalizes the same message again; never reset Seen back to Sent.
         status:
           message.sender_id === currentUser?.id
             ? message.status ||
@@ -145,21 +137,17 @@ const Messages = () => {
   // =========================================================
   // MESSAGE DELIVERY / READ RECEIPTS
   // =========================================================
-
   const markMessageDelivered = async (messageId) => {
     if (!messageId || !currentUser?.id) return;
-
     try {
       const { error } = await supabaseRegistrar.rpc("mark_message_delivered", {
         p_message_id: messageId,
       });
-
-      if (error) {
+      if (error)
         console.warn(
           "[Registrar Messages] Could not mark message delivered:",
           error.message
         );
-      }
     } catch (error) {
       console.warn("[Registrar Messages] Delivery receipt failed:", error);
     }
@@ -167,19 +155,16 @@ const Messages = () => {
 
   const markConversationSeen = async (conversationId, latestMessageId) => {
     if (!conversationId || !latestMessageId || !currentUser?.id) return;
-
     try {
       const { error } = await supabaseRegistrar.rpc("mark_conversation_read", {
         p_conversation_id: conversationId,
         p_message_id: latestMessageId,
       });
-
-      if (error) {
+      if (error)
         console.warn(
           "[Registrar Messages] Could not mark conversation seen:",
           error.message
         );
-      }
     } catch (error) {
       console.warn("[Registrar Messages] Read receipt failed:", error);
     }
@@ -187,13 +172,13 @@ const Messages = () => {
 
   const refreshOutgoingMessageStatuses = async (conversationId, contactId) => {
     if (!conversationId || !contactId || !currentUser?.id) return;
-
     try {
       const { data, error } = await supabaseRegistrar.rpc(
         "get_outgoing_message_statuses",
-        { p_conversation_id: conversationId }
+        {
+          p_conversation_id: conversationId,
+        }
       );
-
       if (error) {
         console.warn(
           "[Registrar Messages] Could not refresh delivery statuses:",
@@ -201,7 +186,6 @@ const Messages = () => {
         );
         return;
       }
-
       const statusByMessageId = new Map(
         (data || []).map((row) => [
           row.message_id,
@@ -217,33 +201,25 @@ const Messages = () => {
                 deliveredAt: row.delivered_at,
                 seenAt: null,
               }
-            : {
-                status: "sent",
-                deliveredAt: null,
-                seenAt: null,
-              },
+            : { status: "sent", deliveredAt: null, seenAt: null },
         ])
       );
-
       const rank = { sent: 0, delivered: 1, seen: 2 };
-
       setMessages((previous) => ({
         ...previous,
         [contactId]: (previous[contactId] || []).map((message) => {
           if (
             message.sender_id !== currentUser.id ||
             !statusByMessageId.has(message.id)
-          ) {
+          )
             return message;
-          }
-
           const fetched = statusByMessageId.get(message.id);
+          // Receipts are monotonic: a stale poll cannot downgrade Seen.
           const currentStatus = message.status || "sent";
           const nextStatus =
             (rank[currentStatus] ?? 0) > (rank[fetched.status] ?? 0)
               ? currentStatus
               : fetched.status;
-
           return {
             ...message,
             status: nextStatus,
@@ -257,207 +233,11 @@ const Messages = () => {
     }
   };
 
-  // =========================================================
-  // UNREAD MESSAGE COUNTS
-  // Rebuild counts from the database instead of relying on
-  // Realtime events alone, so missed events can be recovered.
-  // =========================================================
-
-  const refreshUnreadCounts = useCallback(async () => {
-    if (!currentUser?.id || contactsLoading) return;
-
-    const refreshVersion = ++unreadRefreshVersionRef.current;
-
-    try {
-      const { data: memberships, error: membershipError } =
-        await supabaseRegistrar
-          .from("conversation_members")
-          .select("conversation_id, joined_at")
-          .eq("user_id", currentUser.id);
-
-      if (membershipError) throw membershipError;
-
-      const membershipByConversation = new Map(
-        (memberships || []).map((row) => [row.conversation_id, row.joined_at])
-      );
-
-      const conversationIds = [...membershipByConversation.keys()];
-
-      if (!conversationIds.length) {
-        if (refreshVersion === unreadRefreshVersionRef.current) {
-          setUnreadByContact({});
-        }
-        return;
-      }
-
-      const [
-        { data: memberRows, error: memberError },
-        { data: messageRows, error: messageError },
-        { data: readRows, error: readError },
-      ] = await Promise.all([
-        supabaseRegistrar
-          .from("conversation_members")
-          .select("conversation_id, user_id")
-          .in("conversation_id", conversationIds),
-
-        supabaseRegistrar
-          .from("messages")
-          .select(
-            "id, conversation_id, sender_id, created_at, is_deleted, deleted_at"
-          )
-          .in("conversation_id", conversationIds)
-          .neq("sender_id", currentUser.id)
-          .eq("is_deleted", false)
-          .order("created_at", { ascending: true }),
-
-        supabaseRegistrar
-          .from("message_reads")
-          .select("conversation_id, last_read_at")
-          .eq("user_id", currentUser.id)
-          .in("conversation_id", conversationIds),
-      ]);
-
-      if (memberError) throw memberError;
-      if (messageError) throw messageError;
-      if (readError) throw readError;
-
-      if (refreshVersion !== unreadRefreshVersionRef.current) return;
-
-      const allowedContactIds = new Set(
-        contactsRef.current.map((contact) => contact.id)
-      );
-
-      const contactByConversation = new Map();
-
-      for (const member of memberRows || []) {
-        if (member.user_id === currentUser.id) continue;
-        if (!allowedContactIds.has(member.user_id)) continue;
-
-        contactByConversation.set(member.conversation_id, member.user_id);
-      }
-
-      const readAtByConversation = new Map(
-        (readRows || []).map((row) => [
-          row.conversation_id,
-          row.last_read_at ? new Date(row.last_read_at).getTime() : 0,
-        ])
-      );
-
-      const openContactId = selectedContactRef.current?.id;
-      const nextUnreadCounts = {};
-
-      for (const message of messageRows || []) {
-        if (!message.created_at) continue;
-
-        const contactId = contactByConversation.get(message.conversation_id);
-
-        if (!contactId) continue;
-        if (contactId === openContactId) continue;
-
-        const joinedAt = membershipByConversation.get(message.conversation_id);
-
-        // Do not count messages sent before this member joined.
-        if (
-          joinedAt &&
-          new Date(message.created_at).getTime() < new Date(joinedAt).getTime()
-        ) {
-          continue;
-        }
-
-        const lastReadAt =
-          readAtByConversation.get(message.conversation_id) || 0;
-
-        if (new Date(message.created_at).getTime() <= lastReadAt) {
-          continue;
-        }
-
-        nextUnreadCounts[contactId] = (nextUnreadCounts[contactId] || 0) + 1;
-      }
-
-      if (refreshVersion === unreadRefreshVersionRef.current) {
-        setUnreadByContact(nextUnreadCounts);
-      }
-    } catch (error) {
-      console.error(
-        "[Registrar Messages] Failed to refresh unread counts:",
-        error
-      );
-    }
-  }, [currentUser?.id, contactsLoading]);
-
-  useEffect(() => {
-    if (!currentUser?.id || contactsLoading) return undefined;
-
-    let mounted = true;
-
-    const refresh = () => {
-      if (mounted) void refreshUnreadCounts();
-    };
-
-    refresh();
-
-    const messagesChannel = supabaseRegistrar
-      .channel(`registrar-unread-messages-${currentUser.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          if (!mounted) return;
-
-          const incoming = payload?.new;
-
-          if (incoming?.id && incoming.sender_id !== currentUser.id) {
-            void markMessageDelivered(incoming.id);
-          }
-
-          refresh();
-        }
-      )
-      .subscribe((status) => {
-        console.log("[Registrar Messages] Unread realtime status:", status);
-      });
-
-    const readsChannel = supabaseRegistrar
-      .channel(`registrar-unread-reads-${currentUser.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "message_reads",
-          filter: `user_id=eq.${currentUser.id}`,
-        },
-        refresh
-      )
-      .subscribe();
-
-    // Recovery if Realtime misses an event.
-    const pollTimer = setInterval(refresh, 5000);
-
-    return () => {
-      mounted = false;
-      unreadRefreshVersionRef.current += 1;
-      clearInterval(pollTimer);
-      void supabaseRegistrar.removeChannel(messagesChannel);
-      void supabaseRegistrar.removeChannel(readsChannel);
-    };
-  }, [currentUser?.id, contactsLoading, refreshUnreadCounts]);
-
-  // =========================================================
-  // ATTACHMENTS
-  // =========================================================
-
   const loadAttachmentsForMessages = useCallback(async (messageRows) => {
     const messageIds = (messageRows || [])
       .map((message) => message.id)
       .filter(Boolean);
-
     if (!messageIds.length) return {};
-
     const { data: rows, error } = await supabaseRegistrar
       .from("message_attachments")
       .select(
@@ -465,7 +245,6 @@ const Messages = () => {
       )
       .in("message_id", messageIds)
       .order("created_at", { ascending: true });
-
     if (error) {
       console.error(
         "[Registrar Messages] Failed to load attachment metadata:",
@@ -473,25 +252,19 @@ const Messages = () => {
       );
       throw error;
     }
-
     const map = {};
-
     await Promise.all(
       (rows || []).map(async (row) => {
         if (!map[row.message_id]) map[row.message_id] = [];
-
         const { data, error: urlError } = await supabaseRegistrar.storage
           .from(MESSAGE_ATTACHMENT_BUCKET)
           .createSignedUrl(row.file_path, ATTACHMENT_URL_EXPIRY);
-
-        if (urlError) {
+        if (urlError)
           console.error(
             "[Registrar Messages] Failed to create attachment URL:",
             row.file_name,
             urlError
           );
-        }
-
         map[row.message_id].push({
           id: row.id,
           fileName: row.file_name,
@@ -503,24 +276,17 @@ const Messages = () => {
         });
       })
     );
-
     return map;
   }, []);
 
-  // =========================================================
-  // CURRENT USER
-  // =========================================================
-
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       try {
         const {
           data: { user },
           error,
         } = await supabaseRegistrar.auth.getUser();
-
         if (error) throw error;
         if (mounted) setCurrentUser(user || null);
       } catch (error) {
@@ -530,53 +296,39 @@ const Messages = () => {
         );
       }
     })();
-
     return () => {
       mounted = false;
     };
   }, []);
 
-  // =========================================================
-  // CONTACTS
-  // =========================================================
-
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       setContactsLoading(true);
-
       try {
         const { data, error } = await supabaseRegistrar.rpc(
           "get_registrar_message_contacts"
         );
-
         if (error) throw error;
-
         const ids = (data || []).map((person) => person.id).filter(Boolean);
-
         let profileMap = {};
-
         if (ids.length) {
           const { data: profiles, error: profileError } =
             await supabaseRegistrar
               .from("students")
               .select("id, profile_photo_url")
               .in("id", ids);
-
-          if (profileError) {
+          if (profileError)
             console.error(
               "[Registrar Messages] Profile photo query error:",
               profileError
             );
-          } else {
+          else
             profileMap = (profiles || []).reduce((map, profile) => {
               map[profile.id] = profile.profile_photo_url || null;
               return map;
             }, {});
-          }
         }
-
         const formatted = (data || []).map((person) => ({
           id: person.id,
           name: buildName(person) || "Unnamed User",
@@ -589,14 +341,10 @@ const Messages = () => {
           status: person.status,
           profilePhotoUrl: getProfilePhotoUrl(profileMap[person.id]),
         }));
-
         if (!mounted) return;
-
         setContacts(formatted);
-
         setSelectedContact((previous) => {
           if (!formatted.length) return null;
-
           return (
             formatted.find((contact) => contact.id === previous?.id) ||
             formatted[0]
@@ -604,7 +352,6 @@ const Messages = () => {
         });
       } catch (error) {
         console.error("[Registrar Messages] Failed to load contacts:", error);
-
         if (mounted) {
           setContacts([]);
           setSelectedContact(null);
@@ -613,70 +360,302 @@ const Messages = () => {
         if (mounted) setContactsLoading(false);
       }
     })();
-
     return () => {
       mounted = false;
     };
   }, []);
 
-  const getOrCreateDirectConversation = async (otherUserId) => {
-    if (!otherUserId) {
-      throw new Error("A valid contact is required.");
+  const unreadRefreshVersionRef = useRef(0);
+  const refreshUnreadCounts = async () => {
+    if (!currentUser?.id || contactsLoading) return;
+    const version = ++unreadRefreshVersionRef.current;
+    try {
+      const { data: memberships, error: membershipsError } =
+        await supabaseRegistrar
+          .from("conversation_members")
+          .select("conversation_id, joined_at")
+          .eq("user_id", currentUser.id);
+      if (membershipsError) throw membershipsError;
+      const joinedAtByConversation = new Map(
+        (memberships || []).map((row) => [row.conversation_id, row.joined_at])
+      );
+      const conversationIds = [...joinedAtByConversation.keys()];
+      if (!conversationIds.length) {
+        if (version === unreadRefreshVersionRef.current) setUnreadByContact({});
+        return;
+      }
+      const [messagesResult, readsResult, conversationsResult] =
+        await Promise.all([
+          supabaseRegistrar
+            .from("messages")
+            .select("id, conversation_id, sender_id, created_at, is_deleted")
+            .in("conversation_id", conversationIds)
+            .neq("sender_id", currentUser.id)
+            .eq("is_deleted", false)
+            .order("created_at", { ascending: true }),
+          supabaseRegistrar
+            .from("message_reads")
+            .select("conversation_id, last_read_at")
+            .eq("user_id", currentUser.id)
+            .in("conversation_id", conversationIds),
+          supabaseRegistrar
+            .from("conversations")
+            .select("id, direct_key")
+            .in("id", conversationIds),
+        ]);
+      if (messagesResult.error) throw messagesResult.error;
+      if (readsResult.error) throw readsResult.error;
+      if (conversationsResult.error) throw conversationsResult.error;
+      if (version !== unreadRefreshVersionRef.current) return;
+      const readAtByConversation = new Map(
+        (readsResult.data || []).map((row) => [
+          row.conversation_id,
+          row.last_read_at ? new Date(row.last_read_at).getTime() : 0,
+        ])
+      );
+      const otherUserByConversation = new Map();
+      for (const row of conversationsResult.data || []) {
+        const otherId = row.direct_key
+          ?.split(":")
+          .find((id) => id !== currentUser.id);
+        if (otherId) otherUserByConversation.set(row.id, otherId);
+      }
+      const counts = {};
+      for (const message of messagesResult.data || []) {
+        const joinedAt = joinedAtByConversation.get(message.conversation_id);
+        if (
+          joinedAt &&
+          new Date(message.created_at).getTime() < new Date(joinedAt).getTime()
+        )
+          continue;
+        const readAt = readAtByConversation.get(message.conversation_id) || 0;
+        if (new Date(message.created_at).getTime() <= readAt) continue;
+        const contactId = otherUserByConversation.get(message.conversation_id);
+        if (contactId) counts[contactId] = (counts[contactId] || 0) + 1;
+      }
+      if (version === unreadRefreshVersionRef.current)
+        setUnreadByContact(counts);
+    } catch (error) {
+      console.warn(
+        "[Registrar Messages] Failed to refresh unread counts:",
+        error?.message || error
+      );
     }
+  };
 
+  useEffect(() => {
+    if (!currentUser?.id || contactsLoading) return;
+    void refreshUnreadCounts();
+    const timer = setInterval(() => void refreshUnreadCounts(), 10000);
+    const channel = supabaseRegistrar
+      .channel(`registrar-unread-${currentUser.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => void refreshUnreadCounts()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_reads",
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => void refreshUnreadCounts()
+      )
+      .subscribe();
+    return () => {
+      clearInterval(timer);
+      supabaseRegistrar.removeChannel(channel);
+    };
+  }, [currentUser?.id, contactsLoading]);
+
+  // Load per-user archive state and users this registrar has blocked.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let mounted = true;
+    const loadContactControls = async () => {
+      try {
+        const [membershipsResult, blocksResult] = await Promise.all([
+          supabaseRegistrar
+            .from("conversation_members")
+            .select("conversation_id, is_archived")
+            .eq("user_id", currentUser.id),
+          supabaseRegistrar
+            .from("blocked_users")
+            .select("blocked_user_id")
+            .eq("user_id", currentUser.id),
+        ]);
+        if (membershipsResult.error) throw membershipsResult.error;
+        if (blocksResult.error) throw blocksResult.error;
+        const memberships = membershipsResult.data || [];
+        const conversationIds = memberships
+          .map((row) => row.conversation_id)
+          .filter(Boolean);
+        let conversationRows = [];
+        if (conversationIds.length) {
+          const { data, error } = await supabaseRegistrar
+            .from("conversations")
+            .select("id, direct_key")
+            .in("id", conversationIds);
+          if (error) throw error;
+          conversationRows = data || [];
+        }
+        if (!mounted) return;
+        const archived = new Set();
+        for (const membership of memberships) {
+          if (!membership.is_archived) continue;
+          const conversation = conversationRows.find(
+            (row) => row.id === membership.conversation_id
+          );
+          if (!conversation?.direct_key) continue;
+          const ids = conversation.direct_key.split(":");
+          const otherId = ids.find((id) => id !== currentUser.id);
+          if (otherId) archived.add(otherId);
+        }
+        setArchivedContactIds(archived);
+        setBlockedContactIds(
+          new Set((blocksResult.data || []).map((row) => row.blocked_user_id))
+        );
+      } catch (error) {
+        console.warn(
+          "[Registrar Messages] Failed to load archive/block state:",
+          error
+        );
+      }
+    };
+    void loadContactControls();
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser?.id]);
+
+  const getOrCreateDirectConversation = async (otherUserId) => {
+    if (!otherUserId || !currentUser?.id)
+      throw new Error("A valid contact is required.");
+    // Look up the existing direct conversation first. This preserves history
+    // even when the other person has blocked messaging between the two users.
+    const directKey = [currentUser.id, otherUserId].sort().join(":");
+    const { data: existing, error: lookupError } = await supabaseRegistrar
+      .from("conversations")
+      .select("id, direct_key")
+      .eq("direct_key", directKey)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing?.id)
+      return { id: existing.id, direct_key: existing.direct_key };
     const { data, error } = await supabaseRegistrar.rpc(
       "create_direct_conversation",
       { p_other_user_id: otherUserId }
     );
-
     if (error) throw error;
-
-    return { id: data };
+    return { id: data, direct_key: directKey };
   };
 
-  // =========================================================
-  // ACTIVE CONVERSATION
-  // =========================================================
+  const handleArchiveToggle = async () => {
+    if (!selectedContact || !currentUser?.id || contactActionBusy) return;
+    setContactActionBusy(true);
+    setContactActionError("");
+    try {
+      let conversation = conversations[selectedContact.id];
+      if (!conversation?.id) {
+        conversation = await getOrCreateDirectConversation(selectedContact.id);
+        setConversations((previous) => ({
+          ...previous,
+          [selectedContact.id]: conversation,
+        }));
+      }
+      const nextArchived = !archivedContactIds.has(selectedContact.id);
+      const { error } = await supabaseRegistrar.rpc(
+        "set_conversation_archived",
+        {
+          p_conversation_id: conversation.id,
+          p_is_archived: nextArchived,
+        }
+      );
+      if (error) throw error;
+      setArchivedContactIds((previous) => {
+        const next = new Set(previous);
+        if (nextArchived) next.add(selectedContact.id);
+        else next.delete(selectedContact.id);
+        return next;
+      });
+      setShowContactActions(false);
+      if (nextArchived && contactListFilter === "active") {
+        setSelectedContact(null);
+        setMessageInput("");
+        setSelectedFiles([]);
+      }
+    } catch (error) {
+      console.error("[Registrar Messages] Archive action failed:", error);
+      setContactActionError(
+        error?.message ||
+          "Could not update archive state. Make sure the archive SQL migration has been run."
+      );
+    } finally {
+      setContactActionBusy(false);
+    }
+  };
+
+  const handleBlockToggle = async () => {
+    if (!selectedContact || !currentUser?.id || contactActionBusy) return;
+    setContactActionBusy(true);
+    setContactActionError("");
+    try {
+      const isBlocked = blockedContactIds.has(selectedContact.id);
+      const { error } = await supabaseRegistrar.rpc(
+        isBlocked ? "unblock_user" : "block_user",
+        {
+          p_blocked_user_id: selectedContact.id,
+        }
+      );
+      if (error) throw error;
+      setBlockedContactIds((previous) => {
+        const next = new Set(previous);
+        if (isBlocked) next.delete(selectedContact.id);
+        else next.add(selectedContact.id);
+        return next;
+      });
+      setShowContactActions(false);
+    } catch (error) {
+      console.error("[Registrar Messages] Block action failed:", error);
+      setContactActionError(error?.message || "Could not update block state.");
+    } finally {
+      setContactActionBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentUser?.id || !selectedContact?.id) return;
-
     let mounted = true;
     let channel = null;
     let pollTimer = null;
-
     const contactId = selectedContact.id;
 
     const loadConversation = async () => {
       try {
         let conversation = conversations[contactId];
-
         if (!conversation) {
           conversation = await getOrCreateDirectConversation(contactId);
-
           if (!mounted) return;
-
           setConversations((previous) => ({
             ...previous,
             [contactId]: conversation,
           }));
         }
-
-        if (!conversation?.id) {
+        if (!conversation?.id)
           throw new Error("Conversation could not be created.");
-        }
 
         const { data: rows, error } = await supabaseRegistrar
           .from("messages")
           .select("*")
           .eq("conversation_id", conversation.id)
           .order("created_at", { ascending: true });
-
         if (error) throw error;
         if (!mounted) return;
 
         let attachmentMap = {};
-
         try {
           attachmentMap = await loadAttachmentsForMessages(rows || []);
         } catch (error) {
@@ -685,32 +664,25 @@ const Messages = () => {
             error
           );
         }
-
         if (!mounted) return;
 
         let reactionRows = [];
-
         const loadedMessageIds = (rows || [])
           .map((row) => row.id)
           .filter(Boolean);
-
         if (loadedMessageIds.length) {
           const { data: fetchedReactions, error: reactionError } =
             await supabaseRegistrar
               .from("message_reactions")
               .select("id, message_id, user_id, reaction, created_at")
               .in("message_id", loadedMessageIds);
-
-          if (reactionError) {
+          if (reactionError)
             console.error(
               "[Registrar Messages] Failed to load reactions:",
               reactionError
             );
-          } else {
-            reactionRows = fetchedReactions || [];
-          }
+          else reactionRows = fetchedReactions || [];
         }
-
         const reactionsByMessage = reactionRows.reduce((map, reaction) => {
           (map[reaction.message_id] ||= []).push(reaction);
           return map;
@@ -727,26 +699,18 @@ const Messages = () => {
             .filter(Boolean),
         }));
 
-        // Opening the conversation confirms incoming messages were received
-        // and marks the latest message as seen.
+        // Opening the conversation confirms incoming student messages reached
+        // this client and marks the conversation as seen.
         const incomingRows = (rows || []).filter(
           (row) => row.sender_id !== currentUser.id
         );
-
         await Promise.all(
           incomingRows.map((row) => markMessageDelivered(row.id))
         );
-
         const latestLoadedMessage = (rows || []).at(-1);
-
-        if (latestLoadedMessage) {
+        if (latestLoadedMessage)
           await markConversationSeen(conversation.id, latestLoadedMessage.id);
-        }
-
         await refreshOutgoingMessageStatuses(conversation.id, contactId);
-
-        // Refresh the badge calculation after recording the read position.
-        void refreshUnreadCounts();
 
         channel = supabaseRegistrar
           .channel(`registrar-messages-${conversation.id}`)
@@ -764,37 +728,24 @@ const Messages = () => {
                 payload.new?.id,
                 payload.new?.conversation_id
               );
-
               if (!mounted) return;
-
               const incoming = normalizeMessage({
                 ...payload.new,
                 attachments: [],
               });
-
               if (!incoming) return;
-
               if (incoming.sender_id !== currentUser.id) {
                 void markMessageDelivered(incoming.id);
                 void markConversationSeen(conversation.id, incoming.id);
               } else {
                 void refreshOutgoingMessageStatuses(conversation.id, contactId);
               }
-
               setMessages((previous) => {
                 const existing = previous[contactId] || [];
-
-                if (existing.some((message) => message.id === incoming.id)) {
+                if (existing.some((message) => message.id === incoming.id))
                   return previous;
-                }
-
-                return {
-                  ...previous,
-                  [contactId]: [...existing, incoming],
-                };
+                return { ...previous, [contactId]: [...existing, incoming] };
               });
-
-              void refreshUnreadCounts();
             }
           )
           .on(
@@ -806,7 +757,6 @@ const Messages = () => {
             },
             async (payload) => {
               if (!mounted || !payload.new?.message_id) return;
-
               const { data: messageRow, error: lookupError } =
                 await supabaseRegistrar
                   .from("messages")
@@ -814,7 +764,6 @@ const Messages = () => {
                   .eq("id", payload.new.message_id)
                   .eq("conversation_id", conversation.id)
                   .maybeSingle();
-
               if (lookupError) {
                 console.error(
                   "[Registrar Messages] Attachment message lookup failed:",
@@ -822,30 +771,21 @@ const Messages = () => {
                 );
                 return;
               }
-
               if (!messageRow || !mounted) return;
-
               try {
                 const map = await loadAttachmentsForMessages([messageRow]);
-
                 if (!mounted) return;
-
                 setMessages((previous) => {
                   const existing = previous[contactId] || [];
-
                   return {
                     ...previous,
                     [contactId]: existing.map((message) => {
                       if (message.id !== messageRow.id) return message;
-
                       const merged = [...(message.attachments || [])];
-
                       for (const attachment of map[messageRow.id] || []) {
-                        if (!merged.some((item) => item.id === attachment.id)) {
+                        if (!merged.some((item) => item.id === attachment.id))
                           merged.push(attachment);
-                        }
                       }
-
                       return { ...message, attachments: merged };
                     }),
                   };
@@ -868,9 +808,7 @@ const Messages = () => {
             },
             (payload) => {
               if (!mounted) return;
-
               const updated = normalizeMessage(payload.new);
-
               setMessages((previous) => ({
                 ...previous,
                 [contactId]: (previous[contactId] || []).map((message) =>
@@ -888,8 +826,6 @@ const Messages = () => {
                     : message
                 ),
               }));
-
-              void refreshUnreadCounts();
             }
           )
           .on(
@@ -901,12 +837,9 @@ const Messages = () => {
             },
             async (payload) => {
               if (!mounted) return;
-
               const messageId =
                 payload.new?.message_id || payload.old?.message_id;
-
               if (!messageId) return;
-
               const { data: relatedMessage, error: relatedError } =
                 await supabaseRegistrar
                   .from("messages")
@@ -914,17 +847,13 @@ const Messages = () => {
                   .eq("id", messageId)
                   .eq("conversation_id", conversation.id)
                   .maybeSingle();
-
               if (relatedError || !relatedMessage || !mounted) return;
-
               const { data: freshReactions, error: freshError } =
                 await supabaseRegistrar
                   .from("message_reactions")
                   .select("id, message_id, user_id, reaction, created_at")
                   .eq("message_id", messageId);
-
               if (freshError || !mounted) return;
-
               setMessages((previous) => ({
                 ...previous,
                 [contactId]: (previous[contactId] || []).map((message) =>
@@ -939,7 +868,8 @@ const Messages = () => {
             console.log("[Registrar Messages] Realtime status:", status)
           );
 
-        // Fallback sync for the active conversation.
+        // Realtime stays enabled; this lightweight fallback sync ensures the
+        // active conversation updates without a manual browser refresh.
         pollTimer = setInterval(async () => {
           try {
             const { data: freshRows, error: freshError } =
@@ -948,33 +878,26 @@ const Messages = () => {
                 .select("*")
                 .eq("conversation_id", conversation.id)
                 .order("created_at", { ascending: true });
-
             if (freshError || !mounted) {
-              if (freshError) {
+              if (freshError)
                 console.warn(
                   "[Registrar Messages] Realtime fallback sync failed:",
                   freshError.message
                 );
-              }
               return;
             }
-
             const existing = messagesRefForSync.current?.[contactId] || [];
-
             const existingById = new Map(
               existing.map((item) => [item.id, item])
             );
-
             const messageIds = (freshRows || []).map((row) => row.id);
             let reactionsByMessageId = {};
-
             if (messageIds.length) {
               const { data: freshReactions, error: reactionsError } =
                 await supabaseRegistrar
                   .from("message_reactions")
                   .select("id, message_id, user_id, reaction, created_at")
                   .in("message_id", messageIds);
-
               if (reactionsError) {
                 console.warn(
                   "[Registrar Messages] Reaction fallback sync failed:",
@@ -982,21 +905,16 @@ const Messages = () => {
                 );
               } else {
                 for (const reaction of freshReactions || []) {
-                  if (!reactionsByMessageId[reaction.message_id]) {
+                  if (!reactionsByMessageId[reaction.message_id])
                     reactionsByMessageId[reaction.message_id] = [];
-                  }
-
                   reactionsByMessageId[reaction.message_id].push(reaction);
                 }
               }
             }
-
             const missingRows = (freshRows || []).filter(
               (row) => !existingById.has(row.id)
             );
-
             let attachmentMap = {};
-
             if (missingRows.length) {
               try {
                 attachmentMap = await loadAttachmentsForMessages(missingRows);
@@ -1007,26 +925,24 @@ const Messages = () => {
                 );
               }
             }
-
             if (!mounted) return;
-
             setMessages((previous) => {
               const current = previous[contactId] || [];
               const byId = new Map(current.map((item) => [item.id, item]));
-
               for (const row of freshRows || []) {
                 const old = byId.get(row.id);
-                const normalized = normalizeMessage(row);
-
                 byId.set(row.id, {
-                  ...normalized,
-                  status: old?.status || normalized.status,
+                  ...normalizeMessage(row),
+                  status: old?.status || normalizeMessage(row).status,
                   deliveredAt:
-                    old?.deliveredAt || normalized.deliveredAt || null,
-                  seenAt: old?.seenAt || normalized.seenAt || null,
+                    old?.deliveredAt ||
+                    normalizeMessage(row).deliveredAt ||
+                    null,
+                  seenAt: old?.seenAt || normalizeMessage(row).seenAt || null,
                   attachments: old?.attachments?.length
                     ? old.attachments
                     : attachmentMap[row.id] || [],
+                  // Polling keeps reactions fresh even if Realtime events are unavailable.
                   reactions: Object.prototype.hasOwnProperty.call(
                     reactionsByMessageId,
                     row.id
@@ -1035,7 +951,6 @@ const Messages = () => {
                     : old?.reactions || [],
                 });
               }
-
               return {
                 ...previous,
                 [contactId]: Array.from(byId.values()).sort(
@@ -1044,26 +959,19 @@ const Messages = () => {
                 ),
               };
             });
-
             const incomingFreshRows = (freshRows || []).filter(
               (row) => row.sender_id !== currentUser.id
             );
-
             await Promise.all(
               incomingFreshRows.map((row) => markMessageDelivered(row.id))
             );
-
             const latestFreshMessage = (freshRows || []).at(-1);
-
-            if (latestFreshMessage) {
+            if (latestFreshMessage)
               await markConversationSeen(
                 conversation.id,
                 latestFreshMessage.id
               );
-            }
-
             await refreshOutgoingMessageStatuses(conversation.id, contactId);
-            void refreshUnreadCounts();
           } catch (syncError) {
             console.warn(
               "[Registrar Messages] Realtime fallback sync error:",
@@ -1078,14 +986,11 @@ const Messages = () => {
         );
       }
     };
-
     loadConversation();
-
     return () => {
       mounted = false;
-
       if (pollTimer) clearInterval(pollTimer);
-      if (channel) void supabaseRegistrar.removeChannel(channel);
+      if (channel) supabaseRegistrar.removeChannel(channel);
     };
   }, [
     currentUser?.id,
@@ -1093,29 +998,48 @@ const Messages = () => {
     conversations,
     normalizeMessage,
     loadAttachmentsForMessages,
-    refreshUnreadCounts,
   ]);
 
-  const filteredContacts = contacts.filter((contact) =>
-    `${contact.name} ${contact.role}`
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+  const filteredContacts = contacts.filter((contact) => {
+    const isArchived = archivedContactIds.has(contact.id);
+    const matchesArchiveFilter =
+      contactListFilter === "archived" ? isArchived : !isArchived;
+    return (
+      matchesArchiveFilter &&
+      `${contact.name} ${contact.role}`
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
+    );
+  });
+  useEffect(() => {
+    if (
+      contactListFilter === "active" &&
+      selectedContact &&
+      archivedContactIds.has(selectedContact.id)
+    ) {
+      setSelectedContact(null);
+      setMessageInput("");
+      setSelectedFiles([]);
+    }
+    if (
+      contactListFilter === "archived" &&
+      selectedContact &&
+      !archivedContactIds.has(selectedContact.id)
+    ) {
+      setSelectedContact(null);
+      setMessageInput("");
+      setSelectedFiles([]);
+    }
+  }, [contactListFilter, archivedContactIds]);
 
   const currentMessages = selectedContact
     ? messages[selectedContact.id] || []
     : [];
 
-  // =========================================================
-  // AUTO-SCROLL
-  // =========================================================
-
   const wasNearBottomRef = useRef(true);
-
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
-
     wasNearBottomRef.current =
       container.scrollHeight - container.scrollTop - container.clientHeight <
       140;
@@ -1124,20 +1048,12 @@ const Messages = () => {
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-
     if (wasNearBottomRef.current || currentMessages.length <= 1) {
       requestAnimationFrame(() =>
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: "smooth",
-        })
+        container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
       );
     }
   }, [currentMessages, selectedContact?.id]);
-
-  // =========================================================
-  // EDIT / DELETE / REACTIONS
-  // =========================================================
 
   const handleStartEdit = (message) => {
     setMessageActionError("");
@@ -1147,24 +1063,19 @@ const Messages = () => {
 
   const handleSaveEdit = async (messageId) => {
     const content = editInput.trim();
-
     if (!content) {
       setMessageActionError(
         "A message cannot be empty. Use Delete if you want to remove it."
       );
       return;
     }
-
     try {
       setMessageActionError("");
-
       const { error } = await supabaseRegistrar.rpc("edit_message", {
         p_message_id: messageId,
         p_content: content,
       });
-
       if (error) throw error;
-
       setMessages((previous) => ({
         ...previous,
         [selectedContact.id]: (previous[selectedContact.id] || []).map(
@@ -1179,7 +1090,6 @@ const Messages = () => {
               : message
         ),
       }));
-
       setEditingMessageId(null);
       setEditInput("");
     } catch (error) {
@@ -1190,16 +1100,12 @@ const Messages = () => {
 
   const handleDeleteMessage = async (message) => {
     if (!window.confirm("Delete this message?")) return;
-
     try {
       setMessageActionError("");
-
       const { error } = await supabaseRegistrar.rpc("delete_message", {
         p_message_id: message.id,
       });
-
       if (error) throw error;
-
       setMessages((previous) => ({
         ...previous,
         [selectedContact.id]: (previous[selectedContact.id] || []).map((item) =>
@@ -1214,13 +1120,10 @@ const Messages = () => {
             : item
         ),
       }));
-
       if (editingMessageId === message.id) {
         setEditingMessageId(null);
         setEditInput("");
       }
-
-      void refreshUnreadCounts();
     } catch (error) {
       console.error("[Registrar Messages] Failed to delete message:", error);
       setMessageActionError(error?.message || "Couldn't delete this message.");
@@ -1228,42 +1131,29 @@ const Messages = () => {
   };
 
   const handleReaction = async (message, reaction) => {
-    if (
-      !currentUser?.id ||
-      reactionBusyId === message.id ||
-      message.isDeleted
-    ) {
+    if (!currentUser?.id || reactionBusyId === message.id || message.isDeleted)
       return;
-    }
-
     const existing = (message.reactions || []).find(
       (item) => item.user_id === currentUser.id
     );
-
     setReactionBusyId(message.id);
     setMessageActionError("");
-
     try {
       const rpc =
         existing?.reaction === reaction
           ? "remove_message_reaction"
           : "set_message_reaction";
-
       const args =
         rpc === "remove_message_reaction"
           ? { p_message_id: message.id }
           : { p_message_id: message.id, p_reaction: reaction };
-
       const { error } = await supabaseRegistrar.rpc(rpc, args);
       if (error) throw error;
-
       const { data: refreshed, error: refreshError } = await supabaseRegistrar
         .from("message_reactions")
         .select("id, message_id, user_id, reaction, created_at")
         .eq("message_id", message.id);
-
       if (refreshError) throw refreshError;
-
       setMessages((previous) => ({
         ...previous,
         [selectedContact.id]: (previous[selectedContact.id] || []).map((item) =>
@@ -1280,21 +1170,13 @@ const Messages = () => {
     }
   };
 
-  // =========================================================
-  // FILE SELECTION / SENDING
-  // =========================================================
-
   const handleFileSelection = (event) => {
     const incoming = Array.from(event.target.files || []);
     event.target.value = "";
-
     if (!incoming.length) return;
-
     setAttachmentError("");
-
     setSelectedFiles((previous) => {
       const combined = [...previous];
-
       for (const file of incoming) {
         if (combined.length >= MAX_FILES) {
           setAttachmentError(
@@ -1302,12 +1184,10 @@ const Messages = () => {
           );
           break;
         }
-
         if (file.size > MAX_FILE_SIZE) {
           setAttachmentError(`${file.name} exceeds the 10 MB per-file limit.`);
           continue;
         }
-
         if (
           combined.some(
             (item) =>
@@ -1315,66 +1195,59 @@ const Messages = () => {
               item.size === file.size &&
               item.lastModified === file.lastModified
           )
-        ) {
+        )
           continue;
-        }
-
         combined.push(file);
       }
-
       return combined;
     });
   };
 
   const handleSendMessage = async (event) => {
     event.preventDefault();
-
     if (!selectedContact || !currentUser?.id || uploading) return;
-
+    if (blockedContactIds.has(selectedContact.id)) {
+      setAttachmentError(
+        "You blocked this student. Unblock them before sending messages."
+      );
+      return;
+    }
     const text = messageInput.trim();
     const filesToSend = [...selectedFiles];
-
     if (!text && !filesToSend.length) return;
 
     setUploading(true);
     setAttachmentError("");
-
     try {
       let conversation = conversations[selectedContact.id];
-
       if (!conversation) {
         conversation = await getOrCreateDirectConversation(selectedContact.id);
-
         setConversations((previous) => ({
           ...previous,
           [selectedContact.id]: conversation,
         }));
       }
-
-      if (!conversation?.id) {
+      if (!conversation?.id)
         throw new Error("Conversation could not be found.");
-      }
 
-      // Create the message first so the Storage path can include its UUID.
+      // Create the message first so the Storage path can include its message UUID.
       const { data: sentResult, error: sendError } =
         await supabaseRegistrar.rpc("send_message", {
           p_conversation_id: conversation.id,
           p_content: text || null,
           p_reply_to_message_id: null,
         });
-
       if (sendError) throw sendError;
-
       const sentMessage = Array.isArray(sentResult)
         ? sentResult[0]
         : sentResult;
-
-      if (!sentMessage?.id) {
+      if (!sentMessage?.id)
         throw new Error(
           "The message was created but no message ID was returned."
         );
-      }
 
+      // Render the successful RPC result immediately. Do not depend on
+      // Realtime delivery for the sender to see their own message.
       const normalizedSentMessage = {
         ...normalizeMessage({
           ...sentMessage,
@@ -1384,16 +1257,10 @@ const Messages = () => {
         attachments: [],
         reactions: [],
       };
-
       setMessages((previous) => {
         const existing = previous[selectedContact.id] || [];
-
-        if (
-          existing.some((message) => message.id === normalizedSentMessage.id)
-        ) {
+        if (existing.some((message) => message.id === normalizedSentMessage.id))
           return previous;
-        }
-
         return {
           ...previous,
           [selectedContact.id]: [...existing, normalizedSentMessage].sort(
@@ -1408,13 +1275,12 @@ const Messages = () => {
       setSelectedFiles([]);
 
       const failures = [];
-
       for (const file of filesToSend) {
         const safeName = file.name.replace(/[^\w.\-() ]/g, "_");
         const uniqueName = `${Date.now()}-${Math.random()
           .toString(36)
           .slice(2, 10)}-${safeName}`;
-
+        // Must match Storage INSERT policy: user / conversation / message / filename.
         const filePath = `${currentUser.id}/${conversation.id}/${sentMessage.id}/${uniqueName}`;
 
         const { error: uploadError } = await supabaseRegistrar.storage
@@ -1424,7 +1290,6 @@ const Messages = () => {
             contentType: file.type || "application/octet-stream",
             upsert: false,
           });
-
         if (uploadError) {
           console.error(
             "[Registrar Messages] Attachment upload failed:",
@@ -1442,36 +1307,29 @@ const Messages = () => {
             p_file_type: file.type || "application/octet-stream",
             p_file_size: file.size,
           });
-
         if (metadataError) {
           console.error(
             "[Registrar Messages] Attachment metadata insert failed:",
             metadataError
           );
-
           failures.push(
             `${file.name} uploaded but its attachment record failed: ${metadataError.message}`
           );
-
           continue;
         }
 
         const saved = Array.isArray(attachmentResult)
           ? attachmentResult[0]
           : attachmentResult;
-
         const { data: signedData, error: signedError } =
           await supabaseRegistrar.storage
             .from(MESSAGE_ATTACHMENT_BUCKET)
             .createSignedUrl(filePath, ATTACHMENT_URL_EXPIRY);
-
-        if (signedError) {
+        if (signedError)
           console.error(
             "[Registrar Messages] Failed to sign uploaded attachment:",
             signedError
           );
-        }
-
         const attachment = {
           id: saved?.id || `${sentMessage.id}-${filePath}`,
           fileName: saved?.file_name || file.name,
@@ -1481,20 +1339,16 @@ const Messages = () => {
           createdAt: saved?.created_at || new Date().toISOString(),
           url: signedData?.signedUrl || null,
         };
-
         setMessages((previous) => {
           const existing = previous[selectedContact.id] || [];
-
           const index = existing.findIndex(
             (message) => message.id === sentMessage.id
           );
-
           if (index < 0) {
             const normalized = normalizeMessage({
               ...sentMessage,
               content: text || null,
             });
-
             return {
               ...previous,
               [selectedContact.id]: [
@@ -1503,7 +1357,6 @@ const Messages = () => {
               ],
             };
           }
-
           return {
             ...previous,
             [selectedContact.id]: existing.map((message) =>
@@ -1517,19 +1370,14 @@ const Messages = () => {
           };
         });
       }
-
-      if (failures.length) {
+      if (failures.length)
         setAttachmentError(
           `Message sent, but some files could not be attached:\n${failures.join(
             "\n"
           )}`
         );
-      }
-
-      void refreshUnreadCounts();
     } catch (error) {
       console.error("[Registrar Messages] Failed to send message:", error);
-
       setAttachmentError(
         error?.message || "Failed to send message. Please try again."
       );
@@ -1540,23 +1388,9 @@ const Messages = () => {
 
   const handleSelectContact = (contact) => {
     setSelectedContact(contact);
-
-    // Immediately clear this contact's badge while its conversation opens.
-    setUnreadByContact((previous) => ({
-      ...previous,
-      [contact.id]: 0,
-    }));
-
     setMessageInput("");
     setSelectedFiles([]);
     setAttachmentError("");
-    setMessageActionError("");
-    setEditingMessageId(null);
-    setEditInput("");
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
   const formatFileSize = (bytes) => {
@@ -1566,13 +1400,8 @@ const Messages = () => {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  // =========================================================
-  // PRESENTATIONAL COMPONENTS
-  // =========================================================
-
   const MessageAttachments = ({ attachments = [] }) => {
     if (!attachments.length) return null;
-
     return (
       <div className="mt-2 space-y-2">
         {attachments.map((attachment) => {
@@ -1580,7 +1409,6 @@ const Messages = () => {
           const isPdf =
             attachment.fileType === "application/pdf" ||
             attachment.fileName?.toLowerCase().endsWith(".pdf");
-
           return (
             <div
               key={attachment.id}
@@ -1605,12 +1433,10 @@ const Messages = () => {
                   />
                 </button>
               )}
-
               <div className="flex min-w-0 items-center gap-2 p-2.5">
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-700 text-[10px] font-bold text-white">
                   {isImage ? "IMG" : isPdf ? "PDF" : "FILE"}
                 </div>
-
                 <div className="min-w-0 flex-1">
                   <p
                     className={`break-words text-[11px] font-semibold ${
@@ -1619,7 +1445,6 @@ const Messages = () => {
                   >
                     {attachment.fileName}
                   </p>
-
                   <p
                     className={`mt-1 text-[10px] ${
                       darkMode ? "text-slate-400" : "text-slate-500"
@@ -1628,7 +1453,6 @@ const Messages = () => {
                     {formatFileSize(attachment.fileSize)}
                   </p>
                 </div>
-
                 {attachment.url ? (
                   <a
                     href={attachment.url}
@@ -1658,7 +1482,6 @@ const Messages = () => {
   const ContactAvatar = ({ contact, active, size = "normal" }) => {
     const sizeClass =
       size === "small" ? "w-9 h-9 text-[10px]" : "w-10 h-10 text-xs";
-
     return (
       <div
         className={`${sizeClass} flex-shrink-0 rounded-lg overflow-hidden flex items-center justify-center font-bold ${getAvatarClass(
@@ -1681,25 +1504,6 @@ const Messages = () => {
     );
   };
 
-  const UnreadBadge = ({ contactId }) => {
-    const count = unreadByContact[contactId] || 0;
-
-    if (count <= 0) return null;
-
-    return (
-      <span
-        className="inline-flex min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 py-1 text-[10px] font-bold leading-none text-white"
-        aria-label={`${count} unread messages`}
-      >
-        {count > 9 ? "9+" : count}
-      </span>
-    );
-  };
-
-  // =========================================================
-  // UI
-  // =========================================================
-
   return (
     <div className="w-full min-h-full p-3 sm:p-5 md:p-6 lg:p-8 bg-transparent">
       <div className="max-w-[1400px] mx-auto">
@@ -1711,11 +1515,9 @@ const Messages = () => {
           >
             Registrar Portal
           </p>
-
           <h1 className={`text-xl sm:text-2xl font-black ${headingClass}`}>
             Messages
           </h1>
-
           <p className={`text-xs sm:text-sm mt-1 ${mutedClass}`}>
             Communicate with students and internship-related contacts.
           </p>
@@ -1725,7 +1527,6 @@ const Messages = () => {
           className={`w-full border rounded-xl overflow-hidden shadow-sm ${mainContainerClass}`}
         >
           <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] min-h-0 md:h-[calc(100vh-220px)] md:max-h-[760px]">
-            {/* DESKTOP CONTACT LIST */}
             <aside
               className={`hidden md:flex flex-col min-h-0 border-r ${panelClass}`}
             >
@@ -1734,12 +1535,10 @@ const Messages = () => {
                   <h2 className={`text-sm font-bold ${headingClass}`}>
                     Students
                   </h2>
-
                   <span className={`text-xs ${mutedClass}`}>
                     {contacts.length}
                   </span>
                 </div>
-
                 <div className="relative">
                   <input
                     type="text"
@@ -1748,15 +1547,43 @@ const Messages = () => {
                     placeholder="Search contacts..."
                     className={`w-full h-9 px-3 pr-8 rounded-lg border text-xs outline-none transition ${inputClass}`}
                   />
-
                   <span
                     className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs pointer-events-none ${mutedClass}`}
                   >
                     🔍
                   </span>
                 </div>
+                <div
+                  className={`mt-3 grid grid-cols-2 gap-1 rounded-lg border p-1 ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-900"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setContactListFilter("active")}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-bold ${
+                      contactListFilter === "active"
+                        ? "bg-slate-700 text-white"
+                        : mutedClass
+                    }`}
+                  >
+                    Chats
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContactListFilter("archived")}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-bold ${
+                      contactListFilter === "archived"
+                        ? "bg-slate-700 text-white"
+                        : mutedClass
+                    }`}
+                  >
+                    Archived
+                  </button>
+                </div>
               </div>
-
               <div
                 className={`flex-1 min-h-0 overflow-y-auto p-3 space-y-2 ${panelClass}`}
               >
@@ -1769,7 +1596,6 @@ const Messages = () => {
                 ) : filteredContacts.length ? (
                   filteredContacts.map((contact) => {
                     const active = selectedContact?.id === contact.id;
-
                     return (
                       <button
                         key={contact.id}
@@ -1781,24 +1607,18 @@ const Messages = () => {
                       >
                         <div className="flex items-center gap-3">
                           <ContactAvatar contact={contact} active={active} />
-
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p
-                                className={`text-xs font-bold truncate ${
-                                  active
-                                    ? "text-white"
-                                    : darkMode
-                                    ? "text-slate-100"
-                                    : "text-slate-900"
-                                }`}
-                              >
-                                {contact.name}
-                              </p>
-
-                              <UnreadBadge contactId={contact.id} />
-                            </div>
-
+                            <p
+                              className={`text-xs font-bold truncate ${
+                                active
+                                  ? "text-white"
+                                  : darkMode
+                                  ? "text-slate-100"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {contact.name}
+                            </p>
                             <p
                               className={`text-[10px] mt-1 truncate ${
                                 active
@@ -1811,6 +1631,13 @@ const Messages = () => {
                               {contact.role}
                             </p>
                           </div>
+                          {(unreadByContact[contact.id] || 0) > 0 && (
+                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                              {unreadByContact[contact.id] > 9
+                                ? "9+"
+                                : unreadByContact[contact.id]}
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
@@ -1818,14 +1645,13 @@ const Messages = () => {
                 ) : (
                   <div className="py-8 text-center">
                     <p className={`text-xs ${mutedClass}`}>
-                      No students found.
+                      No archived chats found.
                     </p>
                   </div>
                 )}
               </div>
             </aside>
 
-            {/* MOBILE CONTACT LIST */}
             <div className={`md:hidden border-b ${panelClass}`}>
               <div className="px-3 pt-3 pb-2">
                 <div className="flex items-center justify-between">
@@ -1833,17 +1659,14 @@ const Messages = () => {
                     <h2 className={`text-sm font-bold ${headingClass}`}>
                       Students
                     </h2>
-
                     <p className={`text-[10px] mt-0.5 ${mutedClass}`}>
                       Swipe to switch conversation
                     </p>
                   </div>
-
                   <span className={`text-xs ${mutedClass}`}>
                     {contacts.length}
                   </span>
                 </div>
-
                 <div className="relative mt-3">
                   <input
                     type="text"
@@ -1852,15 +1675,43 @@ const Messages = () => {
                     placeholder="Search contacts..."
                     className={`w-full h-9 px-3 pr-8 rounded-lg border text-xs outline-none transition ${inputClass}`}
                   />
-
                   <span
                     className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs pointer-events-none ${mutedClass}`}
                   >
                     🔍
                   </span>
                 </div>
+                <div
+                  className={`mt-2 mx-3 mb-2 grid grid-cols-2 gap-1 rounded-lg border p-1 ${
+                    darkMode
+                      ? "border-slate-700 bg-slate-900"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setContactListFilter("active")}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-bold ${
+                      contactListFilter === "active"
+                        ? "bg-slate-700 text-white"
+                        : mutedClass
+                    }`}
+                  >
+                    Chats
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContactListFilter("archived")}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-bold ${
+                      contactListFilter === "archived"
+                        ? "bg-slate-700 text-white"
+                        : mutedClass
+                    }`}
+                  >
+                    Archived
+                  </button>
+                </div>
               </div>
-
               <div className="flex gap-2 overflow-x-auto overflow-y-hidden px-3 pb-3 pt-1 snap-x snap-mandatory overscroll-x-contain">
                 {contactsLoading ? (
                   <div className="w-full py-4 text-center">
@@ -1871,7 +1722,6 @@ const Messages = () => {
                 ) : filteredContacts.length ? (
                   filteredContacts.map((contact) => {
                     const active = selectedContact?.id === contact.id;
-
                     return (
                       <button
                         key={contact.id}
@@ -1887,24 +1737,18 @@ const Messages = () => {
                             active={active}
                             size="small"
                           />
-
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <p
-                                className={`text-[11px] font-bold truncate ${
-                                  active
-                                    ? "text-white"
-                                    : darkMode
-                                    ? "text-slate-100"
-                                    : "text-slate-900"
-                                }`}
-                              >
-                                {contact.name}
-                              </p>
-
-                              <UnreadBadge contactId={contact.id} />
-                            </div>
-
+                            <p
+                              className={`text-[11px] font-bold truncate ${
+                                active
+                                  ? "text-white"
+                                  : darkMode
+                                  ? "text-slate-100"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {contact.name}
+                            </p>
                             <p
                               className={`text-[9px] mt-0.5 truncate ${
                                 active
@@ -1917,6 +1761,13 @@ const Messages = () => {
                               {contact.role}
                             </p>
                           </div>
+                          {(unreadByContact[contact.id] || 0) > 0 && (
+                            <span className="min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                              {unreadByContact[contact.id] > 9
+                                ? "9+"
+                                : unreadByContact[contact.id]}
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
@@ -1931,7 +1782,6 @@ const Messages = () => {
               </div>
             </div>
 
-            {/* CHAT PANEL */}
             <div
               className={`flex flex-col min-w-0 min-h-0 h-[500px] sm:h-[550px] md:h-auto ${chatClass}`}
             >
@@ -1950,38 +1800,75 @@ const Messages = () => {
                         active
                         size="large"
                       />
-
                       <div className="min-w-0">
                         <h2
                           className={`text-sm font-bold truncate ${headingClass}`}
                         >
                           {selectedContact.name}
                         </h2>
-
                         <p className={`text-[10px] truncate ${mutedClass}`}>
                           {selectedContact.role}
                         </p>
                       </div>
                     </div>
-
-                    <button
-                      type="button"
-                      className={`w-9 h-9 flex-shrink-0 rounded-lg border transition ${
-                        darkMode
-                          ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
-                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                      title="More options"
-                    >
-                      ⋮
-                    </button>
+                    <div className="relative flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowContactActions((value) => !value);
+                          setContactActionError("");
+                        }}
+                        className={`w-9 h-9 rounded-lg border transition ${
+                          darkMode
+                            ? "border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+                            : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        }`}
+                        title="Chat options"
+                        aria-expanded={showContactActions}
+                      >
+                        ⋮
+                      </button>
+                      {showContactActions && (
+                        <div
+                          className={`absolute right-0 top-11 z-30 w-48 rounded-xl border p-1.5 shadow-xl ${
+                            darkMode
+                              ? "border-slate-700 bg-slate-900"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            disabled={contactActionBusy}
+                            onClick={handleArchiveToggle}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-[11px] font-semibold disabled:opacity-50 ${
+                              darkMode
+                                ? "text-slate-100 hover:bg-slate-800"
+                                : "text-slate-800 hover:bg-slate-100"
+                            }`}
+                          >
+                            {archivedContactIds.has(selectedContact.id)
+                              ? "↩ Unarchive chat"
+                              : "📦 Archive chat"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={contactActionBusy}
+                            onClick={handleBlockToggle}
+                            className="w-full rounded-lg px-3 py-2 text-left text-[11px] font-semibold text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            {blockedContactIds.has(selectedContact.id)
+                              ? "✓ Unblock student"
+                              : "🚫 Block student"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <div>
                     <h2 className={`text-sm font-bold ${headingClass}`}>
                       No contact selected
                     </h2>
-
                     <p className={`text-[10px] mt-1 ${mutedClass}`}>
                       Select a student to start a conversation.
                     </p>
@@ -1989,7 +1876,20 @@ const Messages = () => {
                 )}
               </div>
 
-              {/* MESSAGE HISTORY */}
+              {contactActionError && (
+                <div
+                  role="alert"
+                  className="border-b border-red-300 bg-red-50 px-4 py-2 text-[11px] text-red-700"
+                >
+                  {contactActionError}
+                </div>
+              )}
+              {selectedContact && blockedContactIds.has(selectedContact.id) && (
+                <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+                  You blocked this student. You can still view previous
+                  messages, but sending is disabled until you unblock them.
+                </div>
+              )}
               <div
                 ref={messagesContainerRef}
                 onScroll={handleMessagesScroll}
@@ -2002,7 +1902,6 @@ const Messages = () => {
                       const hasAttachments =
                         (message.attachments || []).length > 0;
                       const isEditing = editingMessageId === message.id;
-
                       const reactionOptions = [
                         { key: "like", emoji: "👍" },
                         { key: "love", emoji: "❤️" },
@@ -2011,11 +1910,9 @@ const Messages = () => {
                         { key: "sad", emoji: "😢" },
                         { key: "angry", emoji: "😡" },
                       ];
-
                       const ownReaction = (message.reactions || []).find(
                         (item) => item.user_id === currentUser?.id
                       )?.reaction;
-
                       const groupedReactions = reactionOptions
                         .map((option) => ({
                           ...option,
@@ -2024,7 +1921,6 @@ const Messages = () => {
                           ).length,
                         }))
                         .filter((item) => item.count > 0);
-
                       return (
                         <div
                           key={message.id}
@@ -2062,7 +1958,6 @@ const Messages = () => {
                                       className="w-full rounded-lg border border-slate-500 bg-slate-900/20 p-2 text-xs text-current outline-none"
                                       autoFocus
                                     />
-
                                     <div className="flex justify-end gap-2">
                                       <button
                                         type="button"
@@ -2074,7 +1969,6 @@ const Messages = () => {
                                       >
                                         Cancel
                                       </button>
-
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -2095,7 +1989,6 @@ const Messages = () => {
                                     {message.text && (
                                       <div>
                                         {message.text}
-
                                         {message.editedAt && (
                                           <span className="ml-1 text-[9px] opacity-60">
                                             (edited)
@@ -2103,7 +1996,6 @@ const Messages = () => {
                                         )}
                                       </div>
                                     )}
-
                                     <MessageAttachments
                                       attachments={message.attachments || []}
                                     />
@@ -2111,7 +2003,6 @@ const Messages = () => {
                                 )}
                               </div>
                             )}
-
                             {!message.isDeleted && (
                               <div
                                 className={`mt-1 flex flex-wrap items-center gap-1 ${
@@ -2139,7 +2030,6 @@ const Messages = () => {
                                     {option.emoji}
                                   </button>
                                 ))}
-
                                 {isSent && !isEditing && (
                                   <>
                                     <button
@@ -2149,7 +2039,6 @@ const Messages = () => {
                                     >
                                       Edit
                                     </button>
-
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -2163,7 +2052,6 @@ const Messages = () => {
                                 )}
                               </div>
                             )}
-
                             {groupedReactions.length > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {groupedReactions.map((reaction) => (
@@ -2180,13 +2068,11 @@ const Messages = () => {
                                 ))}
                               </div>
                             )}
-
                             <span
                               className={`text-[9px] mt-1 px-1 ${mutedClass}`}
                             >
                               {message.time}
                             </span>
-
                             {isSent && !message.isDeleted && (
                               <span
                                 className={`mt-0.5 flex items-center gap-1 px-1 text-[10px] ${
@@ -2251,7 +2137,6 @@ const Messages = () => {
                 </div>
               </div>
 
-              {/* COMPOSER */}
               <div
                 className={`border-t p-3 sm:p-4 flex-shrink-0 ${
                   darkMode
@@ -2271,7 +2156,6 @@ const Messages = () => {
                       <p className={`text-[11px] font-bold ${headingClass}`}>
                         Files to attach ({selectedFiles.length}/{MAX_FILES})
                       </p>
-
                       <button
                         type="button"
                         disabled={uploading}
@@ -2281,7 +2165,6 @@ const Messages = () => {
                         Remove all
                       </button>
                     </div>
-
                     <div className="space-y-1.5">
                       {selectedFiles.map((file, index) => (
                         <div
@@ -2289,7 +2172,6 @@ const Messages = () => {
                           className="flex min-w-0 items-center gap-2"
                         >
                           <span className="text-sm">📎</span>
-
                           <span
                             className={`min-w-0 flex-1 break-words text-[10px] ${headingClass}`}
                           >
@@ -2298,7 +2180,6 @@ const Messages = () => {
                               ({formatFileSize(file.size)})
                             </span>
                           </span>
-
                           <button
                             type="button"
                             disabled={uploading}
@@ -2326,7 +2207,6 @@ const Messages = () => {
                     {attachmentError}
                   </div>
                 )}
-
                 {messageActionError && (
                   <div
                     role="alert"
@@ -2347,11 +2227,11 @@ const Messages = () => {
                     className="hidden"
                     onChange={handleFileSelection}
                   />
-
                   <button
                     type="button"
                     disabled={
                       !selectedContact ||
+                      blockedContactIds.has(selectedContact?.id) ||
                       uploading ||
                       selectedFiles.length >= MAX_FILES
                     }
@@ -2366,7 +2246,6 @@ const Messages = () => {
                   >
                     📎
                   </button>
-
                   <input
                     type="text"
                     value={messageInput}
@@ -2377,14 +2256,18 @@ const Messages = () => {
                         : "Select a contact..."
                     }
                     autoComplete="off"
-                    disabled={!selectedContact || uploading}
+                    disabled={
+                      !selectedContact ||
+                      blockedContactIds.has(selectedContact?.id) ||
+                      uploading
+                    }
                     className={`flex-1 min-w-0 h-11 px-3 sm:px-4 rounded-lg border text-xs outline-none transition disabled:opacity-50 disabled:cursor-not-allowed ${inputClass}`}
                   />
-
                   <button
                     type="submit"
                     disabled={
                       !selectedContact ||
+                      blockedContactIds.has(selectedContact?.id) ||
                       uploading ||
                       (!messageInput.trim() && !selectedFiles.length)
                     }
@@ -2393,7 +2276,6 @@ const Messages = () => {
                     {uploading ? "Sending..." : "Send"}
                   </button>
                 </form>
-
                 <p className={`mt-2 text-[9px] ${mutedClass}`}>
                   Attach up to {MAX_FILES} files, maximum 10 MB each.
                 </p>
@@ -2402,8 +2284,6 @@ const Messages = () => {
           </div>
         </section>
       </div>
-
-      {/* IMAGE PREVIEW */}
       {imagePreview && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
@@ -2424,16 +2304,13 @@ const Messages = () => {
             >
               ×
             </button>
-
             <img
               src={imagePreview.url}
               alt={imagePreview.fileName}
               className="max-h-[78vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
             />
-
             <div className="flex max-w-[92vw] flex-wrap items-center justify-center gap-3 text-center text-xs text-white">
               <span className="break-all">{imagePreview.fileName}</span>
-
               <a
                 href={imagePreview.url}
                 target="_blank"
