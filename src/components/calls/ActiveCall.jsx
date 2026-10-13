@@ -1,6 +1,119 @@
 import React, { useEffect, useRef, useState } from "react";
 
+function getRecipientInfo(call, callContact) {
+  // Prefer the separately stored contact so database updates
+  // cannot accidentally replace the displayed recipient.
+  const recipient =
+    callContact ||
+    call?.recipient ||
+    call?.otherUser ||
+    call?.contact ||
+    call?.recipientDetails ||
+    call ||
+    {};
+
+  const fullName = [
+    recipient.first_name,
+    recipient.middle_name,
+    recipient.last_name,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const name =
+    recipient.name ||
+    recipient.company_name ||
+    recipient.companyName ||
+    recipient.full_name ||
+    recipient.fullName ||
+    fullName ||
+    recipient.caller_name ||
+    recipient.callerName ||
+    "Contact";
+
+  const role =
+    recipient.role ||
+    recipient.user_role ||
+    recipient.roleValue ||
+    recipient.contactType ||
+    recipient.contact_type ||
+    "";
+
+  const roleLabel =
+    role === "company" ? "Company Supervisor" : role.replace(/_/g, " ");
+
+  const photoUrl =
+    recipient.profilePhotoUrl ||
+    recipient.profile_photo_url ||
+    recipient.caller_photo_url ||
+    recipient.callerPhotoUrl ||
+    recipient.companyLogoUrl ||
+    recipient.company_logo_url ||
+    recipient.logoUrl ||
+    recipient.logo_url ||
+    recipient.photoUrl ||
+    recipient.photo_url ||
+    recipient.avatarUrl ||
+    recipient.avatar_url ||
+    recipient.image_url ||
+    null;
+
+  const initials =
+    name === "Contact"
+      ? "?"
+      : name
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((part) => part[0])
+          .join("")
+          .toUpperCase();
+
+  return {
+    name,
+    roleLabel,
+    photoUrl,
+    initials,
+  };
+}
+
+function RecipientAvatar({ recipient, size = "large" }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [recipient.photoUrl]);
+
+  const sizeClass =
+    size === "small" ? "h-12 w-12 text-base" : "h-32 w-32 text-4xl";
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 font-bold text-white shadow-2xl ${sizeClass}`}
+    >
+      {recipient.photoUrl && !imageFailed ? (
+        <img
+          src={recipient.photoUrl}
+          alt={recipient.name}
+          className="h-full w-full object-cover"
+          onError={() => {
+            console.warn(
+              "[ActiveCall] Recipient image failed to load:",
+              recipient.photoUrl
+            );
+            setImageFailed(true);
+          }}
+        />
+      ) : (
+        recipient.initials
+      )}
+    </div>
+  );
+}
+
 export default function ActiveCall({
+  call,
+  callContact,
   callType,
   localStream,
   remoteStream,
@@ -21,13 +134,19 @@ export default function ActiveCall({
 
   const isVideoCall = callType === "video";
 
+  const recipient = getRecipientInfo(call, callContact);
+
   const statusText =
     {
       idle: "Call ended",
       connecting: "Connecting...",
-      ringing: "Calling...",
+      ringing: `Calling ${recipient.name}...`,
       connected: "Connected",
+      accepted: "Connecting...",
       ended: "Call ended",
+      declined: "Call declined",
+      cancelled: "Call cancelled",
+      missed: "Missed call",
       failed: "Connection failed",
     }[callStatus] || "Connecting...";
 
@@ -35,13 +154,9 @@ export default function ActiveCall({
     remoteStream?.getVideoTracks().some((track) => track.readyState === "live")
   );
 
-  // =========================================================
-  // LOCAL VIDEO
-  // =========================================================
-
+  // Attach local video.
   useEffect(() => {
     const video = localVideoRef.current;
-
     if (!video) return;
 
     video.srcObject = localStream || null;
@@ -59,13 +174,9 @@ export default function ActiveCall({
     };
   }, [localStream, isVideoCall]);
 
-  // =========================================================
-  // REMOTE VIDEO
-  // =========================================================
-
+  // Attach remote video.
   useEffect(() => {
     const video = remoteVideoRef.current;
-
     if (!video) return;
 
     video.srcObject = remoteStream || null;
@@ -86,13 +197,9 @@ export default function ActiveCall({
     };
   }, [remoteStream, isVideoCall]);
 
-  // =========================================================
-  // REMOTE AUDIO
-  // =========================================================
-
+  // Attach remote audio.
   useEffect(() => {
     const audio = remoteAudioRef.current;
-
     if (!audio) return;
 
     audio.srcObject = remoteStream || null;
@@ -113,19 +220,11 @@ export default function ActiveCall({
     };
   }, [remoteStream]);
 
-  // =========================================================
-  // RESET ENDING STATE FOR A NEW CALL
-  // =========================================================
-
   useEffect(() => {
     endingRef.current = false;
     setEnding(false);
     setMediaError("");
-  }, [callType]);
-
-  // =========================================================
-  // END CALL
-  // =========================================================
+  }, [call?.id, callType]);
 
   const handleEndCall = async () => {
     if (endingRef.current) return;
@@ -152,28 +251,35 @@ export default function ActiveCall({
     onToggleCamera?.();
   };
 
-  // =========================================================
-  // AUDIO CALL
-  // =========================================================
+  const recipientDetails = (
+    <div className="flex flex-col items-center">
+      <RecipientAvatar recipient={recipient} />
 
+      <h2 className="mt-5 max-w-full break-words text-center text-2xl font-bold">
+        {recipient.name}
+      </h2>
+
+      {recipient.roleLabel && (
+        <p className="mt-1 text-sm text-slate-400">{recipient.roleLabel}</p>
+      )}
+
+      <p className="mt-2 text-sm text-slate-300" aria-live="polite">
+        {statusText}
+      </p>
+    </div>
+  );
+
+  // AUDIO CALL
   if (!isVideoCall) {
     return (
       <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950 p-6 text-white">
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
         <div className="flex w-full max-w-md flex-col items-center">
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-5xl font-bold shadow-2xl">
-            ?
-          </div>
-
-          <h2 className="mt-6 text-2xl font-bold">Voice Call</h2>
-
-          <p className="mt-2 text-sm text-slate-400" aria-live="polite">
-            {statusText}
-          </p>
+          {recipientDetails}
 
           {mediaError && (
-            <p className="mt-3 max-w-sm text-center text-sm text-amber-300">
+            <p className="mt-4 max-w-sm text-center text-sm text-amber-300">
               {mediaError}
             </p>
           )}
@@ -210,10 +316,7 @@ export default function ActiveCall({
     );
   }
 
-  // =========================================================
   // VIDEO CALL
-  // =========================================================
-
   return (
     <div className="fixed inset-0 z-[9998] overflow-hidden bg-black text-white">
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
@@ -229,14 +332,22 @@ export default function ActiveCall({
 
       {!remoteHasVideo && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-4xl font-bold">
-              ?
-            </div>
+          <div className="flex flex-col items-center">
+            <RecipientAvatar recipient={recipient} />
 
-            <p className="mt-5 text-lg font-semibold" aria-live="polite">
+            <h2 className="mt-5 max-w-[80vw] break-words text-center text-xl font-bold">
+              {recipient.name}
+            </h2>
+
+            {recipient.roleLabel && (
+              <p className="mt-1 text-sm text-slate-300">
+                {recipient.roleLabel}
+              </p>
+            )}
+
+            <p className="mt-2 text-sm text-slate-400" aria-live="polite">
               {callStatus === "connected"
-                ? "Waiting for the other person's video..."
+                ? "Waiting for their video..."
                 : statusText}
             </p>
           </div>
@@ -244,7 +355,6 @@ export default function ActiveCall({
       )}
 
       {/* LOCAL VIDEO */}
-
       <div className="absolute right-4 top-4 h-40 w-28 overflow-hidden rounded-2xl border border-white/20 bg-slate-900 shadow-xl sm:h-48 sm:w-36">
         <video
           ref={localVideoRef}
@@ -263,20 +373,23 @@ export default function ActiveCall({
         )}
       </div>
 
-      {/* STATUS */}
+      {/* CALL STATUS AND RECIPIENT */}
+      <div className="absolute left-4 top-4 flex max-w-[calc(100%-9rem)] items-center gap-3 rounded-2xl bg-black/60 p-3 backdrop-blur-md">
+        <RecipientAvatar recipient={recipient} size="small" />
 
-      <div className="absolute left-4 top-4 rounded-full bg-black/50 px-4 py-2 text-sm backdrop-blur-md">
-        {statusText}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{recipient.name}</p>
+          <p className="text-xs text-slate-300">{statusText}</p>
+        </div>
       </div>
 
       {mediaError && (
-        <div className="absolute left-4 right-4 top-16 rounded-xl bg-amber-950/90 p-3 text-sm text-amber-100 sm:left-auto sm:right-4 sm:max-w-sm">
+        <div className="absolute left-4 right-4 top-24 rounded-xl bg-amber-950/90 p-3 text-sm text-amber-100 sm:left-auto sm:right-4 sm:max-w-sm">
           {mediaError}
         </div>
       )}
 
       {/* CONTROLS */}
-
       <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-full bg-black/60 px-5 py-4 backdrop-blur-md">
         <button
           type="button"

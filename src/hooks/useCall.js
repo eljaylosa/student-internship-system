@@ -11,6 +11,9 @@ const TERMINAL_CALL_STATUSES = new Set([
   "missed",
 ]);
 
+const ACTIVE_CALL_STATUSES = new Set(["ringing", "accepted"]);
+const HEARTBEAT_INTERVAL_MS = 15_000;
+
 export default function useCall() {
   const location = useLocation();
 
@@ -28,6 +31,7 @@ export default function useCall() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [error, setError] = useState("");
+  const [callContact, setCallContact] = useState(null);
 
   const webRTCRef = useRef(null);
   const signalingRef = useRef(null);
@@ -54,7 +58,7 @@ export default function useCall() {
   );
 
   // =========================================================
-  // CLEANUP
+  // CLEANUP LOCAL CALL RESOURCES
   // =========================================================
 
   const cleanupCall = useCallback(async () => {
@@ -71,8 +75,11 @@ export default function useCall() {
       if (statusChannel) {
         try {
           await client.removeChannel(statusChannel);
-        } catch (error) {
-          console.error("[Call] Failed to remove call-status channel:", error);
+        } catch (cleanupError) {
+          console.error(
+            "[Call] Failed to remove call-status channel:",
+            cleanupError
+          );
         }
       }
 
@@ -82,8 +89,8 @@ export default function useCall() {
       if (signaling) {
         try {
           await signaling.disconnect();
-        } catch (error) {
-          console.error("[Call] Failed to disconnect signaling:", error);
+        } catch (cleanupError) {
+          console.error("[Call] Failed to disconnect signaling:", cleanupError);
         }
       }
 
@@ -93,8 +100,8 @@ export default function useCall() {
       if (rtc) {
         try {
           rtc.close();
-        } catch (error) {
-          console.error("[Call] Failed to close WebRTC:", error);
+        } catch (cleanupError) {
+          console.error("[Call] Failed to close WebRTC:", cleanupError);
         }
       }
 
@@ -109,6 +116,7 @@ export default function useCall() {
       receiverReadyRef.current = false;
 
       if (mountedRef.current) {
+        setCallContact(null);
         setCurrentCall(null);
         setIncomingCall(null);
         setLocalStream(null);
@@ -156,8 +164,6 @@ export default function useCall() {
 
           console.log("[Call] Database status update:", updatedCall.status);
 
-          // Keep the ref in sync. endCall reads this ref instead
-          // of relying on a potentially stale React state value.
           currentCallStatusRef.current = updatedCall.status;
 
           const nextCall = {
@@ -194,7 +200,7 @@ export default function useCall() {
   );
 
   // =========================================================
-  // SEND OFFER
+  // SEND WEBRTC OFFER
   // =========================================================
 
   const sendOffer = useCallback(async () => {
@@ -219,11 +225,13 @@ export default function useCall() {
       }
 
       console.log("[Call] WebRTC offer sent.");
-    } catch (error) {
-      console.error("[Call] Failed to create/send offer:", error);
+    } catch (offerError) {
+      console.error("[Call] Failed to create/send offer:", offerError);
 
       if (mountedRef.current) {
-        setError(error?.message || "Failed to establish the call connection.");
+        setError(
+          offerError?.message || "Failed to establish the call connection."
+        );
       }
     }
   }, []);
@@ -255,10 +263,10 @@ export default function useCall() {
             for (const candidate of pendingIceCandidatesRef.current) {
               try {
                 await webRTCRef.current.addIceCandidate(candidate);
-              } catch (error) {
+              } catch (candidateError) {
                 console.error(
                   "[Call] Failed to add queued ICE candidate:",
-                  error
+                  candidateError
                 );
               }
             }
@@ -288,10 +296,10 @@ export default function useCall() {
             for (const candidate of pendingIceCandidatesRef.current) {
               try {
                 await webRTCRef.current.addIceCandidate(candidate);
-              } catch (error) {
+              } catch (candidateError) {
                 console.error(
                   "[Call] Failed to add queued ICE candidate:",
-                  error
+                  candidateError
                 );
               }
             }
@@ -328,11 +336,13 @@ export default function useCall() {
             console.warn("[Call] Unknown signaling event:", signal.type);
           }
         }
-      } catch (error) {
-        console.error("[Call] Failed to process signal:", error);
+      } catch (signalError) {
+        console.error("[Call] Failed to process signal:", signalError);
 
         if (mountedRef.current) {
-          setError(error?.message || "A WebRTC signaling error occurred.");
+          setError(
+            signalError?.message || "A WebRTC signaling error occurred."
+          );
         }
       }
     },
@@ -367,12 +377,12 @@ export default function useCall() {
       try {
         await signaling.connect();
         return signaling;
-      } catch (error) {
+      } catch (signalingError) {
         if (signalingRef.current === signaling) {
           signalingRef.current = null;
         }
 
-        throw error;
+        throw signalingError;
       }
     },
     [handleSignal]
@@ -401,8 +411,11 @@ export default function useCall() {
             if (signalingRef.current) {
               await signalingRef.current.sendIceCandidate(candidate);
             }
-          } catch (error) {
-            console.error("[Call] Failed to send ICE candidate:", error);
+          } catch (candidateError) {
+            console.error(
+              "[Call] Failed to send ICE candidate:",
+              candidateError
+            );
           }
         },
 
@@ -422,8 +435,6 @@ export default function useCall() {
               "The call connection failed. Check the network and try again."
             );
 
-            // Terminate the database call too, rather than only changing
-            // the local UI. cleanupCall is safe if another path wins.
             void (async () => {
               try {
                 const callId = currentCallRef.current?.id;
@@ -431,14 +442,18 @@ export default function useCall() {
                 const client = getActiveClient();
 
                 if (callId && status === "ringing" && isCallerRef.current) {
-                  await client.rpc("cancel_call", { p_call_id: callId });
+                  await client.rpc("cancel_call", {
+                    p_call_id: callId,
+                  });
                 } else if (callId && status === "accepted") {
-                  await client.rpc("end_call", { p_call_id: callId });
+                  await client.rpc("end_call", {
+                    p_call_id: callId,
+                  });
                 }
-              } catch (error) {
+              } catch (terminationError) {
                 console.warn(
                   "[Call] Failed to terminate after connection failure:",
-                  error
+                  terminationError
                 );
               } finally {
                 await cleanupCall();
@@ -473,8 +488,6 @@ export default function useCall() {
           video: type === "video",
         });
 
-        // If the call was cleaned up while permissions were pending,
-        // don't attach a late stream to a closed call.
         if (cleaningUpRef.current || webRTCRef.current !== rtc) {
           rtc.close();
           throw new Error("Call setup was cancelled.");
@@ -490,14 +503,14 @@ export default function useCall() {
         }
 
         return rtc;
-      } catch (error) {
+      } catch (setupError) {
         rtc.close();
 
         if (webRTCRef.current === rtc) {
           webRTCRef.current = null;
         }
 
-        throw error;
+        throw setupError;
       }
     },
     [cleanupCall, getActiveClient]
@@ -508,7 +521,7 @@ export default function useCall() {
   // =========================================================
 
   const startCall = useCallback(
-    async (conversationId, type = "audio") => {
+    async (conversationId, type = "audio", recipient = null) => {
       if (!conversationId) {
         throw new Error("A valid conversation ID is required.");
       }
@@ -540,57 +553,84 @@ export default function useCall() {
         receiverReadyRef.current = false;
         offerSentRef.current = false;
 
+        // Recover abandoned calls before creating a new one.
+        const { error: recoveryError } = await client.rpc(
+          "recover_stale_calls"
+        );
+
+        if (recoveryError) {
+          // Recovery must not silently be treated as successful.
+          // The database's create_call check remains authoritative.
+          console.warn("[Call] Stale-call recovery failed:", recoveryError);
+        }
+
         const { data, error: createError } = await client.rpc("create_call", {
           p_conversation_id: conversationId,
           p_call_type: type,
         });
 
         if (createError) throw createError;
+
         if (!data?.id) {
           throw new Error("The call could not be created.");
         }
 
         createdCallId = data.id;
-        currentCallRef.current = data;
+
+        const callWithRecipient = {
+          ...data,
+          recipient,
+        };
+
+        currentCallRef.current = callWithRecipient;
         currentCallStatusRef.current = data.status || "ringing";
         isCallerRef.current = true;
 
-        setCurrentCall(data);
+        setCallContact(recipient);
+        setCurrentCall(callWithRecipient);
 
         await subscribeToCallStatus(data.id, client);
         await connectSignaling(data.id, client);
         await setupWebRTC({ isCaller: true, type });
 
         setCallStatus("ringing");
+
         console.log("[Call] Outgoing call initialized:", data.id);
 
         return data;
-      } catch (error) {
-        console.error("[Call] Failed to start call:", error);
+      } catch (startError) {
+        console.error("[Call] Failed to start call:", startError);
 
         if (createdCallId) {
           try {
-            const { error: cancelError } = await client.rpc("cancel_call", {
+            const status = currentCallStatusRef.current;
+
+            const rpcName = status === "accepted" ? "end_call" : "cancel_call";
+
+            const { error: terminationError } = await client.rpc(rpcName, {
               p_call_id: createdCallId,
             });
 
-            if (cancelError) {
+            if (terminationError) {
               console.error(
-                "[Call] Failed to cancel partially initialized call:",
-                cancelError
+                "[Call] Failed to terminate partially initialized call:",
+                terminationError
               );
             }
-          } catch (cancelError) {
-            console.error("[Call] Cleanup cancellation failed:", cancelError);
+          } catch (terminationError) {
+            console.error(
+              "[Call] Cleanup after call creation failed:",
+              terminationError
+            );
           }
         }
 
         if (mountedRef.current) {
-          setError(error?.message || "Unable to start the call.");
+          setError(startError?.message || "Unable to start the call.");
         }
 
         await cleanupCall();
-        throw error;
+        throw startError;
       } finally {
         startingCallRef.current = false;
       }
@@ -605,7 +645,7 @@ export default function useCall() {
   );
 
   // =========================================================
-  // ACCEPT CALL
+  // ACCEPT INCOMING CALL
   // =========================================================
 
   const acceptCall = useCallback(
@@ -639,17 +679,36 @@ export default function useCall() {
         });
 
         if (acceptError) throw acceptError;
+
         if (!data?.id) {
           throw new Error("The call could not be accepted.");
         }
 
         databaseAccepted = true;
 
-        currentCallRef.current = data;
-        currentCallStatusRef.current = data.status || "accepted";
+        const acceptedCall = {
+          ...call,
+          ...data,
+
+          // Preserve caller information from the incoming call object.
+          caller:
+            call?.caller ??
+            call?.callerDetails ??
+            call?.otherUser ??
+            call?.contact ??
+            null,
+
+          // Preserve any existing recipient/contact metadata.
+          recipient:
+            call?.recipient ?? call?.otherUser ?? call?.contact ?? null,
+        };
+
+        currentCallRef.current = acceptedCall;
+        currentCallStatusRef.current = acceptedCall.status || "accepted";
         isCallerRef.current = false;
 
-        setCurrentCall(data);
+        setCallContact(acceptedCall.caller);
+        setCurrentCall(acceptedCall);
         setIncomingCall(null);
 
         await subscribeToCallStatus(call.id, client);
@@ -661,9 +720,10 @@ export default function useCall() {
         }
 
         console.log("[Call] Incoming call accepted:", call.id);
+
         return data;
-      } catch (error) {
-        console.error("[Call] Failed to accept call:", error);
+      } catch (acceptError) {
+        console.error("[Call] Failed to accept call:", acceptError);
 
         if (databaseAccepted) {
           try {
@@ -686,11 +746,11 @@ export default function useCall() {
         }
 
         if (mountedRef.current) {
-          setError(error?.message || "Unable to accept the call.");
+          setError(acceptError?.message || "Unable to accept the call.");
         }
 
         await cleanupCall();
-        throw error;
+        throw acceptError;
       } finally {
         acceptingCallRef.current = false;
       }
@@ -705,7 +765,7 @@ export default function useCall() {
   );
 
   // =========================================================
-  // DECLINE CALL
+  // DECLINE INCOMING CALL
   // =========================================================
 
   const declineCall = useCallback(
@@ -729,6 +789,7 @@ export default function useCall() {
       }
 
       setIncomingCall(null);
+
       console.log("[Call] Incoming call declined:", callId);
     },
     [portalClient]
@@ -744,6 +805,7 @@ export default function useCall() {
       if (!targetCallId) return;
 
       const client = getActiveClient();
+
       setError("");
 
       const { error: cancelError } = await client.rpc("cancel_call", {
@@ -772,13 +834,14 @@ export default function useCall() {
       }
 
       await cleanupCall();
+
       console.log("[Call] Outgoing call cancelled:", targetCallId);
     },
     [cleanupCall, getActiveClient]
   );
 
   // =========================================================
-  // END ACCEPTED CALL OR CANCEL RINGING OUTGOING CALL
+  // END ACCEPTED CALL OR CANCEL RINGING CALL
   // =========================================================
 
   const endCall = useCallback(
@@ -790,8 +853,6 @@ export default function useCall() {
 
       const client = getActiveClient();
 
-      // Ask the database for the latest status before choosing the RPC.
-      // This protects against a missed or delayed Realtime update.
       let latestStatus = currentCallStatusRef.current || call?.status || null;
 
       try {
@@ -859,6 +920,7 @@ export default function useCall() {
       }
 
       await cleanupCall();
+
       console.log("[Call] Call ended:", targetCallId);
     },
     [cancelCall, cleanupCall, getActiveClient]
@@ -895,47 +957,103 @@ export default function useCall() {
   }, []);
 
   // =========================================================
+  // PARTICIPANT HEARTBEAT
+  // =========================================================
+
+  useEffect(() => {
+    const callId = currentCall?.id;
+    const status = currentCall?.status;
+
+    if (!callId || !ACTIVE_CALL_STATUSES.has(status)) {
+      return undefined;
+    }
+
+    let stopped = false;
+    let inFlight = false;
+    let intervalId;
+
+    const sendHeartbeat = async () => {
+      if (stopped || inFlight) return;
+
+      const client = getActiveClient();
+
+      inFlight = true;
+
+      try {
+        const { data, error: heartbeatError } = await client.rpc(
+          "heartbeat_call",
+          { p_call_id: callId }
+        );
+
+        if (heartbeatError) {
+          console.warn("[Call] Heartbeat failed:", heartbeatError.message);
+        } else if (data === false) {
+          console.warn(
+            "[Call] Heartbeat was not accepted; the call may no longer be active."
+          );
+        }
+      } catch (heartbeatError) {
+        console.warn("[Call] Heartbeat request failed:", heartbeatError);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void sendHeartbeat();
+
+    intervalId = setInterval(() => {
+      void sendHeartbeat();
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
+  }, [currentCall?.id, currentCall?.status, getActiveClient]);
+
+  // =========================================================
   // UNMOUNT CLEANUP
   // =========================================================
 
-useEffect(() => {
-  mountedRef.current = true;
+  useEffect(() => {
+    mountedRef.current = true;
 
-  return () => {
-    mountedRef.current = false;
+    return () => {
+      mountedRef.current = false;
 
-    const client = activeClientRef.current || portalClient;
+      const client = activeClientRef.current || portalClient;
 
-    const statusChannel = callStatusChannelRef.current;
-    callStatusChannelRef.current = null;
+      const statusChannel = callStatusChannelRef.current;
+      callStatusChannelRef.current = null;
 
-    if (statusChannel) {
-      void client.removeChannel(statusChannel);
-    }
+      if (statusChannel) {
+        void client.removeChannel(statusChannel);
+      }
 
-    const signaling = signalingRef.current;
-    signalingRef.current = null;
+      const signaling = signalingRef.current;
+      signalingRef.current = null;
 
-    if (signaling) {
-      void signaling.disconnect();
-    }
+      if (signaling) {
+        void signaling.disconnect();
+      }
 
-    const rtc = webRTCRef.current;
-    webRTCRef.current = null;
+      const rtc = webRTCRef.current;
+      webRTCRef.current = null;
 
-    if (rtc) {
-      rtc.close();
-    }
+      if (rtc) {
+        rtc.close();
+      }
 
-    currentCallRef.current = null;
-    currentCallStatusRef.current = null;
-    activeClientRef.current = null;
-  };
-}, []);
+      currentCallRef.current = null;
+      currentCallStatusRef.current = null;
+      activeClientRef.current = null;
+    };
+  }, []);
 
   return {
     currentCall,
     incomingCall,
+    callContact,
     localStream,
     remoteStream,
     callStatus,

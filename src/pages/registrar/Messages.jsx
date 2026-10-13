@@ -58,7 +58,7 @@ const Messages = () => {
     }
 
     try {
-      await startCall(conversation.id, type);
+      await startCall(conversation.id, type, selectedContact);
     } catch (error) {
       console.error("[Student Messages] Failed to start call:", error);
     }

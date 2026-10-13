@@ -149,33 +149,31 @@ const Messages = () => {
 
   const { startCall, currentCall, callStatus } = useCallContext();
 
-   const handleStartCall = async (type) => {
-     const conversation = selectedContact
-       ? conversations[selectedContact.id]
-       : null;
+  const handleStartCall = async (type) => {
+    const conversation = selectedContact
+      ? conversations[selectedContact.id]
+      : null;
 
-     if (!conversation?.id) {
-       console.warn(
-         "[Student Messages] No conversation available for calling."
-       );
-       return;
-     }
+    if (!conversation?.id) {
+      console.warn("[Student Messages] No conversation available for calling.");
+      return;
+    }
 
-     if (
-       currentCall ||
-       callStatus === "connecting" ||
-       callStatus === "ringing"
-     ) {
-       console.warn("[Student Messages] A call is already in progress.");
-       return;
-     }
+    if (
+      currentCall ||
+      callStatus === "connecting" ||
+      callStatus === "ringing"
+    ) {
+      console.warn("[Student Messages] A call is already in progress.");
+      return;
+    }
 
-     try {
-       await startCall(conversation.id, type);
-     } catch (error) {
-       console.error("[Student Messages] Failed to start call:", error);
-     }
-   };
+    try {
+      await startCall(conversation.id, type, selectedContact);
+    } catch (error) {
+      console.error("[Student Messages] Failed to start call:", error);
+    }
+  };
 
   // NEW: Keep the latest contact/selection values available to async
   // unread-count refreshes without making them depend on message polling.

@@ -2,6 +2,242 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import getPortalSupabaseClient from "../services/getPortalSupabaseClient";
 
+const PROFILE_PHOTO_BUCKET = "profile-photos";
+const COMPANY_LOGO_BUCKET = "company-logos";
+
+/* =========================================================
+   STORAGE HELPERS
+   ========================================================= */
+
+function normalizeStoragePath(path, bucketName, stripBucketPrefix = false) {
+  if (!path || typeof path !== "string") return "";
+
+  let cleanPath = path.trim();
+
+  // Extract the object path if the database already stores a URL.
+  const markers = [
+    `/storage/v1/object/public/${bucketName}/`,
+    `/storage/v1/object/sign/${bucketName}/`,
+    `/storage/v1/object/authenticated/${bucketName}/`,
+  ];
+
+  for (const marker of markers) {
+    const index = cleanPath.indexOf(marker);
+
+    if (index !== -1) {
+      cleanPath = cleanPath.slice(index + marker.length).split("?")[0];
+      break;
+    }
+  }
+
+  cleanPath = cleanPath.replace(/^\/+/, "");
+
+  // Only strip a bucket prefix when explicitly requested.
+  if (stripBucketPrefix && cleanPath.startsWith(`${bucketName}/`)) {
+    cleanPath = cleanPath.slice(bucketName.length + 1);
+  }
+
+  return cleanPath;
+}
+
+function resolveProfilePhoto(client, photoPath) {
+  if (!photoPath || typeof photoPath !== "string") {
+    return { url: null, fallbackUrl: null };
+  }
+
+  if (/^https?:\/\//i.test(photoPath)) {
+    return { url: photoPath, fallbackUrl: null };
+  }
+
+  // Try the exact object path stored in the database first.
+  const exactPath = normalizeStoragePath(
+    photoPath,
+    PROFILE_PHOTO_BUCKET,
+    false
+  );
+
+  if (!exactPath) {
+    return { url: null, fallbackUrl: null };
+  }
+
+  const { data } = client.storage
+    .from(PROFILE_PHOTO_BUCKET)
+    .getPublicUrl(exactPath);
+
+  let fallbackUrl = null;
+
+  // If the stored path starts with the bucket name, prepare an
+  // alternate URL for legacy records using a relative object path.
+  if (exactPath.startsWith(`${PROFILE_PHOTO_BUCKET}/`)) {
+    const alternatePath = normalizeStoragePath(
+      exactPath,
+      PROFILE_PHOTO_BUCKET,
+      true
+    );
+
+    const { data: alternateData } = client.storage
+      .from(PROFILE_PHOTO_BUCKET)
+      .getPublicUrl(alternatePath);
+
+    if (alternateData?.publicUrl !== data?.publicUrl) {
+      fallbackUrl = alternateData?.publicUrl ?? null;
+    }
+  }
+
+  return {
+    url: data?.publicUrl ?? null,
+    fallbackUrl,
+  };
+}
+
+async function resolveCompanyLogo(client, logoPath) {
+  if (!logoPath || typeof logoPath !== "string") {
+    return { url: null, fallbackUrl: null };
+  }
+
+  if (/^https?:\/\//i.test(logoPath)) {
+    return { url: logoPath, fallbackUrl: null };
+  }
+
+  const exactPath = normalizeStoragePath(logoPath, COMPANY_LOGO_BUCKET, false);
+
+  if (!exactPath) {
+    return { url: null, fallbackUrl: null };
+  }
+
+  // Company logos are in a private bucket, so use signed URLs.
+  const exactResult = await client.storage
+    .from(COMPANY_LOGO_BUCKET)
+    .createSignedUrl(exactPath, 3600);
+
+  if (!exactResult.error && exactResult.data?.signedUrl) {
+    return {
+      url: exactResult.data.signedUrl,
+      fallbackUrl: null,
+    };
+  }
+
+  // Fallback for paths that include "company-logos/" even though
+  // the stored object may be relative to the bucket.
+  if (exactPath.startsWith(`${COMPANY_LOGO_BUCKET}/`)) {
+    const alternatePath = normalizeStoragePath(
+      exactPath,
+      COMPANY_LOGO_BUCKET,
+      true
+    );
+
+    const alternateResult = await client.storage
+      .from(COMPANY_LOGO_BUCKET)
+      .createSignedUrl(alternatePath, 3600);
+
+    if (!alternateResult.error && alternateResult.data?.signedUrl) {
+      return {
+        url: alternateResult.data.signedUrl,
+        fallbackUrl: null,
+      };
+    }
+  }
+
+  console.warn(
+    "[Incoming Calls] Could not resolve company logo:",
+    exactResult.error?.message
+  );
+
+  return { url: null, fallbackUrl: null };
+}
+
+/* =========================================================
+   ENRICH CALL WITH CALLER DETAILS
+   ========================================================= */
+
+async function enrichCallerDetails(client, call) {
+  const { data, error } = await client.rpc("get_call_caller_details", {
+    p_call_id: call.id,
+  });
+
+  if (error) {
+    console.error("[Incoming Calls] Caller details RPC failed:", error.message);
+
+    return {
+      ...call,
+      caller_name: "Unknown caller",
+      caller_photo_url: null,
+      caller_photo_fallback_url: null,
+      caller: null,
+    };
+  }
+
+  const details = Array.isArray(data) ? data[0] : data;
+
+  if (!details) {
+    return {
+      ...call,
+      caller_name: "Unknown caller",
+      caller_photo_url: null,
+      caller_photo_fallback_url: null,
+      caller: null,
+    };
+  }
+
+  const normalizedRole = String(details.caller_role || "")
+    .toLowerCase()
+    .replace(/[_-]/g, " ");
+
+  const isCompany = ["company", "company supervisor"].includes(normalizedRole);
+
+  const rawPhoto = details.caller_photo_url;
+
+  console.log("[Incoming Calls] Caller details:", {
+    callerId: details.caller_id,
+    callerName: details.caller_name,
+    callerRole: details.caller_role,
+    rawPhoto,
+  });
+
+  let photoUrl = null;
+  let photoFallbackUrl = null;
+
+  if (isCompany) {
+    const result = await resolveCompanyLogo(client, rawPhoto);
+    photoUrl = result.url;
+    photoFallbackUrl = result.fallbackUrl;
+  } else {
+    const result = resolveProfilePhoto(client, rawPhoto);
+    photoUrl = result.url;
+    photoFallbackUrl = result.fallbackUrl;
+  }
+
+  console.log("[Incoming Calls] Resolved caller image:", {
+    callerName: details.caller_name,
+    callerRole: details.caller_role,
+    isCompany,
+    photoUrl,
+    photoFallbackUrl,
+  });
+
+  const callerName = details.caller_name || "Unknown caller";
+
+  return {
+    ...call,
+    caller_name: callerName,
+    caller_photo_url: photoUrl,
+    caller_photo_fallback_url: photoFallbackUrl,
+    caller: {
+      id: details.caller_id,
+      full_name: callerName,
+      name: callerName,
+      role: details.caller_role,
+      profile_photo_url: photoUrl,
+      photo_url: photoUrl,
+      avatar_url: photoUrl,
+    },
+  };
+}
+
+/* =========================================================
+   INCOMING CALLS HOOK
+   ========================================================= */
+
 export default function useIncomingCalls() {
   const location = useLocation();
 
@@ -20,7 +256,6 @@ export default function useIncomingCalls() {
   const generationRef = useRef(0);
   const clientRef = useRef(client);
 
-  // Keep the latest client available to callbacks and cleanup.
   clientRef.current = client;
 
   const publishIncomingCall = useCallback((call) => {
@@ -31,9 +266,9 @@ export default function useIncomingCalls() {
     }
   }, []);
 
-  // =========================================================
-  // GET CURRENT USER
-  // =========================================================
+  /* =========================================================
+     GET CURRENT USER
+     ========================================================= */
 
   const loadCurrentUser = useCallback(async () => {
     const activeClient = clientRef.current;
@@ -54,9 +289,9 @@ export default function useIncomingCalls() {
     return userId;
   }, []);
 
-  // =========================================================
-  // LOAD AND VALIDATE A CALL
-  // =========================================================
+  /* =========================================================
+     LOAD AND VALIDATE CALL
+     ========================================================= */
 
   const loadCall = useCallback(async (callId) => {
     if (!callId) return null;
@@ -82,12 +317,12 @@ export default function useIncomingCalls() {
       return null;
     }
 
-    return data;
+    return enrichCallerDetails(activeClient, data);
   }, []);
 
-  // =========================================================
-  // PROCESS A POSSIBLE INCOMING CALL
-  // =========================================================
+  /* =========================================================
+     PROCESS INCOMING CALL
+     ========================================================= */
 
   const processCall = useCallback(
     async (callId, expectedGeneration = generationRef.current) => {
@@ -106,7 +341,6 @@ export default function useIncomingCalls() {
         return;
       }
 
-      // Avoid replacing an already-visible incoming call with another.
       const current = incomingCallRef.current;
 
       if (current && current.id !== callId) {
@@ -118,9 +352,9 @@ export default function useIncomingCalls() {
     [loadCall, publishIncomingCall]
   );
 
-  // =========================================================
-  // HANDLE INSERT / UPDATE
-  // =========================================================
+  /* =========================================================
+     HANDLE NEW CALL
+     ========================================================= */
 
   const handleNewCall = useCallback(
     (payload) => {
@@ -133,6 +367,10 @@ export default function useIncomingCalls() {
     },
     [processCall]
   );
+
+  /* =========================================================
+     HANDLE CALL UPDATE
+     ========================================================= */
 
   const handleCallUpdate = useCallback(
     (payload) => {
@@ -155,9 +393,9 @@ export default function useIncomingCalls() {
     [processCall, publishIncomingCall]
   );
 
-  // =========================================================
-  // RECOVER RINGING CALLS
-  // =========================================================
+  /* =========================================================
+     RECOVER RINGING CALLS
+     ========================================================= */
 
   const recoverIncomingCalls = useCallback(
     async (expectedGeneration) => {
@@ -216,9 +454,9 @@ export default function useIncomingCalls() {
     [processCall]
   );
 
-  // =========================================================
-  // SUBSCRIBE TO INCOMING CALLS
-  // =========================================================
+  /* =========================================================
+     SUBSCRIBE TO INCOMING CALLS
+     ========================================================= */
 
   useEffect(() => {
     let disposed = false;
@@ -346,9 +584,9 @@ export default function useIncomingCalls() {
     publishIncomingCall,
   ]);
 
-  // =========================================================
-  // CLEAR INCOMING CALL
-  // =========================================================
+  /* =========================================================
+     CLEAR INCOMING CALL
+     ========================================================= */
 
   const clearIncomingCall = useCallback(() => {
     publishIncomingCall(null);

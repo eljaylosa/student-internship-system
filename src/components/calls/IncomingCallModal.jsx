@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export default function IncomingCallModal({
   call,
@@ -7,10 +7,20 @@ export default function IncomingCallModal({
   accepting = false,
 }) {
   const [processing, setProcessing] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
-  if (!call) {
-    return null;
-  }
+  const photoUrl =
+    call?.caller_photo_url ||
+    call?.caller?.profile_photo_url ||
+    call?.caller?.photo_url ||
+    call?.caller?.avatar_url ||
+    null;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [call?.id, photoUrl]);
+
+  if (!call) return null;
 
   const isVideoCall = call.call_type === "video";
   const isBusy = accepting || processing;
@@ -19,19 +29,19 @@ export default function IncomingCallModal({
     call.caller_name ||
     call.caller?.full_name ||
     call.caller?.name ||
-    "Someone";
+    call.caller?.company_name ||
+    "Unknown caller";
 
-  const initials = callerName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
+  const initials =
+    callerName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "?";
 
   const handleAction = async (action) => {
-    if (isBusy) {
-      return;
-    }
+    if (isBusy) return;
 
     setProcessing(true);
 
@@ -53,11 +63,28 @@ export default function IncomingCallModal({
       aria-describedby="incoming-call-description"
     >
       <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl dark:bg-slate-900">
-        {/* CALLER */}
+        {/* CALLER PROFILE */}
 
         <div className="flex flex-col items-center px-6 pb-6 pt-8">
-          <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold text-white shadow-lg">
-            {initials || "?"}
+          <div className="mb-5 flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold text-white shadow-lg ring-4 ring-indigo-100 dark:ring-slate-700">
+            {photoUrl && !imageFailed ? (
+              <img
+                key={photoUrl}
+                src={photoUrl}
+                alt={`${callerName} profile`}
+                className="h-full w-full rounded-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => {
+                  console.warn(
+                    "[IncomingCallModal] Caller image failed to load:",
+                    photoUrl
+                  );
+                  setImageFailed(true);
+                }}
+              />
+            ) : (
+              <span aria-label="Caller initials">{initials}</span>
+            )}
           </div>
 
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -66,7 +93,7 @@ export default function IncomingCallModal({
 
           <h2
             id="incoming-call-title"
-            className="mt-1 text-xl font-bold text-slate-900 dark:text-white"
+            className="mt-1 text-center text-xl font-bold text-slate-900 dark:text-white"
           >
             {callerName}
           </h2>
@@ -83,7 +110,7 @@ export default function IncomingCallModal({
           </p>
         </div>
 
-        {/* ACTIONS */}
+        {/* CALL ACTIONS */}
 
         <div className="flex gap-3 border-t border-slate-200 p-5 dark:border-slate-800">
           <button
@@ -105,6 +132,7 @@ export default function IncomingCallModal({
             <span aria-hidden="true">
               {isBusy ? "…" : isVideoCall ? "🎥" : "📞"}
             </span>
+
             {isBusy ? "Connecting..." : "Accept"}
           </button>
         </div>

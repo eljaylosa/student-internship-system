@@ -71,7 +71,19 @@ const handleStartCall = async (type) => {
   }
 
   try {
-    await startCall(conversation.id, type);
+    console.log(
+      "[Outgoing Call] Selected contact:",
+      JSON.stringify(selectedContact, null, 2)
+    );
+
+    console.log("[Outgoing Call] Contact image fields:", {
+      profile_photo_url: selectedContact?.profile_photo_url,
+      photo_url: selectedContact?.photo_url,
+      avatar_url: selectedContact?.avatar_url,
+      company_logo_url: selectedContact?.company_logo_url,
+      logo_url: selectedContact?.logo_url,
+    });
+    await startCall(conversation.id, type, selectedContact);
   } catch (error) {
     console.error("[Student Messages] Failed to start call:", error);
   }
