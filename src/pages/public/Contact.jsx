@@ -6,7 +6,7 @@ const contactDetails = [
     title: "Email us",
     value: "internlinksupport@gmail.com",
     description: "For questions and general inquiries",
-    href: "mailto:support@internlink.com",
+    href: "mailto:internlinksupport@gmail.com",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect
@@ -190,7 +190,7 @@ const Contact = () => {
   };
 
   return (
-    <main className="contact-page relative min-h-screen overflow-hidden bg-[#f7f9fd] px-4 pb-16 pt-28 font-mono text-slate-800 sm:px-6 sm:pt-32 lg:pb-24">
+    <main className="public-contact contact-page relative min-h-screen overflow-hidden bg-[#f7f9fd] px-4 pb-16 pt-28 font-mono text-slate-800 sm:px-6 sm:pt-32 lg:pb-24">
       <style>{`
         .contact-page {
           --contact-blue: #2563eb;

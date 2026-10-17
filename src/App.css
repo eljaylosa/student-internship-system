@@ -1,0 +1,2245 @@
+/* =========================================
+   INTERNLINK PUBLIC THEME
+   ========================================= */
+
+html {
+  color-scheme: light;
+}
+
+html.public-dark {
+  color-scheme: dark;
+}
+
+/* Smooth theme transitions on public pages */
+html.public-dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* Navbar */
+html.public-dark .public-navbar {
+  background-color: rgba(15, 23, 42, 0.96);
+  border-color: #334155;
+}
+
+html.public-dark .public-brand {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-theme-button,
+html.public-dark .public-login {
+  color: #e2e8f0;
+  background-color: #1e293b;
+  border-color: #475569;
+}
+
+html.public-dark .public-theme-button:hover,
+html.public-dark .public-login:hover {
+  color: #ffffff;
+  background-color: #334155;
+}
+
+/* Mobile navigation */
+html.public-dark .public-mobile-menu {
+  color: #e2e8f0;
+  background-color: #0f172a;
+  border-color: #334155;
+}
+
+html.public-dark .public-mobile-menu a {
+  color: #cbd5e1;
+}
+
+html.public-dark .public-mobile-menu a:hover {
+  background-color: #1e293b;
+  color: #93c5fd;
+}
+
+html.public-dark .public-mobile-menu a.bg-blue-50 {
+  background-color: #1e3a5f;
+  color: #bfdbfe;
+}
+
+/* Reusable classes for public pages */
+html.public-dark .public-page {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-section {
+  background-color: #111827;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-card {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-muted {
+  color: #94a3b8;
+}
+
+/* Inputs and text areas on public pages */
+html.public-dark .public-page input,
+html.public-dark .public-page textarea,
+html.public-dark .public-page select {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+
+html.public-dark .public-page input::placeholder,
+html.public-dark .public-page textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* Keep blue primary buttons readable */
+html.public-dark .public-page .bg-blue-600 {
+  color: #ffffff;
+}
+
+/* ==========================================
+   INTERNLINK PUBLIC HOMEPAGE — DARK MODE
+   Scoped to public homepage only
+   ========================================== */
+
+html.public-dark .public-home {
+  background-color: #0b1120;
+  color: #e2e8f0;
+}
+
+/* Main light section backgrounds */
+html.public-dark .public-home [class~="bg-white"],
+html.public-dark .public-home [class~="bg-white/90"],
+html.public-dark .public-home [class~="bg-white/95"],
+html.public-dark .public-home [class~="bg-white/80"],
+html.public-dark .public-home [class~="bg-[#f8faff]"],
+html.public-dark .public-home [class~="bg-slate-50"] {
+  background-color: #111827;
+}
+
+/* Dashboard preview and elevated cards */
+html.public-dark .public-home [class~="bg-white/90"],
+html.public-dark .public-home [class~="bg-white/95"] {
+  background-color: rgba(17, 24, 39, 0.96);
+}
+
+html.public-dark .public-home .feature-card,
+html.public-dark .public-home article[class*="border-slate-200"] {
+  border-color: #334155;
+}
+
+/* Text colors */
+html.public-dark .public-home [class~="text-slate-950"],
+html.public-dark .public-home [class~="text-slate-900"],
+html.public-dark .public-home [class~="text-slate-800"],
+html.public-dark .public-home [class~="text-slate-700"] {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-home [class~="text-slate-600"],
+html.public-dark .public-home [class~="text-slate-500"],
+html.public-dark .public-home [class~="text-slate-400"] {
+  color: #a8b6ca;
+}
+
+/* Borders and dividers */
+html.public-dark .public-home [class*="border-slate-100"],
+html.public-dark .public-home [class*="border-slate-200"] {
+  border-color: #334155;
+}
+
+/* Hero background effects */
+html.public-dark .public-home [class~="from-white"] {
+  --tw-gradient-from: #0b1120 var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(11 17 32 / 0%) var(--tw-gradient-to-position);
+}
+
+/* Soft neutral backgrounds */
+html.public-dark .public-home [class~="bg-slate-100"] {
+  background-color: #273449;
+}
+
+html.public-dark .public-home [class~="bg-slate-200"] {
+  background-color: #334155;
+}
+
+html.public-dark .public-home [class~="bg-slate-50/30"] {
+  background-color: rgb(30 41 59 / 30%);
+}
+
+/* White buttons and floating dashboard labels */
+html.public-dark .public-home button[class*="bg-white"],
+html.public-dark .public-home a[class*="bg-white"] {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-home button[class*="bg-white"]:hover,
+html.public-dark .public-home a[class*="bg-white"]:hover {
+  background-color: #334155;
+  color: #bfdbfe;
+}
+
+/* Preserve primary blue buttons */
+html.public-dark .public-home [class~="bg-blue-600"],
+html.public-dark .public-home [class~="hover:bg-blue-700"]:hover {
+  color: #ffffff;
+}
+
+/* Keep the dark CTA visually consistent in both themes */
+html.public-dark .public-home [class~="bg-slate-950"] {
+  background-color: #070b14;
+  color: #ffffff;
+}
+
+/* Portal dashboard window */
+html.public-dark .public-home .dashboard-float {
+  color: #e2e8f0;
+}
+
+html.public-dark .public-home .dashboard-float [class*="border-slate-200"] {
+  border-color: #334155;
+}
+
+/* Respect the user's theme across transitions */
+.public-home,
+.public-home article,
+.public-home section {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease;
+}
+
+/* ==========================================
+   INTERNLINK ABOUT PAGE — DARK MODE
+   Scoped to the public About page only
+   ========================================== */
+
+html.public-dark .public-about {
+  background-color: #0b1120;
+  color: #e2e8f0;
+}
+
+/* Main light backgrounds */
+html.public-dark .public-about [class~="bg-white"],
+html.public-dark .public-about [class~="bg-white/80"],
+html.public-dark .public-about [class~="bg-white/90"],
+html.public-dark .public-about [class~="bg-white/95"],
+html.public-dark .public-about [class~="bg-slate-50"],
+html.public-dark .public-about [class~="bg-slate-50/70"],
+html.public-dark .public-about [class~="bg-slate-50/80"],
+html.public-dark .public-about [class~="bg-slate-100"] {
+  background-color: #111827;
+}
+
+/* Translucent white surfaces */
+html.public-dark .public-about [class~="bg-white/80"],
+html.public-dark .public-about [class~="bg-white/90"],
+html.public-dark .public-about [class~="bg-white/95"] {
+  background-color: rgb(17 24 39 / 94%);
+}
+
+/* Subtle section backgrounds */
+html.public-dark .public-about [class~="bg-slate-50/70"],
+html.public-dark .public-about [class~="bg-slate-50/80"] {
+  background-color: rgb(15 23 42 / 82%);
+}
+
+/* Neutral text */
+html.public-dark .public-about [class~="text-slate-950"],
+html.public-dark .public-about [class~="text-slate-900"],
+html.public-dark .public-about [class~="text-slate-800"],
+html.public-dark .public-about [class~="text-slate-700"] {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-about [class~="text-slate-600"],
+html.public-dark .public-about [class~="text-slate-500"] {
+  color: #a8b6ca;
+}
+
+html.public-dark .public-about [class~="text-slate-400"],
+html.public-dark .public-about [class~="text-slate-300"] {
+  color: #8493a8;
+}
+
+/* Borders and dividers */
+html.public-dark .public-about [class*="border-slate-100"],
+html.public-dark .public-about [class*="border-slate-200"],
+html.public-dark .public-about [class*="divide-slate-200"] {
+  border-color: #334155;
+}
+
+/* Mission cards, team cards, project preview */
+html.public-dark .public-about .about-card,
+html.public-dark .public-about .about-team-card {
+  background-color: #111827;
+  border-color: #334155;
+}
+
+html.public-dark .public-about .about-card:hover,
+html.public-dark .public-about .about-team-card:hover {
+  border-color: #60a5fa;
+}
+
+/* Dashboard preview inner panels */
+html.public-dark .public-about .about-page [class~="bg-gradient-to-br"] {
+  color: inherit;
+}
+
+/* Role cards */
+html.public-dark .public-about [class~="bg-blue-50"],
+html.public-dark .public-about [class~="bg-blue-50/90"],
+html.public-dark .public-about [class~="bg-indigo-50"],
+html.public-dark .public-about [class~="bg-sky-50"],
+html.public-dark .public-about [class~="bg-emerald-50"],
+html.public-dark .public-about [class~="bg-amber-50/70"],
+html.public-dark .public-about [class~="bg-amber-50"] {
+  background-color: #1e293b;
+}
+
+/* Keep colored labels readable */
+html.public-dark .public-about [class~="text-blue-700"],
+html.public-dark .public-about [class~="text-blue-600"],
+html.public-dark .public-about [class~="text-indigo-600"],
+html.public-dark .public-about [class~="text-sky-600"],
+html.public-dark .public-about [class~="text-emerald-700"],
+html.public-dark .public-about [class~="text-amber-700"] {
+  color: #93c5fd;
+}
+
+/* Soft decorative backgrounds */
+html.public-dark .public-about .about-orb {
+  opacity: 0.16;
+}
+
+html.public-dark .public-about .about-grid {
+  background-image: linear-gradient(rgb(96 165 250 / 8%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(96 165 250 / 8%) 1px, transparent 1px);
+}
+
+/* Team photo placeholder background */
+html.public-dark .public-about .about-team-card .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+/* Final CTA */
+html.public-dark .public-about [class*="from-blue-50"][class*="to-indigo-50"] {
+  background-image: linear-gradient(
+    135deg,
+    #172554 0%,
+    #111827 52%,
+    #1e1b4b 100%
+  );
+  border-color: #334155;
+}
+
+html.public-dark .public-about [class~="from-white"] {
+  --tw-gradient-from: #111827 var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(17 24 39 / 0%) var(--tw-gradient-to-position);
+}
+
+/* Amber scope notice: preserve its warning identity */
+html.public-dark .public-about [class~="border-amber-200/80"] {
+  border-color: #854d0e;
+}
+
+html.public-dark .public-about [class~="text-amber-950"] {
+  color: #fde68a;
+}
+
+html.public-dark .public-about [class~="text-amber-900/80"] {
+  color: #fcd34d;
+}
+
+/* Buttons with white backgrounds */
+html.public-dark .public-about a[class*="bg-white"],
+html.public-dark .public-about button[class*="bg-white"] {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-about a[class*="bg-white"]:hover,
+html.public-dark .public-about button[class*="bg-white"]:hover {
+  background-color: #334155;
+  color: #bfdbfe;
+}
+
+/* Keep primary blue buttons and the academic banner intact */
+html.public-dark .public-about a[class~="bg-blue-600"],
+html.public-dark .public-about [class*="via-blue-700"] {
+  color: #fff;
+}
+
+/* Smooth theme transitions */
+.public-about,
+.public-about section,
+.public-about article,
+.public-about a {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease;
+}
+
+/* =====================================================
+   INTERNLINK ABOUT PAGE — DARK MODE
+   Scoped styles: does not affect private portals
+   ===================================================== */
+
+/* Base page */
+html.public-dark .public-about {
+  background-color: #0b1120;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* Main section surfaces */
+html.public-dark .public-about [class~="bg-white"],
+html.public-dark .public-about [class~="bg-white/80"],
+html.public-dark .public-about [class~="bg-white/90"],
+html.public-dark .public-about [class~="bg-white/95"],
+html.public-dark .public-about [class~="bg-slate-50"],
+html.public-dark .public-about [class~="bg-slate-50/70"],
+html.public-dark .public-about [class~="bg-slate-50/80"],
+html.public-dark .public-about [class~="bg-slate-100"] {
+  background-color: #111827;
+}
+
+/* Section backgrounds */
+html.public-dark .public-about section[class*="bg-slate-50"] {
+  background-color: #0f172a;
+}
+
+/* Cards and preview panels */
+html.public-dark .public-about .about-card,
+html.public-dark .public-about .about-team-card {
+  background-color: #111827;
+  border-color: #334155;
+}
+
+html.public-dark .public-about .about-card:hover,
+html.public-dark .public-about .about-team-card:hover {
+  border-color: #60a5fa;
+}
+
+/* Project preview: pale gradient cards */
+html.public-dark .public-about [class*="from-blue-50"][class*="to-white"],
+html.public-dark .public-about [class*="from-indigo-50"][class*="to-white"] {
+  background-image: none;
+  background-color: #1e293b;
+  border-color: #334155;
+}
+
+/* Subtle gray panel inside the project preview */
+html.public-dark .public-about [class~="bg-slate-50/80"],
+html.public-dark .public-about [class~="bg-slate-50/70"] {
+  background-color: #172033;
+}
+
+/* Translucent white floating labels and panels */
+html.public-dark .public-about [class~="bg-white/80"],
+html.public-dark .public-about [class~="bg-white/90"],
+html.public-dark .public-about [class~="bg-white/95"] {
+  background-color: rgb(17 24 39 / 96%);
+}
+
+/* Soft blue, indigo, sky, emerald and amber surfaces */
+html.public-dark .public-about [class~="bg-blue-50"],
+html.public-dark .public-about [class~="bg-blue-50/90"],
+html.public-dark .public-about [class~="bg-blue-100"],
+html.public-dark .public-about [class~="bg-indigo-50"],
+html.public-dark .public-about [class~="bg-indigo-100"],
+html.public-dark .public-about [class~="bg-sky-50"],
+html.public-dark .public-about [class~="bg-emerald-50"],
+html.public-dark .public-about [class~="bg-amber-50"],
+html.public-dark .public-about [class~="bg-amber-50/70"],
+html.public-dark .public-about [class~="bg-amber-100"] {
+  background-color: #1e293b;
+}
+
+/* More subtle blue hover surfaces */
+html.public-dark .public-about [class~="hover:bg-blue-50"]:hover,
+html.public-dark .public-about [class~="hover:bg-blue-100"]:hover,
+html.public-dark .public-about [class~="hover:bg-indigo-50"]:hover {
+  background-color: #273449;
+}
+
+/* Text: primary */
+html.public-dark .public-about [class~="text-slate-950"],
+html.public-dark .public-about [class~="text-slate-900"],
+html.public-dark .public-about [class~="text-slate-800"],
+html.public-dark .public-about [class~="text-slate-700"] {
+  color: #f1f5f9;
+}
+
+/* Text: secondary */
+html.public-dark .public-about [class~="text-slate-600"],
+html.public-dark .public-about [class~="text-slate-500"] {
+  color: #a8b6ca;
+}
+
+html.public-dark .public-about [class~="text-slate-400"],
+html.public-dark .public-about [class~="text-slate-300"] {
+  color: #8493a8;
+}
+
+/* Preserve colored text accents, with improved contrast */
+html.public-dark .public-about [class~="text-blue-700"],
+html.public-dark .public-about [class~="text-blue-600"],
+html.public-dark .public-about [class~="text-indigo-600"],
+html.public-dark .public-about [class~="text-sky-600"],
+html.public-dark .public-about [class~="text-emerald-700"] {
+  color: #93c5fd;
+}
+
+html.public-dark .public-about [class~="text-amber-950"] {
+  color: #fde68a;
+}
+
+html.public-dark .public-about [class~="text-amber-900/80"] {
+  color: #fcd34d;
+}
+
+/* Borders and dividers */
+html.public-dark .public-about [class*="border-slate-100"],
+html.public-dark .public-about [class*="border-slate-200"],
+html.public-dark .public-about [class*="divide-slate-200"] {
+  border-color: #334155;
+}
+
+html.public-dark .public-about [class*="border-blue-100"],
+html.public-dark .public-about [class*="border-indigo-100"],
+html.public-dark .public-about [class*="border-emerald-100"] {
+  border-color: #334155;
+}
+
+/* Section label */
+html.public-dark .public-about [class*="border-blue-100"][class*="bg-blue-50"] {
+  border-color: #334155;
+  background-color: #172554;
+  color: #bfdbfe;
+}
+
+/* Hero decorative glows and grid */
+html.public-dark .public-about .about-orb {
+  opacity: 0.16;
+}
+
+html.public-dark .public-about .about-grid {
+  background-image: linear-gradient(rgb(96 165 250 / 8%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(96 165 250 / 8%) 1px, transparent 1px);
+}
+
+/* Team photo fallback background */
+html.public-dark .public-about .about-team-card .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+/* Team member label over the photo */
+html.public-dark .public-about .about-team-card [class*="bg-white/90"] {
+  background-color: rgb(15 23 42 / 92%);
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+/* Academic project banner: retain the blue gradient */
+html.public-dark .public-about [class*="via-blue-700"] {
+  color: #ffffff;
+}
+
+/* Academic details panel */
+html.public-dark .public-about [class*="bg-white/["] {
+  background-color: rgb(15 23 42 / 45%);
+}
+
+/* Scope notice */
+html.public-dark .public-about [class*="border-amber-200"] {
+  border-color: #854d0e;
+}
+
+html.public-dark .public-about [class*="bg-amber-50"] {
+  background-color: #292313;
+}
+
+/* Final CTA gradient */
+html.public-dark .public-about .about-shine[class*="from-blue-50"] {
+  background-image: linear-gradient(
+    135deg,
+    #172554 0%,
+    #111827 52%,
+    #1e1b4b 100%
+  );
+  border-color: #334155;
+}
+
+/* Final CTA heading and description */
+html.public-dark
+  .public-about
+  [class*="from-blue-50"]
+  [class~="text-slate-950"] {
+  color: #f1f5f9;
+}
+
+html.public-dark
+  .public-about
+  [class*="from-blue-50"]
+  [class~="text-slate-600"] {
+  color: #cbd5e1;
+}
+
+/* White-background links */
+html.public-dark .public-about a[class*="bg-white"] {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+html.public-dark .public-about a[class*="bg-white"]:hover {
+  background-color: #334155;
+  color: #bfdbfe;
+}
+
+/* =====================================================
+   SMOOTH HOVER ANIMATIONS
+   Important: don't override the existing transition
+   declarations on .about-team-card or its image.
+   ===================================================== */
+
+/* Card lift and shadow */
+.public-about .about-team-card {
+  transition: transform 350ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 350ms ease, border-color 350ms ease;
+  will-change: transform;
+}
+
+/* Smooth photo zoom */
+.public-about .about-team-image {
+  display: block;
+  transform: scale(1);
+  transition: transform 800ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: transform;
+}
+
+/* Smooth image overlay */
+.public-about .about-image-overlay {
+  transition: opacity 450ms ease;
+}
+
+/* Smooth name and arrow accents */
+.public-about .about-team-card p,
+.public-about .about-team-card svg {
+  transition: color 300ms ease, transform 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .public-about .about-team-card,
+  .public-about .about-team-image,
+  .public-about .about-image-overlay,
+  .public-about .about-team-card p,
+  .public-about .about-team-card svg {
+    transition: none !important;
+    will-change: auto;
+  }
+}
+
+/* =====================================================
+   INTERNLINK SERVICES — PUBLIC DARK MODE
+   ===================================================== */
+
+html.public-dark .public-services {
+  background-color: #0b1120;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* Main light backgrounds */
+html.public-dark .public-services [class~="bg-white"],
+html.public-dark .public-services [class~="bg-white/80"],
+html.public-dark .public-services [class~="bg-white/90"],
+html.public-dark .public-services [class~="bg-slate-50"],
+html.public-dark .public-services [class~="bg-slate-50/70"],
+html.public-dark .public-services [class~="bg-slate-50/80"],
+html.public-dark .public-services [class~="bg-slate-100"] {
+  background-color: #111827;
+}
+
+/* Light section backgrounds */
+html.public-dark .public-services section[class*="bg-slate-50"] {
+  background-color: #0f172a;
+}
+
+/* Service cards */
+html.public-dark .public-services .service-grid-card {
+  background-color: #111827;
+  border-color: #334155;
+}
+
+html.public-dark .public-services .service-grid-card:hover {
+  border-color: #60a5fa;
+}
+
+/* Dashboard preview */
+html.public-dark .public-services [class*="bg-[radial-gradient"] {
+  background-image: radial-gradient(
+      ellipse at top left,
+      rgb(30 58 138 / 25%),
+      transparent 52%
+    ),
+    linear-gradient(to bottom, #0b1120, #0f172a);
+}
+
+html.public-dark .public-services [class*="from-blue-200/60"] {
+  opacity: 0.3;
+}
+
+html.public-dark .public-services [class~="bg-white/80"],
+html.public-dark .public-services [class~="bg-white/90"] {
+  background-color: rgb(17 24 39 / 94%);
+}
+
+/* Pale accent cards in dashboard preview */
+html.public-dark .public-services [class~="bg-blue-50"],
+html.public-dark .public-services [class~="bg-violet-50"],
+html.public-dark .public-services [class~="bg-emerald-50"],
+html.public-dark .public-services [class~="bg-amber-50"],
+html.public-dark .public-services [class~="bg-blue-50/70"],
+html.public-dark .public-services [class~="bg-slate-50/80"] {
+  background-color: #1e293b;
+}
+
+/* Text */
+html.public-dark .public-services [class~="text-slate-950"],
+html.public-dark .public-services [class~="text-slate-900"],
+html.public-dark .public-services [class~="text-slate-800"],
+html.public-dark .public-services [class~="text-slate-700"] {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-services [class~="text-slate-600"],
+html.public-dark .public-services [class~="text-slate-500"] {
+  color: #a8b6ca;
+}
+
+html.public-dark .public-services [class~="text-slate-400"] {
+  color: #8493a8;
+}
+
+/* Colored accents */
+html.public-dark .public-services [class~="text-blue-700"],
+html.public-dark .public-services [class~="text-blue-600"],
+html.public-dark .public-services [class~="text-violet-700"],
+html.public-dark .public-services [class~="text-violet-600"],
+html.public-dark .public-services [class~="text-emerald-700"],
+html.public-dark .public-services [class~="text-amber-700"] {
+  color: #93c5fd;
+}
+
+/* Borders */
+html.public-dark .public-services [class*="border-slate-100"],
+html.public-dark .public-services [class*="border-slate-200"],
+html.public-dark .public-services [class*="border-blue-100"],
+html.public-dark .public-services [class*="border-violet-100"],
+html.public-dark .public-services [class*="border-emerald-100"] {
+  border-color: #334155;
+}
+
+/* Service icon boxes: keep colored icons visible */
+html.public-dark .public-services .service-grid-card [class*="bg-blue-50"],
+html.public-dark .public-services .service-grid-card [class*="bg-violet-50"],
+html.public-dark .public-services .service-grid-card [class*="bg-emerald-50"],
+html.public-dark .public-services .service-grid-card [class*="bg-amber-50"] {
+  background-color: #273449;
+}
+
+/* Capabilities callout */
+html.public-dark
+  .public-services
+  [class*="border-blue-100"][class*="bg-blue-50"] {
+  background-color: #172554;
+  border-color: #334155;
+}
+
+html.public-dark .public-services [class~="text-blue-950"] {
+  color: #dbeafe;
+}
+
+/* Keep the scope section dark in both themes */
+html.public-dark .public-services section[class~="bg-slate-950"] {
+  background-color: #070b14;
+}
+
+html.public-dark .public-services [class*="bg-white/["] {
+  background-color: rgb(255 255 255 / 5%);
+}
+
+/* Bottom CTA: retain its gradient */
+html.public-dark .public-services [class*="via-indigo-700"] {
+  color: #ffffff;
+}
+
+/* White CTA buttons */
+html.public-dark .public-services a[class~="bg-white"] {
+  background-color: #f8fafc;
+  color: #1e3a8a;
+}
+
+/* Modal */
+html.public-dark .public-services [role="dialog"] {
+  background-color: #111827;
+  border-color: #334155;
+}
+
+html.public-dark .public-services [role="dialog"] [class~="bg-blue-50/60"],
+html.public-dark .public-services [role="dialog"] [class~="bg-amber-50/70"] {
+  background-color: #1e293b;
+}
+
+html.public-dark .public-services [role="dialog"] [class~="text-amber-950"] {
+  color: #fde68a;
+}
+
+html.public-dark
+  .public-services
+  [role="dialog"]
+  button[class~="bg-slate-100"] {
+  background-color: #273449;
+  color: #e2e8f0;
+}
+
+html.public-dark
+  .public-services
+  [role="dialog"]
+  button[class~="bg-slate-900"] {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+/* Smooth background transitions without overriding card animations */
+.public-services {
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.public-services section,
+.public-services .service-grid-card {
+  transition: background-color 250ms ease, border-color 250ms ease,
+    color 250ms ease, transform 300ms ease, box-shadow 300ms ease;
+}
+
+/* =====================================================
+   INTERNLINK CONTACT — PUBLIC DARK MODE
+   Scoped only to the public Contact page
+   ===================================================== */
+
+.public-contact {
+  transition: background-color 250ms ease, color 250ms ease;
+}
+
+html.public-dark .public-contact {
+  background-color: #0b1120;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* Main contact panel */
+html.public-dark .public-contact .contact-reveal.rounded-\[1\.75rem\] {
+  background-color: #111827;
+  border-color: #334155;
+  box-shadow: 0 25px 80px -35px rgb(0 0 0 / 65%);
+}
+
+/* Light backgrounds and contact badge */
+html.public-dark .public-contact [class~="bg-white"],
+html.public-dark .public-contact [class~="bg-white/80"] {
+  background-color: #111827;
+}
+
+html.public-dark .public-contact [class~="bg-[#f7f9fd]"] {
+  background-color: #0b1120;
+}
+
+html.public-dark .public-contact [class~="bg-slate-50/80"] {
+  background-color: #172033;
+}
+
+/* Headings and body text */
+html.public-dark .public-contact [class~="text-slate-950"],
+html.public-dark .public-contact [class~="text-slate-900"],
+html.public-dark .public-contact [class~="text-slate-800"],
+html.public-dark .public-contact [class~="text-slate-700"] {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-contact [class~="text-slate-600"] {
+  color: #b8c4d6;
+}
+
+html.public-dark .public-contact [class~="text-slate-500"] {
+  color: #a8b6ca;
+}
+
+html.public-dark .public-contact [class~="text-slate-400"] {
+  color: #8493a8;
+}
+
+/* Borders */
+html.public-dark .public-contact [class~="border-slate-200"],
+html.public-dark .public-contact [class~="border-slate-200/80"],
+html.public-dark .public-contact [class~="border-slate-100"] {
+  border-color: #334155;
+}
+
+/* Contact badge */
+html.public-dark .public-contact [class~="border-blue-100"] {
+  border-color: #334155;
+}
+
+html.public-dark .public-contact [class~="text-blue-700"] {
+  color: #93c5fd;
+}
+
+/* Form fields */
+html.public-dark .public-contact .contact-field {
+  color: #f1f5f9;
+  background-color: #172033;
+  border-color: #3b4a60;
+}
+
+html.public-dark .public-contact .contact-field::placeholder {
+  color: #8493a8;
+  opacity: 1;
+}
+
+html.public-dark .public-contact .contact-field:hover {
+  border-color: #64748b;
+}
+
+html.public-dark .public-contact .contact-field:focus {
+  color: #f8fafc;
+  background-color: #1e293b;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgb(59 130 246 / 15%),
+    0 8px 20px -16px rgb(37 99 235 / 50%);
+}
+
+html.public-dark .public-contact .contact-field:disabled {
+  background-color: #111827;
+  color: #94a3b8;
+}
+
+/* Form status messages */
+html.public-dark .public-contact [role="alert"],
+html.public-dark .public-contact [role="status"] {
+  color: #e2e8f0;
+}
+
+html.public-dark
+  .public-contact
+  [class*="border-emerald-200"][class*="bg-emerald-50"] {
+  background-color: #052e24;
+  border-color: #166534;
+  color: #bbf7d0;
+}
+
+html.public-dark
+  .public-contact
+  [class*="border-amber-200"][class*="bg-amber-50"] {
+  background-color: #422006;
+  border-color: #92400e;
+  color: #fde68a;
+}
+
+html.public-dark .public-contact [class*="border-red-200"][class*="bg-red-50"] {
+  background-color: #450a0a;
+  border-color: #991b1b;
+  color: #fecaca;
+}
+
+/* Decorative background */
+html.public-dark .public-contact [class*="bg-[radial-gradient"] {
+  opacity: 0.35;
+}
+
+html.public-dark .public-contact .contact-orb {
+  opacity: 0.45;
+}
+
+/* Keep the contact information panel dark and preserve its gradient */
+html.public-dark .public-contact aside {
+  color: #f8fafc;
+}
+
+html.public-dark .public-contact .contact-card {
+  border-color: rgb(255 255 255 / 10%);
+  background-color: rgb(255 255 255 / 5%);
+}
+
+html.public-dark .public-contact .contact-card:hover {
+  border-color: rgb(96 165 250 / 40%);
+  background-color: rgb(255 255 255 / 9%);
+}
+
+html.public-dark .public-contact .contact-icon {
+  border-color: rgb(255 255 255 / 12%);
+  background-color: rgb(255 255 255 / 7%);
+  color: #93c5fd;
+}
+
+/* Social links */
+html.public-dark .public-contact aside a {
+  transition: color 220ms ease, border-color 220ms ease,
+    background-color 220ms ease, transform 220ms ease;
+}
+
+/* Map */
+html.public-dark .public-contact .contact-map {
+  border-color: rgb(255 255 255 / 12%);
+  background-color: rgb(255 255 255 / 5%);
+}
+
+html.public-dark .public-contact .contact-map iframe {
+  filter: saturate(0.85) brightness(0.85);
+}
+
+html.public-dark .public-contact .contact-map:hover iframe {
+  filter: saturate(1.08) brightness(0.95);
+}
+
+/* Footer */
+html.public-dark .public-contact footer {
+  color: #94a3b8;
+}
+
+/* Smooth transitions for page surfaces */
+.public-contact .contact-reveal,
+.public-contact .contact-field,
+.public-contact .contact-card,
+.public-contact .contact-icon {
+  transition: background-color 250ms ease, border-color 250ms ease,
+    color 250ms ease, box-shadow 300ms ease, transform 300ms ease;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .public-contact,
+  .public-contact *,
+  .public-contact *::before,
+  .public-contact *::after {
+    scroll-behavior: auto;
+  }
+}
+
+/* =====================================================
+   INTERNLINK LOGIN — PUBLIC DARK MODE
+   Scoped to Login.jsx only
+   ===================================================== */
+
+.public-login {
+  transition: background 250ms ease, color 250ms ease;
+}
+
+html.public-dark .public-login {
+  background: linear-gradient(135deg, #0b1120 0%, #111827 50%, #172033 100%);
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* Main heading and supporting text */
+html.public-dark .public-login h2 {
+  color: #f8fafc;
+}
+
+html.public-dark .public-login h3 {
+  color: #f1f5f9;
+}
+
+html.public-dark .public-login p {
+  color: #a8b6ca;
+}
+
+/* Portal selector container */
+html.public-dark .public-login .grid.grid-cols-3 {
+  background-color: #172033;
+  border-color: #334155;
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 15%);
+}
+
+/* Inactive portal tabs */
+html.public-dark .public-login .grid.grid-cols-3 button:not(.bg-gradient-to-r) {
+  color: #a8b6ca;
+}
+
+html.public-dark
+  .public-login
+  .grid.grid-cols-3
+  button:not(.bg-gradient-to-r):hover {
+  background-color: #273449;
+  color: #f8fafc;
+}
+
+/* Active portal tabs keep their original gradients */
+html.public-dark .public-login .grid.grid-cols-3 button.bg-gradient-to-r {
+  color: #ffffff;
+}
+
+/* Login card */
+html.public-dark .public-login .rounded-2xl.bg-white {
+  background-color: #111827;
+  border-color: #334155;
+  box-shadow: 0 24px 60px -30px rgb(0 0 0 / 75%);
+}
+
+/* Icon container */
+html.public-dark .public-login .bg-slate-50 {
+  background-color: #172033;
+  border-color: #334155;
+}
+
+/* Keep the three portal icons distinguishable */
+html.public-dark .public-login .text-blue-600 {
+  color: #60a5fa;
+}
+
+html.public-dark .public-login .text-emerald-600 {
+  color: #34d399;
+}
+
+html.public-dark .public-login .text-purple-600 {
+  color: #c4b5fd;
+}
+
+/* Form labels */
+html.public-dark .public-login label {
+  color: #b8c4d6;
+}
+
+/* Inputs */
+html.public-dark .public-login input {
+  background-color: #172033;
+  color: #f1f5f9;
+  border-color: #3b4a60;
+}
+
+html.public-dark .public-login input::placeholder {
+  color: #8493a8;
+  opacity: 1;
+}
+
+html.public-dark .public-login input:hover {
+  border-color: #64748b;
+}
+
+html.public-dark .public-login input:focus {
+  background-color: #1e293b;
+  border-color: #60a5fa;
+  outline: none;
+  --tw-ring-color: rgb(96 165 250 / 45%);
+}
+
+html.public-dark .public-login input:disabled {
+  background-color: #111827;
+  color: #94a3b8;
+  opacity: 0.6;
+}
+
+/* Keep portal-specific sign-in button gradients */
+html.public-dark .public-login form button[type="submit"] {
+  color: #ffffff;
+}
+
+/* Forgot password */
+html.public-dark .public-login button:not([type="submit"]) {
+  transition: color 200ms ease, background-color 200ms ease;
+}
+
+html.public-dark .public-login .text-slate-400 {
+  color: #94a3b8;
+}
+
+html.public-dark .public-login button.text-slate-400:hover {
+  color: #f8fafc;
+}
+
+/* Create account divider */
+html.public-dark .public-login .border-t {
+  border-color: #334155;
+}
+
+/* Footer links */
+html.public-dark .public-login footer a {
+  color: #a8b6ca;
+  transition: color 200ms ease;
+}
+
+html.public-dark .public-login footer a:hover {
+  color: #f8fafc;
+}
+
+/* General text contrast */
+html.public-dark .public-login .text-slate-500 {
+  color: #a8b6ca;
+}
+
+html.public-dark .public-login .text-slate-800 {
+  color: #e2e8f0;
+}
+
+/* Smooth transitions without changing portal gradients */
+.public-login > main > div,
+.public-login input,
+.public-login footer a {
+  transition: background-color 250ms ease, border-color 250ms ease,
+    color 250ms ease, box-shadow 250ms ease;
+}
+
+/* =========================================================
+   INTERNLINK SIGNUP — COMPLETE PUBLIC DARK MODE
+   Based on the existing SignUp.jsx
+   Scope: Signup page only
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   PAGE BACKGROUND
+   --------------------------------------------------------- */
+
+html.public-dark .min-h-screen:has(> .public-signup) {
+  background-color: #080f1d;
+  background-image: none;
+}
+
+html.public-dark .public-signup {
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------
+   PAGE HEADER
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup h2 {
+  color: #f8fafc;
+}
+
+html.public-dark .public-signup > div.text-center > p {
+  color: #a5b4c8;
+}
+
+/* ---------------------------------------------------------
+   ROLE SELECTOR
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup > .grid.grid-cols-3 {
+  background-color: #111c2e;
+  border-color: #29384d;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / 20%);
+}
+
+html.public-dark
+  .public-signup
+  > .grid.grid-cols-3
+  button:not(.bg-gradient-to-r) {
+  color: #a9b8cc;
+}
+
+html.public-dark
+  .public-signup
+  > .grid.grid-cols-3
+  button:not(.bg-gradient-to-r):hover {
+  background-color: #26364d;
+  color: #f8fafc;
+}
+
+html.public-dark .public-signup > .grid.grid-cols-3 button.bg-gradient-to-r {
+  color: #fff;
+}
+
+/* ---------------------------------------------------------
+   MAIN FORM CARD
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup > div.bg-white {
+  background-color: #111827;
+  border-color: #2c394d;
+  box-shadow: 0 24px 70px -35px rgb(0 0 0 / 85%);
+}
+
+html.public-dark .public-signup h3 {
+  color: #f1f5f9;
+}
+
+/* Portal icon container */
+
+html.public-dark .public-signup .rounded-2xl.bg-slate-50 {
+  background-color: #192538;
+  border-color: #334155;
+}
+
+/* Preserve the Student, Registrar, and Company icon colors. */
+
+/* ---------------------------------------------------------
+   FORM SECTIONS
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup section {
+  background-color: rgb(24 36 55 / 68%);
+  border-color: #334155;
+}
+
+html.public-dark .public-signup section h4 {
+  color: #eaf0f8;
+}
+
+html.public-dark .public-signup section p {
+  color: #9eacc0;
+}
+
+/* ---------------------------------------------------------
+   LABELS AND TEXT
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup label {
+  color: #bac7d8;
+}
+
+html.public-dark .public-signup .text-slate-400 {
+  color: #91a0b5;
+}
+
+html.public-dark .public-signup .text-slate-500 {
+  color: #aebbd0;
+}
+
+html.public-dark .public-signup .text-slate-600 {
+  color: #c5d0df;
+}
+
+html.public-dark .public-signup .text-slate-700 {
+  color: #d5deea;
+}
+
+html.public-dark .public-signup .text-slate-800,
+html.public-dark .public-signup .text-slate-900 {
+  color: #f1f5f9;
+}
+
+/* Keep required-field indicators visible. */
+
+html.public-dark .public-signup .text-red-500 {
+  color: #fb7185;
+}
+
+/* ---------------------------------------------------------
+   TEXT INPUTS, SELECTS, AND TEXTAREAS
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup input:not([type="checkbox"]):not([type="file"]),
+html.public-dark .public-signup select,
+html.public-dark .public-signup textarea {
+  background-color: #172235;
+  color: #f1f5f9;
+  border-color: #3b4b62;
+}
+
+html.public-dark .public-signup input::placeholder,
+html.public-dark .public-signup textarea::placeholder {
+  color: #8291a7;
+  opacity: 1;
+}
+
+/* Focus states */
+
+html.public-dark .public-signup input:focus,
+html.public-dark .public-signup select:focus,
+html.public-dark .public-signup textarea:focus {
+  background-color: #1d2a3f;
+  border-color: #60a5fa;
+  outline-color: #60a5fa;
+}
+
+/* Disabled fields */
+
+html.public-dark .public-signup input:disabled,
+html.public-dark .public-signup select:disabled,
+html.public-dark .public-signup textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Dropdown options */
+
+html.public-dark .public-signup select option {
+  background-color: #172235;
+  color: #f1f5f9;
+}
+
+/* ---------------------------------------------------------
+   PHONE INPUT
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup .phone-input {
+  background-color: #172235;
+  border-color: #3b4b62;
+}
+
+html.public-dark .public-signup .phone-input:focus-within {
+  background-color: #1d2a3f;
+  border-color: #60a5fa;
+}
+
+html.public-dark .public-signup .phone-input select {
+  background-color: transparent;
+  color: #f1f5f9;
+  border-color: transparent;
+}
+
+html.public-dark .public-signup .phone-input input {
+  background-color: transparent;
+  color: #f1f5f9;
+  border-color: transparent;
+}
+
+html.public-dark .public-signup .phone-input input:focus {
+  background-color: transparent;
+}
+
+html.public-dark .public-signup .phone-input span {
+  color: #d1dbea;
+}
+
+/* ---------------------------------------------------------
+   FILE UPLOADS
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup input[type="file"] {
+  width: 100%;
+  color: #cbd5e1;
+  background-color: #172235;
+  border: 1px solid #3b4b62;
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+}
+
+html.public-dark .public-signup input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background-color: #334155;
+  color: #f1f5f9;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+
+html.public-dark .public-signup input[type="file"]::file-selector-button:hover {
+  background-color: #475569;
+}
+
+/* ---------------------------------------------------------
+   EMAIL VERIFICATION PANEL
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup .mt-3.rounded-xl.border.bg-white {
+  background-color: #131e30;
+  border-color: #334155;
+}
+
+/* Change Email button */
+
+html.public-dark .public-signup button.border-slate-200 {
+  border-color: #40516a;
+  color: #cbd5e1;
+}
+
+html.public-dark .public-signup button.border-slate-200:hover {
+  background-color: #26364b;
+  color: #fff;
+}
+
+/* Verification code separator */
+
+html.public-dark .public-signup .border-t.border-slate-100 {
+  border-color: #334155;
+}
+
+/* Verification button disabled state */
+
+html.public-dark .public-signup button.bg-slate-100 {
+  background-color: #29364a;
+  color: #94a3b8;
+}
+
+/* Keep role-specific verification buttons readable. */
+
+html.public-dark .public-signup button.bg-blue-600,
+html.public-dark .public-signup button.bg-emerald-600,
+html.public-dark .public-signup button.bg-purple-600 {
+  color: #fff;
+}
+
+/* ---------------------------------------------------------
+   VERIFIED EMAIL STATE
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup input.bg-emerald-50 {
+  background-color: #082f27;
+  border-color: #16634e;
+  color: #a7f3d0;
+}
+
+html.public-dark .public-signup .bg-emerald-100 {
+  background-color: #064e3b;
+}
+
+html.public-dark .public-signup .text-emerald-600,
+html.public-dark .public-signup .text-emerald-700 {
+  color: #6ee7b7;
+}
+
+/* ---------------------------------------------------------
+   STUDENT / REGISTRAR / COMPANY VERIFICATION NOTICES
+   --------------------------------------------------------- */
+
+/* Student notice */
+
+html.public-dark .public-signup .bg-blue-50 {
+  background-color: #142747;
+  border-color: #294d7d;
+}
+
+html.public-dark .public-signup .text-blue-900 {
+  color: #dbeafe;
+}
+
+html.public-dark .public-signup .text-blue-700 {
+  color: #bfdbfe;
+}
+
+/* Registrar notice */
+
+html.public-dark .public-signup .bg-emerald-50 {
+  background-color: #092f29;
+  border-color: #17634e;
+}
+
+html.public-dark .public-signup .text-emerald-900 {
+  color: #d1fae5;
+}
+
+/* Company notice */
+
+html.public-dark .public-signup .bg-purple-50 {
+  background-color: #291744;
+  border-color: #62418d;
+}
+
+html.public-dark .public-signup .text-purple-900 {
+  color: #f3e8ff;
+}
+
+html.public-dark .public-signup .text-purple-700 {
+  color: #e9d5ff;
+}
+
+/* ---------------------------------------------------------
+   PASSWORD STRENGTH
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup .bg-slate-100.rounded-full {
+  background-color: #334155;
+}
+
+/* Preserve the existing strength indicator colors. */
+
+html.public-dark .public-signup .text-red-500 {
+  color: #fb7185;
+}
+
+html.public-dark .public-signup .text-orange-500 {
+  color: #fb923c;
+}
+
+html.public-dark .public-signup .text-yellow-600 {
+  color: #facc15;
+}
+
+html.public-dark .public-signup .text-blue-500 {
+  color: #60a5fa;
+}
+
+/* ---------------------------------------------------------
+   SUPPORTING DOCUMENT TOOLTIP
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup [class*="bg-slate-800"] {
+  background-color: #020617;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+html.public-dark .public-signup [class*="bg-slate-800"] .text-white {
+  color: #fff;
+}
+
+html.public-dark .public-signup [class*="bg-slate-800"] .text-slate-200 {
+  color: #e2e8f0;
+}
+
+html.public-dark .public-signup [class*="bg-slate-800"] .text-slate-300 {
+  color: #cbd5e1;
+}
+
+/* Tooltip separator */
+
+html.public-dark .public-signup [class*="bg-slate-800"] .border-slate-600 {
+  border-color: #475569;
+}
+
+/* Tooltip arrow */
+
+html.public-dark .public-signup [class*="border-t-slate-800"] {
+  border-top-color: #020617;
+}
+
+/* ---------------------------------------------------------
+   TERMS, PRIVACY, AND LINKS
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup a {
+  transition: color 180ms ease;
+}
+
+html.public-dark
+  .public-signup
+  a:not([class*="text-blue-"]):not([class*="text-emerald-"]):not(
+    [class*="text-purple-"]
+  ) {
+  color: #cbd5e1;
+}
+
+html.public-dark .public-signup a:hover {
+  color: #f8fafc;
+}
+
+/* Terms checkbox */
+
+html.public-dark .public-signup input[type="checkbox"] {
+  accent-color: #60a5fa;
+}
+
+/* ---------------------------------------------------------
+   SUBMIT BUTTON
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup button.bg-gradient-to-r {
+  color: #fff;
+}
+
+html.public-dark .public-signup button.bg-gradient-to-r:disabled {
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------
+   LOGIN DIVIDER AND FOOTER
+   --------------------------------------------------------- */
+
+html.public-dark .public-signup .border-t.border-slate-100 {
+  border-color: #334155;
+}
+
+html.public-dark .public-signup footer {
+  color: #94a3b8;
+}
+
+html.public-dark .public-signup footer a:hover {
+  color: #e2e8f0;
+}
+
+/* ---------------------------------------------------------
+   SMOOTH TRANSITIONS
+   --------------------------------------------------------- */
+
+.public-signup > div.bg-white,
+.public-signup input,
+.public-signup select,
+.public-signup textarea,
+.public-signup .phone-input,
+.public-signup section,
+.public-signup > .grid.grid-cols-3 button {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, box-shadow 200ms ease;
+}
+
+/* ---------------------------------------------------------
+   ACCESSIBILITY — REDUCED MOTION
+   --------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .public-signup,
+  .public-signup *,
+  .public-signup *::before,
+  .public-signup *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================
+   FORGOT PASSWORD — WORKING DARK MODE
+   Uses the existing JSX Tailwind classes
+   ========================================================= */
+
+html.public-dark .public-forgot-password {
+  min-height: 100vh;
+  background: #080f1d !important;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* HEADER */
+
+html.public-dark .public-forgot-password h2 {
+  color: #f8fafc !important;
+}
+
+html.public-dark .public-forgot-password main > div.text-center > p {
+  color: #a5b4c8 !important;
+}
+
+/* MAIN WHITE CARD */
+
+html.public-dark .public-forgot-password main > div.bg-white {
+  background: #111827 !important;
+  border-color: #2c394d !important;
+  color: #e2e8f0;
+  box-shadow: 0 24px 70px -35px rgb(0 0 0 / 85%);
+}
+
+/* CARD TITLE */
+
+html.public-dark .public-forgot-password h3 {
+  color: #f1f5f9 !important;
+}
+
+/* ICON BOX */
+
+html.public-dark .public-forgot-password .bg-slate-50 {
+  background-color: #192538 !important;
+}
+
+html.public-dark .public-forgot-password .border-slate-100 {
+  border-color: #334155 !important;
+}
+
+html.public-dark .public-forgot-password svg.text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+/* SECONDARY TEXT */
+
+html.public-dark .public-forgot-password .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.public-dark .public-forgot-password .text-slate-500 {
+  color: #a5b4c8 !important;
+}
+
+html.public-dark .public-forgot-password .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+html.public-dark .public-forgot-password .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+html.public-dark .public-forgot-password .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+/* EMAIL INPUT */
+
+html.public-dark .public-forgot-password input[type="email"] {
+  background-color: #172235 !important;
+  color: #f1f5f9 !important;
+  border-color: #3b4b62 !important;
+}
+
+html.public-dark .public-forgot-password input[type="email"]::placeholder {
+  color: #8291a7 !important;
+  opacity: 1;
+}
+
+html.public-dark .public-forgot-password input[type="email"]:focus {
+  background-color: #1d2a3f !important;
+  border-color: #60a5fa !important;
+  --tw-ring-color: #60a5fa;
+}
+
+html.public-dark .public-forgot-password input[type="email"]:disabled {
+  opacity: 0.6;
+}
+
+/* SUCCESS MESSAGE */
+
+html.public-dark .public-forgot-password .bg-emerald-50 {
+  background-color: #092f29 !important;
+}
+
+html.public-dark .public-forgot-password .border-emerald-100 {
+  border-color: #17634e !important;
+}
+
+html.public-dark .public-forgot-password .text-emerald-700 {
+  color: #a7f3d0 !important;
+}
+
+/* ERROR MESSAGE */
+
+html.public-dark .public-forgot-password .bg-red-50 {
+  background-color: #3a1720 !important;
+}
+
+html.public-dark .public-forgot-password .border-red-100 {
+  border-color: #7f2939 !important;
+}
+
+html.public-dark .public-forgot-password .text-red-700 {
+  color: #fecdd3 !important;
+}
+
+/* SEND RESET LINK BUTTON */
+
+html.public-dark .public-forgot-password button[type="submit"] {
+  color: #fff !important;
+}
+
+html.public-dark .public-forgot-password button[type="submit"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* BACK TO LOGIN BUTTON */
+
+html.public-dark .public-forgot-password button:not([type="submit"]) {
+  color: #a5b4c8;
+}
+
+html.public-dark .public-forgot-password button:not([type="submit"]):hover {
+  color: #fff !important;
+}
+
+/* CREATE ACCOUNT DIVIDER */
+
+html.public-dark .public-forgot-password .border-t {
+  border-color: #334155 !important;
+}
+
+/* LINKS */
+
+html.public-dark .public-forgot-password a {
+  color: #e2e8f0;
+}
+
+html.public-dark .public-forgot-password a:hover {
+  color: #fff !important;
+}
+
+/* FOOTER */
+
+html.public-dark .public-forgot-password footer {
+  color: #94a3b8 !important;
+}
+
+html.public-dark .public-forgot-password footer a {
+  color: #a5b4c8;
+}
+
+html.public-dark .public-forgot-password footer a:hover {
+  color: #f8fafc !important;
+}
+
+/* SMOOTH TRANSITIONS */
+
+.public-forgot-password input,
+.public-forgot-password button,
+.public-forgot-password a,
+.public-forgot-password main > div.bg-white {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, box-shadow 200ms ease;
+}
+
+/* =========================================================
+   PRIVACY POLICY — PUBLIC DARK MODE
+   ========================================================= */
+
+html.public-dark .public-privacy-policy {
+  min-height: 100vh;
+  background: #080f1d !important;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* HEADER AND FOOTER */
+
+html.public-dark .public-privacy-policy header,
+html.public-dark .public-privacy-policy footer {
+  background-color: #080f1d !important;
+  border-color: #253247 !important;
+}
+
+html.public-dark .public-privacy-policy header .text-slate-400,
+html.public-dark .public-privacy-policy footer .text-slate-500 {
+  color: #a5b4c8 !important;
+}
+
+html.public-dark .public-privacy-policy header .text-white {
+  color: #f8fafc;
+}
+
+html.public-dark .public-privacy-policy header a:hover,
+html.public-dark .public-privacy-policy footer a:hover {
+  color: #f8fafc !important;
+}
+
+html.public-dark .public-privacy-policy footer .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+/* PAGE TITLE */
+
+html.public-dark .public-privacy-policy main h2 {
+  color: #f8fafc !important;
+}
+
+html.public-dark .public-privacy-policy main > div.text-center p {
+  color: #94a3b8 !important;
+}
+
+/* POLICY CONTENT CARD */
+
+html.public-dark .public-privacy-policy main > div.bg-white {
+  background-color: #111827 !important;
+  border-color: #2c394d !important;
+  color: #b9c6d8 !important;
+  box-shadow: 0 24px 70px -35px rgb(0 0 0 / 85%);
+}
+
+/* SECTION HEADINGS */
+
+html.public-dark .public-privacy-policy main h3 {
+  color: #f1f5f9 !important;
+}
+
+/* BOLD TEXT INSIDE POLICY */
+
+html.public-dark .public-privacy-policy main strong {
+  color: #e2e8f0 !important;
+}
+
+/* BOTTOM DIVIDER */
+
+html.public-dark .public-privacy-policy main .border-t {
+  border-color: #334155 !important;
+}
+
+/* RETURN TO REGISTRATION LINK */
+
+html.public-dark .public-privacy-policy main a {
+  color: #cbd5e1;
+}
+
+html.public-dark .public-privacy-policy main a:hover {
+  color: #fff !important;
+}
+
+/* FOOTER LINKS */
+
+html.public-dark .public-privacy-policy footer a {
+  color: #a5b4c8;
+}
+
+/* TRANSITIONS */
+
+.public-privacy-policy header,
+.public-privacy-policy footer,
+.public-privacy-policy main > div.bg-white,
+.public-privacy-policy a {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, box-shadow 200ms ease;
+}
+
+/* =========================================================
+   TERMS & CONDITIONS — PUBLIC DARK MODE
+   ========================================================= */
+
+html.public-dark .public-terms-conditions {
+  min-height: 100vh;
+  background: #080f1d !important;
+  color: #e2e8f0;
+  color-scheme: dark;
+}
+
+/* HEADER AND FOOTER */
+
+html.public-dark .public-terms-conditions header,
+html.public-dark .public-terms-conditions footer {
+  background-color: #080f1d !important;
+  border-color: #253247 !important;
+}
+
+html.public-dark .public-terms-conditions header .text-slate-400,
+html.public-dark .public-terms-conditions footer .text-slate-500 {
+  color: #a5b4c8 !important;
+}
+
+html.public-dark .public-terms-conditions header a:hover,
+html.public-dark .public-terms-conditions footer a:hover {
+  color: #f8fafc !important;
+}
+
+html.public-dark .public-terms-conditions header .text-white {
+  color: #f8fafc;
+}
+
+html.public-dark .public-terms-conditions footer .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+/* PAGE TITLE */
+
+html.public-dark .public-terms-conditions main h2 {
+  color: #f8fafc !important;
+}
+
+html.public-dark .public-terms-conditions main > div.text-center p {
+  color: #94a3b8 !important;
+}
+
+/* TERMS CONTENT CARD */
+
+html.public-dark .public-terms-conditions main > div.bg-white {
+  background-color: #111827 !important;
+  border-color: #2c394d !important;
+  color: #b9c6d8 !important;
+  box-shadow: 0 24px 70px -35px rgb(0 0 0 / 85%);
+}
+
+/* SECTION HEADINGS */
+
+html.public-dark .public-terms-conditions main h3 {
+  color: #f1f5f9 !important;
+}
+
+/* BOLD LABELS */
+
+html.public-dark .public-terms-conditions main strong {
+  color: #e2e8f0 !important;
+}
+
+/* DIVIDER */
+
+html.public-dark .public-terms-conditions main .border-t {
+  border-color: #334155 !important;
+}
+
+/* REGISTRATION LINK */
+
+html.public-dark .public-terms-conditions main a {
+  color: #cbd5e1;
+}
+
+html.public-dark .public-terms-conditions main a:hover {
+  color: #fff !important;
+}
+
+/* FOOTER LINKS */
+
+html.public-dark .public-terms-conditions footer a {
+  color: #a5b4c8;
+}
+
+html.public-dark .public-terms-conditions footer a:hover {
+  color: #f8fafc !important;
+}
+
+/* SMOOTH TRANSITIONS */
+
+.public-terms-conditions header,
+.public-terms-conditions footer,
+.public-terms-conditions main > div.bg-white,
+.public-terms-conditions a {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, box-shadow 200ms ease;
+}
+
+/* =========================================================
+   SIMS CHATBOT — PUBLIC DARK MODE
+   ========================================================= */
+
+/* CHAT WINDOW */
+
+html.public-dark .sims-chatbot-widget section[role="dialog"] {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+  color: #e2e8f0;
+  box-shadow: 0 24px 70px -20px rgb(0 0 0 / 75%);
+}
+
+/* CHAT HEADER — keep the original gradient */
+
+html.public-dark .sims-chatbot-widget section[role="dialog"] > header {
+  color: #fff;
+}
+
+/* CHAT HISTORY BACKGROUND */
+
+html.public-dark .sims-chatbot-widget .bg-slate-50\/80 {
+  background-color: #0b1220 !important;
+}
+
+/* SUPPORT LABEL */
+
+html.public-dark .sims-chatbot-widget .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* BOT AVATAR */
+
+html.public-dark .sims-chatbot-widget .bg-indigo-100 {
+  background-color: #25244b !important;
+}
+
+html.public-dark .sims-chatbot-widget .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+
+/* BOT MESSAGES */
+
+html.public-dark .sims-chatbot-widget .border-slate-100.bg-white {
+  background-color: #182235 !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+/* USER MESSAGES — preserve the indigo bubble */
+
+html.public-dark .sims-chatbot-widget .bg-indigo-600.text-white {
+  background-color: #4f46e5 !important;
+  color: #fff !important;
+}
+
+/* ERROR MESSAGES */
+
+html.public-dark .sims-chatbot-widget .border-red-200.bg-red-50 {
+  background-color: #3b1720 !important;
+  border-color: #7f2939 !important;
+  color: #fecdd3 !important;
+}
+
+/* QUICK QUESTION LABEL */
+
+html.public-dark .sims-chatbot-widget .font-bold.uppercase {
+  color: #94a3b8;
+}
+
+/* QUICK QUESTION BUTTONS */
+
+html.public-dark .sims-chatbot-widget .border-indigo-100.bg-white {
+  background-color: #172235 !important;
+  border-color: #37356e !important;
+  color: #c7d2fe !important;
+}
+
+html.public-dark .sims-chatbot-widget .border-indigo-100.bg-white:hover {
+  background-color: #272650 !important;
+  border-color: #6366f1 !important;
+  color: #fff !important;
+}
+
+/* INPUT AREA */
+
+html.public-dark .sims-chatbot-widget form.border-t {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+}
+
+html.public-dark .sims-chatbot-widget .focus-within\:border-indigo-300 {
+  border-color: #6366f1 !important;
+}
+
+html.public-dark .sims-chatbot-widget .bg-slate-50.p-1\.5 {
+  background-color: #172235 !important;
+  border-color: #3b4b62 !important;
+}
+
+html.public-dark .sims-chatbot-widget input {
+  color: #f1f5f9 !important;
+  caret-color: #a5b4fc;
+}
+
+html.public-dark .sims-chatbot-widget input::placeholder {
+  color: #8291a7 !important;
+  opacity: 1;
+}
+
+html.public-dark .sims-chatbot-widget input:focus {
+  outline: none;
+}
+
+/* SEND BUTTON — retain the original gradient-like color */
+
+html.public-dark .sims-chatbot-widget button[type="submit"] {
+  background-color: #4f46e5;
+  color: #fff;
+}
+
+html.public-dark .sims-chatbot-widget button[type="submit"]:hover {
+  background-color: #4338ca;
+}
+
+html.public-dark .sims-chatbot-widget button[type="submit"]:disabled {
+  opacity: 0.4;
+}
+
+/* HEADER BUTTONS */
+
+html.public-dark .sims-chatbot-widget section[role="dialog"] > header button {
+  color: rgb(255 255 255 / 85%);
+}
+
+html.public-dark
+  .sims-chatbot-widget
+  section[role="dialog"]
+  > header
+  button:hover {
+  background-color: rgb(255 255 255 / 15%);
+  color: #fff;
+}
+
+/* DISCLAIMER */
+
+html.public-dark .sims-chatbot-widget form p {
+  color: #94a3b8 !important;
+}
+
+/* TOGGLE BUTTON — retain its original appearance */
+
+html.public-dark .sims-chatbot-widget > div > button {
+  color: #fff;
+}
+
+/* SMOOTH TRANSITIONS */
+
+.sims-chatbot-widget section[role="dialog"],
+.sims-chatbot-widget section[role="dialog"] > div,
+.sims-chatbot-widget section[role="dialog"] form,
+.sims-chatbot-widget section[role="dialog"] input,
+.sims-chatbot-widget section[role="dialog"] button {
+  transition: background-color 200ms ease, border-color 200ms ease,
+    color 200ms ease, box-shadow 200ms ease;
+}

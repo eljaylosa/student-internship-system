@@ -205,7 +205,7 @@ export default function ChatbotWidget() {
   }
 
   return (
-    <div className="fixed bottom-5 right-4 z-[100] sm:bottom-6 sm:right-6">
+    <div className="sims-chatbot-widget fixed bottom-5 right-4 z-[100] sm:bottom-6 sm:right-6">
       {isOpen && (
         <section
           role="dialog"

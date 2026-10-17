@@ -192,7 +192,7 @@ function Services() {
   }, [activeService]);
 
   return (
-    <main className="services-page min-h-screen overflow-hidden bg-white text-slate-900">
+    <main className="public-services services-page min-h-screen overflow-hidden bg-white text-slate-900">
       <style>{`
         .services-page {
           --services-ink: #172554;

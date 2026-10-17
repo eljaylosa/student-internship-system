@@ -149,7 +149,7 @@ export default function About() {
   }, []);
 
   return (
-    <main className="about-page min-h-screen overflow-hidden bg-white text-slate-900 pt-20">
+    <main className="public-about about-page min-h-screen overflow-hidden bg-white text-slate-900 pt-20">
       <style>{`
         .about-page {
           --about-blue: #2563eb;
@@ -399,8 +399,8 @@ export default function About() {
 
             <p className="mt-6 max-w-xl text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
               Meet InternLink, a web-based Student Internship Management System
-              designed to bring students, registrar, and company
-              together in one organized digital environment.
+              designed to bring students, registrar, and company together in one
+              organized digital environment.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -515,7 +515,7 @@ export default function About() {
                       </Icon>
                     </div>
                     <p className="mt-4 text-lg font-bold text-slate-900">
-                      Advisers
+                      Registrars
                     </p>
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">
                       Reviews & coordination
@@ -703,11 +703,11 @@ export default function About() {
                 Purpose-built for each role
               </h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Students, registrar, and company have
-                different responsibilities. InternLink uses role-based access
-                and dedicated portal workflows to support their respective
-                tasks, from submitting requirements to reviewing internship
-                progress and evaluations.
+                Students, registrar, and company have different
+                responsibilities. InternLink uses role-based access and
+                dedicated portal workflows to support their respective tasks,
+                from submitting requirements to reviewing internship progress
+                and evaluations.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -849,10 +849,6 @@ export default function About() {
                     src={member.image}
                     alt={`${member.name}, ${member.role}`}
                     loading="lazy"
-                    onError={(event) => {
-                      event.currentTarget.onerror = null;
-                      event.currentTarget.src = noProfileImg;
-                    }}
                     className="about-team-image h-full w-full object-cover object-center"
                   />
 

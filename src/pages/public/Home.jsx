@@ -121,7 +121,6 @@ function PortalIcon({ type }) {
   );
 }
 
-
 function DashboardPreview() {
   const [activePortal, setActivePortal] = useState(0);
 
@@ -555,7 +554,6 @@ function DashboardPreview() {
   );
 }
 
-
 const Home = () => {
   useEffect(() => {
     const elements = document.querySelectorAll("[data-reveal]");
@@ -586,7 +584,7 @@ const Home = () => {
   }, []);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-white font-sans text-slate-900">
+    <main className="public-home min-h-screen overflow-hidden bg-white font-sans text-slate-900">
       <style>{`
         @keyframes hero-enter {
           from { opacity: 0; transform: translateY(24px); }

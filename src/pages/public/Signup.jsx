@@ -2000,7 +2000,7 @@ const SignUp = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
-      <main className="flex-1 flex flex-col items-center py-30 px-4 max-w-3xl mx-auto w-full">
+      <main className="public-signup flex-1 flex flex-col items-center py-30 px-4 max-w-3xl mx-auto w-full">
         {/* PAGE HEADER */}
 
         <div className="text-center mb-10">

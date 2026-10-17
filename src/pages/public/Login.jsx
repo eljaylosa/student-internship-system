@@ -611,7 +611,7 @@ const Login = () => {
   // =========================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
+    <div className="public-login min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 font-sans text-gray-800 flex flex-col">
       <main className="flex-1 flex flex-col items-center justify-center py-30 px-4 max-w-3xl mx-auto w-full">
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl mb-3">
