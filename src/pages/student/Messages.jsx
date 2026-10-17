@@ -30,6 +30,9 @@ const Messages = () => {
   const [contactActionError, setContactActionError] = useState("");
 
   const [messagesLoading, setMessagesLoading] = useState(false);
+  // Increment to force a conversation refresh even when the selected contact
+  // ID stays the same (for example, after unarchiving an open chat).
+  const [conversationReloadKey, setConversationReloadKey] = useState(0);
 
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,43 +55,45 @@ const Messages = () => {
   const conversationsRef = useRef(conversations);
   const selectedContactRef = useRef(selectedContact);
 
-  const {startCall, currentCall, callStatus } = useCallContext();
+  const { startCall, currentCall, callStatus } = useCallContext();
 
-  
-const handleStartCall = async (type) => {
-  const conversation = selectedContact
-    ? conversations[selectedContact.id]
-    : null;
+  const handleStartCall = async (type) => {
+    const conversation = selectedContact
+      ? conversations[selectedContact.id]
+      : null;
 
-  if (!conversation?.id) {
-    console.warn("[Student Messages] No conversation available for calling.");
-    return;
-  }
+    if (!conversation?.id) {
+      console.warn("[Student Messages] No conversation available for calling.");
+      return;
+    }
 
-  if (currentCall || callStatus === "connecting" || callStatus === "ringing") {
-    console.warn("[Student Messages] A call is already in progress.");
-    return;
-  }
+    if (
+      currentCall ||
+      callStatus === "connecting" ||
+      callStatus === "ringing"
+    ) {
+      console.warn("[Student Messages] A call is already in progress.");
+      return;
+    }
 
-  try {
-    console.log(
-      "[Outgoing Call] Selected contact:",
-      JSON.stringify(selectedContact, null, 2)
-    );
+    try {
+      console.log(
+        "[Outgoing Call] Selected contact:",
+        JSON.stringify(selectedContact, null, 2)
+      );
 
-    console.log("[Outgoing Call] Contact image fields:", {
-      profile_photo_url: selectedContact?.profile_photo_url,
-      photo_url: selectedContact?.photo_url,
-      avatar_url: selectedContact?.avatar_url,
-      company_logo_url: selectedContact?.company_logo_url,
-      logo_url: selectedContact?.logo_url,
-    });
-    await startCall(conversation.id, type, selectedContact);
-  } catch (error) {
-    console.error("[Student Messages] Failed to start call:", error);
-  }
-};
-
+      console.log("[Outgoing Call] Contact image fields:", {
+        profile_photo_url: selectedContact?.profile_photo_url,
+        photo_url: selectedContact?.photo_url,
+        avatar_url: selectedContact?.avatar_url,
+        company_logo_url: selectedContact?.company_logo_url,
+        logo_url: selectedContact?.logo_url,
+      });
+      await startCall(conversation.id, type, selectedContact);
+    } catch (error) {
+      console.error("[Student Messages] Failed to start call:", error);
+    }
+  };
 
   useEffect(() => {
     messagesRefForSync.current = messages;
@@ -1851,7 +1856,7 @@ const handleStartCall = async (type) => {
         supabaseStudent.removeChannel(messageChannel);
       }
     };
-  }, [currentUser?.id, selectedContact?.id]);
+  }, [currentUser?.id, selectedContact?.id, conversationReloadKey]);
 
   // =========================================================
   // CURRENT MESSAGES
@@ -2343,6 +2348,13 @@ const handleStartCall = async (type) => {
         else next.delete(contact.id);
         return next;
       });
+
+      // Unarchiving should reload the conversation even if this contact is
+      // already selected and selectedContact.id therefore does not change.
+      if (!shouldArchive) {
+        setConversationReloadKey((previous) => previous + 1);
+      }
+
       if (shouldArchive && contactListFilter === "active") {
         setSelectedContact((selected) =>
           selected?.id === contact.id ? null : selected
@@ -3788,12 +3800,16 @@ const handleStartCall = async (type) => {
                   <div className="h-full flex items-center justify-center">
                     <div className="text-center">
                       <p className={`text-sm font-semibold ${headingClass}`}>
-                        No messages yet.
+                        {messagesLoading
+                          ? "Loading messages..."
+                          : "No messages yet."}
                       </p>
 
-                      <p className={`text-xs mt-1 ${mutedClass}`}>
-                        Start the conversation below.
-                      </p>
+                      {!messagesLoading && (
+                        <p className={`text-xs mt-1 ${mutedClass}`}>
+                          Start the conversation below.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
