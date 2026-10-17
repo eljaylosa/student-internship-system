@@ -22,6 +22,7 @@ import Services from "./pages/public/Services.jsx";
 import Contact from "./pages/public/Contact.jsx";
 import Footer from "./components/layout/Footer.jsx";
 import MaintenancePage from "./pages/public/MaintenancePage.jsx";
+import ChatbotWidget from "./components/chatbot/ChatbotWidget.jsx";
 
 import CallProvider from "./context/CallProvider.jsx";
 
@@ -254,7 +255,7 @@ function MaintenanceGate({ children }) {
 function AppContent() {
   const location = useLocation();
 
-  // =========================================================
+  // =====================  ====================================
   // PORTAL DETECTION
   // =========================================================
 
@@ -266,6 +267,24 @@ function AppContent() {
   const isPortal =
     isStudentPortal || isRegistrarPortal || isCompanyPortal || isAdminPortal;
 
+    const normalizedPath = location.pathname.replace(/\/+$/, "") || "/";
+
+    const publicChatbotPaths = [
+      "/",
+      "/home",
+      "/about",
+      "/services",
+      "/contact",
+      "/signup",
+      "/login",
+      "/forgot-password",
+      "/reset-password",
+      "/terms",
+      "/privacy",
+    ];
+
+    const showChatbot = publicChatbotPaths.includes(normalizedPath);
+
   return (
     <MaintenanceGate>
       <>
@@ -276,8 +295,8 @@ function AppContent() {
 
         <Routes>
           {/* =====================================================
-              PUBLIC ROUTES
-          ===================================================== */}
+                PUBLIC ROUTES
+            ===================================================== */}
 
           <Route path="/" element={<Home />} />
           <Route path="/home" element={<Home />} />
@@ -286,8 +305,8 @@ function AppContent() {
           <Route path="/contact" element={<Contact />} />
 
           {/* =====================================================
-              AUTH ROUTES
-          ===================================================== */}
+                AUTH ROUTES
+            ===================================================== */}
 
           <Route path="/signup" element={<SignUp />} />
           <Route path="/login" element={<Login />} />
@@ -300,8 +319,8 @@ function AppContent() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
 
           {/* =====================================================
-              STUDENT PORTAL
-          ===================================================== */}
+                STUDENT PORTAL
+            ===================================================== */}
 
           <Route
             path="/student"
@@ -332,8 +351,8 @@ function AppContent() {
           </Route>
 
           {/* =====================================================
-              REGISTRAR PORTAL
-          ===================================================== */}
+                REGISTRAR PORTAL
+            ===================================================== */}
 
           <Route
             path="/registrar"
@@ -364,9 +383,9 @@ function AppContent() {
           </Route>
 
           {/* =====================================================
-              COMPANY VERIFICATION DOCUMENT UPLOAD
-              Public route accessed through secure email link
-          ===================================================== */}
+                COMPANY VERIFICATION DOCUMENT UPLOAD
+                Public route accessed through secure email link
+            ===================================================== */}
 
           <Route
             path="/company/verification-upload"
@@ -374,8 +393,8 @@ function AppContent() {
           />
 
           {/* =====================================================
-              COMPANY PORTAL
-          ===================================================== */}
+                COMPANY PORTAL
+            ===================================================== */}
 
           <Route
             path="/company"
@@ -402,8 +421,8 @@ function AppContent() {
           </Route>
 
           {/* =====================================================
-              ADMIN PORTAL
-          ===================================================== */}
+                ADMIN PORTAL
+            ===================================================== */}
 
           {/* ADMIN LOGIN */}
 
@@ -443,6 +462,9 @@ function AppContent() {
 
         {/* PUBLIC FOOTER */}
         {!isPortal && <Footer />}
+
+        {/* PUBLIC CHATBOT ONLY */}
+        {showChatbot && <ChatbotWidget />}
       </>
     </MaintenanceGate>
   );

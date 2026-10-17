@@ -425,6 +425,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [students, setStudents] = useState([]);
   const [registrars, setRegistrars] = useState([]);
+  const [schools, setSchools] = useState([]);
   const [companies, setCompanies] = useState([]);
 
   // =========================================================
@@ -557,6 +558,7 @@ export default function UserManagement() {
               first_name,
               middle_name,
               last_name,
+              school_id,
               status,
               created_at,
               updated_at
@@ -566,6 +568,22 @@ export default function UserManagement() {
 
       if (usersError) {
         throw usersError;
+      }
+
+      // -------------------------------------------------------
+      // SCHOOLS
+      // -------------------------------------------------------
+      // users.school_id identifies the school where a registrar
+      // is employed. Fetch names separately to avoid depending
+      // on an assumed foreign-key relationship in PostgREST.
+      // -------------------------------------------------------
+
+      const { data: schoolRows, error: schoolsError } = await supabase
+        .from("schools")
+        .select("id, name");
+
+      if (schoolsError) {
+        throw schoolsError;
       }
 
       // -------------------------------------------------------
@@ -600,7 +618,7 @@ export default function UserManagement() {
 
       const { data: registrarRows, error: registrarsError } = await supabase
         .from("registrars")
-        .select("id, employee_id, profile_photo_url");
+        .select("id, employee_id, profile_photo_url, school_id");
 
       if (registrarsError) {
         throw registrarsError;
@@ -625,6 +643,7 @@ export default function UserManagement() {
       setUsers(userRows || []);
       setStudents(studentRows || []);
       setRegistrars(registrarRows || []);
+      setSchools(schoolRows || []);
       setCompanies(companyRows || []);
 
       // =======================================================
@@ -841,6 +860,20 @@ export default function UserManagement() {
             : null;
 
         // -----------------------------------------------------
+        // EMPLOYMENT SCHOOL
+        // -----------------------------------------------------
+
+        const registrarSchoolId =
+          registrarProfile?.school_id || user.school_id || null;
+
+        const employmentSchool =
+          user.role === "registrar"
+            ? schools.find(
+                (school) => String(school.id) === String(registrarSchoolId)
+              )
+            : null;
+
+        // -----------------------------------------------------
         // COMPANY
         // -----------------------------------------------------
 
@@ -891,6 +924,8 @@ export default function UserManagement() {
 
           companyEmail: companyProfile?.company_email || "",
 
+          schoolName: employmentSchool?.name || "",
+
           roleLabel: getRoleLabel(user.role),
 
           statusLabel: getStatusLabel(user.status),
@@ -904,6 +939,7 @@ export default function UserManagement() {
     users,
     students,
     registrars,
+    schools,
     companies,
     profilePhotoUrls,
     companyLogoUrls,
@@ -938,6 +974,7 @@ export default function UserManagement() {
           user.statusLabel,
           user.companyName,
           user.companyEmail,
+          user.schoolName,
         ]
           .filter(Boolean)
           .join(" ")
@@ -1828,6 +1865,10 @@ export default function UserManagement() {
 
                       <th className="px-5 py-4">Name</th>
 
+                      {activeTab === "registrar" && (
+                        <th className="px-5 py-4">School</th>
+                      )}
+
                       <th className="px-5 py-4">Login Email</th>
 
                       <th className="px-5 py-4">Status</th>
@@ -1945,6 +1986,20 @@ export default function UserManagement() {
                             </div>
                           </div>
                         </td>
+
+                        {/* EMPLOYMENT SCHOOL — REGISTRARS ONLY */}
+
+                        {activeTab === "registrar" && (
+                          <td className="px-5 py-4">
+                            <div
+                              className={`text-sm ${
+                                darkMode ? "text-gray-300" : "text-gray-700"
+                              }`}
+                            >
+                              {user.schoolName || "No school assigned"}
+                            </div>
+                          </td>
+                        )}
 
                         {/* EMAIL */}
 
@@ -2119,6 +2174,17 @@ export default function UserManagement() {
                         >
                           {user.roleLabel}
                         </div>
+
+                        {activeTab === "registrar" && (
+                          <div
+                            className={`text-xs mt-2 ${
+                              darkMode ? "text-blue-300" : "text-blue-700"
+                            }`}
+                          >
+                            <span className="font-semibold">School:</span>{" "}
+                            {user.schoolName || "No school assigned"}
+                          </div>
+                        )}
 
                         <div
                           className={`text-xs mt-2 break-all ${

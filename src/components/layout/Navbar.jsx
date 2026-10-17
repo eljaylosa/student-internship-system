@@ -1,167 +1,242 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import logoImg from "../../assets/logos/internlink_logo_transparent.png"; // Adjust the path as necessary
+import React, { useEffect, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import logoImg from "../../assets/logos/internlink_logo_transparent.png";
+
+const navigationLinks = [
+  { label: "Home", to: "/" },
+  { label: "About", to: "/about" },
+  { label: "Services", to: "/services" },
+  { label: "Contact", to: "/contact" },
+];
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
   const closeMenu = () => setIsOpen(false);
 
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  // Allow users to close the mobile menu with the Escape key.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const getNavLinkClass = ({ isActive }) =>
+    [
+      "relative py-2 text-sm font-medium transition-colors duration-200",
+      "after:absolute after:bottom-0 after:left-0 after:h-0.5",
+      "after:rounded-full after:bg-blue-600 after:transition-all after:duration-200",
+      isActive
+        ? "text-blue-600 after:w-full"
+        : "text-slate-600 after:w-0 hover:text-blue-600 hover:after:w-full",
+    ].join(" ");
+
+  const getMobileNavLinkClass = ({ isActive }) =>
+    [
+      "flex items-center justify-between rounded-xl px-4 py-3",
+      "text-sm font-medium transition-colors duration-200",
+      isActive
+        ? "bg-blue-50 text-blue-700"
+        : "text-slate-600 hover:bg-slate-50 hover:text-blue-600",
+    ].join(" ");
+
   return (
-    <nav className="bg-white/95 backdrop-blur-md shadow-sm fixed w-full z-50 top-0 left-0 border-b border-gray-100 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-6 md:px-8 h-20 flex justify-between items-center">
-        {/* Brand Logo Link */}
+    <nav
+      aria-label="Main navigation"
+      className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-xl"
+    >
+      <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Brand */}
         <Link
           to="/"
           onClick={closeMenu}
-          // Added 'flex items-center gap-2' to align the text and logo image perfectly side-by-side
-          className="flex items-center gap-2 font-bold text-2xl text-gray-900 hover:text-blue-600 font-mono tracking-tight transition duration-200"
+          aria-label="InternLink home"
+          className="group flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4"
         >
-          {/* Text Layout */}
-          <span>
+          <span className="font-mono text-xl font-bold tracking-tight text-slate-900 transition-colors duration-200 group-hover:text-blue-600 sm:text-2xl">
             Intern<span className="text-blue-600">Link</span>
           </span>
 
-          {/* Logo Graphic Container */}
-          {/* The 'h-8 w-auto' rules scale the logo to match your font height seamlessly */}
           <img
             src={logoImg}
-            alt="InternLink Logo"
-            className="h-8 w-auto object-contain"
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-auto object-contain transition-transform duration-200 group-hover:scale-105 sm:h-9"
           />
         </Link>
 
-        {/* --- DESKTOP NAVIGATION LINKS --- */}
-        <div className="hidden md:flex space-x-8 items-center">
-          <div className="flex space-x-6">
-            <Link
-              to="/"
-              className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium transition duration-200"
-            >
-              Home
-            </Link>
-            <Link
-              to="/about"
-              className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium transition duration-200"
-            >
-              About
-            </Link>
-            <Link
-              to="/services"
-              className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium transition duration-200"
-            >
-              Services
-            </Link>
-            <Link
-              to="/contact"
-              className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium transition duration-200"
-            >
-              Contact
-            </Link>
+        {/* Desktop Navigation */}
+        <div className="hidden items-center gap-7 md:flex lg:gap-9">
+          <div className="flex items-center gap-6 lg:gap-8">
+            {navigationLinks.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={getNavLinkClass}
+              >
+                {item.label}
+              </NavLink>
+            ))}
           </div>
 
-          {/* Desktop Visual Divider Separator */}
-          <div className="h-5 w-px bg-gray-200"></div>
+          <div aria-hidden="true" className="h-7 w-px bg-slate-200" />
 
-          {/* Desktop Authentication Section */}
-          <div className="flex space-x-3 items-center">
+          {/* Authentication Actions */}
+          <div className="flex items-center gap-3">
             <Link
               to="/login"
-              className="cursor-pointer text-gray-700 hover:text-blue-600 border border-gray-200 hover:border-blue-600 px-4 py-2 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all duration-200"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               Log In
             </Link>
+
             <Link
               to="/signup"
-              className="cursor-pointer bg-blue-600 text-white border border-transparent hover:bg-blue-700 px-4 py-2 rounded-xl text-xs font-semibold font-mono tracking-wide shadow-sm hover:shadow transition-all duration-200"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
-              Sign Up
+              Get Started
+              <svg
+                aria-hidden="true"
+                className="ml-2 h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.8"
+                  d="M5 12h14m-6-6 6 6-6 6"
+                />
+              </svg>
             </Link>
           </div>
         </div>
 
-        {/* --- MOBILE BURGER ACTION TRIGGER BUTTON --- */}
+        {/* Mobile Menu Toggle */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
           type="button"
-          className="md:hidden text-gray-600 hover:text-blue-600 focus:outline-none cursor-pointer p-2 rounded-xl border border-transparent hover:bg-gray-50 transition"
-          aria-label="Toggle Navigation Menu"
+          onClick={() => setIsOpen((previous) => !previous)}
+          aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={isOpen}
+          aria-controls="mobile-navigation"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition-colors duration-200 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 md:hidden"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            {isOpen ? (
+          {isOpen ? (
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="2"
-                d="M6 18L18 6M6 6l12 12"
+                strokeLinecap="round"
+                d="m6 6 12 12M18 6 6 18"
               />
-            ) : (
+            </svg>
+          ) : (
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="2"
-                d="M4 6h16M4 12h16M4 18h16"
+                d="M4 7h16M4 12h16M4 17h16"
               />
-            )}
-          </svg>
+            </svg>
+          )}
         </button>
       </div>
 
-      {/* --- MOBILE DROPDOWN EXTENSION DRAWER --- */}
-      {isOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100 absolute top-full left-0 w-full shadow-xl py-6 px-6 flex flex-col space-y-3 backdrop-blur-md">
-          <Link
-            to="/"
-            onClick={closeMenu}
-            className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium py-2.5 px-3 rounded-xl hover:bg-gray-50 transition"
-          >
-            Home
-          </Link>
-          <Link
-            to="/about"
-            onClick={closeMenu}
-            className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium py-2.5 px-3 rounded-xl hover:bg-gray-50 transition"
-          >
-            About
-          </Link>
-          <Link
-            to="/services"
-            onClick={closeMenu}
-            className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium py-2.5 px-3 rounded-xl hover:bg-gray-50 transition"
-          >
-            Services
-          </Link>
-          <Link
-            to="/contact"
-            onClick={closeMenu}
-            className="text-gray-600 hover:text-blue-600 font-mono text-sm font-medium py-2.5 px-3 rounded-xl hover:bg-gray-50 transition mb-2"
-          >
-            Contact
-          </Link>
+      {/* Mobile Navigation */}
+      <div
+        id="mobile-navigation"
+        aria-label="Mobile navigation"
+        className={[
+          "grid overflow-hidden border-t border-slate-100 bg-white md:hidden",
+          "transition-[grid-template-rows,opacity] duration-200 ease-in-out",
+          isOpen
+            ? "grid-rows-[1fr] opacity-100"
+            : "pointer-events-none grid-rows-[0fr] opacity-0",
+        ].join(" ")}
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+      >
+        <div className="overflow-hidden">
+          <div className="space-y-1 px-4 pb-5 pt-3 sm:px-6">
+            {navigationLinks.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                onClick={closeMenu}
+                className={getMobileNavLinkClass}
+              >
+                <span>{item.label}</span>
 
-          {/* Mobile Split Button Matrix Group */}
-          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
-            <Link
-              to="/login"
-              onClick={closeMenu}
-              className="cursor-pointer text-center text-gray-700 border border-gray-200 py-3 rounded-xl text-xs font-semibold font-mono transition active:bg-gray-50"
-            >
-              Login
-            </Link>
-            <Link
-              to="/signup"
-              onClick={closeMenu}
-              className="cursor-pointer text-center bg-blue-600 text-white py-3 rounded-xl text-xs font-semibold font-mono shadow-sm transition active:bg-blue-700"
-            >
-              Sign Up
-            </Link>
+                <svg
+                  aria-hidden="true"
+                  className="h-4 w-4 opacity-50"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                    d="m9 18 6-6-6-6"
+                  />
+                </svg>
+              </NavLink>
+            ))}
+
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+              <Link
+                to="/login"
+                onClick={closeMenu}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                Log In
+              </Link>
+
+              <Link
+                to="/signup"
+                onClick={closeMenu}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                Sign Up
+              </Link>
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </nav>
   );
 };
