@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const highlights = [
@@ -121,54 +121,181 @@ function PortalIcon({ type }) {
   );
 }
 
+
 function DashboardPreview() {
+  const [activePortal, setActivePortal] = useState(0);
+
+  const portals = [
+    {
+      key: "student",
+      label: "Student Portal",
+      eyebrow: "Student Dashboard",
+      title: "Welcome back!",
+      description: "Your internship journey, organized.",
+      initials: "S",
+      color: "blue",
+      sidebar: ["Dashboard", "Applications", "Status", "Messages"],
+      stats: [
+        { label: "Applications", value: "Application tracking", color: "blue" },
+        { label: "Status", value: "Placement updates", color: "indigo" },
+      ],
+      overviewTitle: "Internship overview",
+      overview: [
+        ["Application status", "In progress", "blue"],
+        ["Required documents", "Document tracking", "indigo"],
+        ["Placement updates", "Stay informed", "emerald"],
+      ],
+    },
+    {
+      key: "registrar",
+      label: "Registrar Portal",
+      eyebrow: "Registrar Dashboard",
+      title: "Academic overview",
+      description: "Keep student internship records organized.",
+      initials: "R",
+      color: "violet",
+      sidebar: ["Dashboard", "Students", "Applications", "Reports"],
+      stats: [
+        {
+          label: "Student records",
+          value: "Record management",
+          color: "violet",
+        },
+        { label: "Applications", value: "Review progress", color: "indigo" },
+      ],
+      overviewTitle: "Registrar workspace",
+      overview: [
+        ["Student records", "Review student information", "violet"],
+        ["Application reviews", "Check submitted applications", "indigo"],
+        ["Internship coordination", "Track academic progress", "blue"],
+      ],
+    },
+    {
+      key: "company",
+      label: "Company Portal",
+      eyebrow: "Company Dashboard",
+      title: "Manage your interns",
+      description: "Coordinate opportunities and student progress.",
+      initials: "C",
+      color: "purple",
+      sidebar: ["Dashboard", "Opportunities", "My Interns", "Evaluations"],
+      stats: [
+        {
+          label: "Opportunities",
+          value: "Internship listings",
+          color: "purple",
+        },
+        { label: "My interns", value: "Intern supervision", color: "indigo" },
+      ],
+      overviewTitle: "Company workspace",
+      overview: [
+        ["Internship opportunities", "Manage available positions", "purple"],
+        ["Assigned interns", "Monitor intern progress", "indigo"],
+        ["Evaluations", "Review internship performance", "blue"],
+      ],
+    },
+  ];
+
+  const portal = portals[activePortal];
+
+  const colorStyles = {
+    blue: {
+      icon: "bg-blue-50 text-blue-600",
+      active: "bg-blue-50 text-blue-700",
+      bar: "bg-blue-500",
+      dot: "bg-blue-600",
+      glow: "bg-blue-500/[0.12]",
+    },
+    indigo: {
+      icon: "bg-indigo-50 text-indigo-600",
+      active: "bg-indigo-50 text-indigo-700",
+      bar: "bg-indigo-500",
+      dot: "bg-indigo-600",
+      glow: "bg-indigo-500/[0.12]",
+    },
+    violet: {
+      icon: "bg-violet-50 text-violet-600",
+      active: "bg-violet-50 text-violet-700",
+      bar: "bg-violet-500",
+      dot: "bg-violet-600",
+      glow: "bg-violet-500/[0.12]",
+    },
+    purple: {
+      icon: "bg-purple-50 text-purple-600",
+      active: "bg-purple-50 text-purple-700",
+      bar: "bg-purple-500",
+      dot: "bg-purple-600",
+      glow: "bg-purple-500/[0.12]",
+    },
+    emerald: {
+      icon: "bg-emerald-50 text-emerald-600",
+      active: "bg-emerald-50 text-emerald-700",
+      bar: "bg-emerald-500",
+      dot: "bg-emerald-600",
+      glow: "bg-emerald-500/[0.12]",
+    },
+  };
+
+  const currentStyle = colorStyles[portal.color];
+
+  const goToPortal = (index) => {
+    setActivePortal((index + portals.length) % portals.length);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "ArrowLeft") goToPortal(activePortal - 1);
+    if (event.key === "ArrowRight") goToPortal(activePortal + 1);
+  };
+
   return (
     <div className="dashboard-float relative mx-auto w-full max-w-[560px]">
       <div
         aria-hidden="true"
-        className="absolute -inset-6 rounded-[36px] bg-blue-500/[0.12] blur-3xl"
+        className={`absolute -inset-6 rounded-[36px] ${currentStyle.glow} blur-3xl transition-colors duration-300`}
       />
 
       <div className="relative overflow-hidden rounded-[24px] border border-white/70 bg-white/90 p-3 shadow-[0_30px_100px_-35px_rgba(37,99,235,0.38)] backdrop-blur-xl sm:rounded-[28px] sm:p-4">
-        {/* Mock application window */}
         <div className="overflow-hidden rounded-[18px] border border-slate-200/80 bg-slate-50">
-          <div className="flex h-12 items-center justify-between border-b border-slate-200/80 bg-white px-4">
-            <div className="flex items-center gap-1.5" aria-hidden="true">
+          {/* Application window header */}
+          <div className="flex h-12 items-center justify-between gap-2 border-b border-slate-200/80 bg-white px-3 sm:px-4">
+            <div
+              className="flex shrink-0 items-center gap-1.5"
+              aria-hidden="true"
+            >
               <span className="h-2 w-2 rounded-full bg-red-300" />
               <span className="h-2 w-2 rounded-full bg-amber-300" />
               <span className="h-2 w-2 rounded-full bg-emerald-300" />
             </div>
 
-            <span className="text-[9px] font-semibold tracking-[0.16em] text-slate-400 sm:text-[10px]">
-              INTERNLINK / STUDENT PORTAL
+            <span className="truncate text-[8px] font-semibold tracking-[0.1em] text-slate-400 sm:text-[10px] sm:tracking-[0.16em]">
+              INTERNLINK / {portal.label.toUpperCase()}
             </span>
 
-            <div className="h-6 w-6 rounded-full bg-blue-100 text-center text-[10px] font-bold leading-6 text-blue-700">
-              S
+            <div
+              className={`h-6 w-6 shrink-0 rounded-full ${currentStyle.icon} text-center text-[10px] font-bold leading-6`}
+            >
+              {portal.initials}
             </div>
           </div>
 
-          <div className="grid grid-cols-[78px_1fr] sm:grid-cols-[112px_1fr]">
+          <div className="grid grid-cols-[78px_minmax(0,1fr)] sm:grid-cols-[112px_minmax(0,1fr)]">
             {/* Sidebar */}
-            <div className="space-y-4 border-r border-slate-200/80 bg-white p-2.5 sm:p-4">
-              <div className="mb-6 flex items-center gap-1.5">
-                <span className="h-5 w-5 rounded-md bg-blue-600" />
+            <div className="space-y-3 border-r border-slate-200/80 bg-white p-2.5 sm:space-y-4 sm:p-4">
+              <div className="mb-5 flex items-center gap-1.5 sm:mb-6">
+                <span
+                  className={`h-5 w-5 shrink-0 rounded-md ${currentStyle.dot}`}
+                />
                 <span className="hidden text-[10px] font-bold text-slate-700 sm:inline">
                   InternLink
                 </span>
               </div>
 
-              {[
-                ["Dashboard", true],
-                ["Applications", false],
-                ["Status", false],
-                ["Messages", false],
-              ].map(([label, active]) => (
+              {portal.sidebar.map((label, index) => (
                 <div
                   key={label}
                   className={`rounded-lg px-2 py-2 text-[8px] leading-3 sm:text-[9px] ${
-                    active
-                      ? "bg-blue-50 font-semibold text-blue-700"
+                    index === 0
+                      ? `${currentStyle.active} font-semibold`
                       : "text-slate-400"
                   }`}
                 >
@@ -177,119 +304,221 @@ function DashboardPreview() {
               ))}
             </div>
 
-            {/* Dashboard body */}
+            {/* Dashboard content */}
             <div className="min-w-0 p-3 sm:p-5">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-blue-600 sm:text-[9px]">
-                    Student Dashboard
+                <div className="min-w-0">
+                  <p
+                    className={`text-[8px] font-semibold uppercase tracking-[0.1em] sm:text-[9px] ${
+                      currentStyle.icon.split(" ")[1]
+                    }`}
+                  >
+                    {portal.eyebrow}
                   </p>
+
                   <h3 className="mt-1 text-sm font-bold tracking-tight text-slate-900 sm:text-lg">
-                    Welcome back!
+                    {portal.title}
                   </h3>
-                  <p className="mt-1 text-[8px] text-slate-500 sm:text-[10px]">
-                    Your internship journey, organized.
+
+                  <p className="mt-1 text-[8px] leading-4 text-slate-500 sm:text-[10px]">
+                    {portal.description}
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[8px] text-slate-500 sm:text-[9px]">
+                <div className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[8px] text-slate-500 sm:block sm:text-[9px]">
                   My workspace
                 </div>
               </div>
 
+              {/* Summary cards */}
               <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-6 sm:gap-3">
-                <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 sm:p-3">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[8px] text-slate-500 sm:text-[9px]">
-                      Applications
-                    </span>
-                    <span className="h-5 w-5 rounded-md bg-blue-50 text-center text-[10px] leading-5 text-blue-600">
-                      ↗
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 w-10 rounded-full bg-slate-200" />
-                  <div className="mt-2 h-1 w-full rounded-full bg-slate-100">
-                    <div className="h-full w-3/5 rounded-full bg-blue-500" />
-                  </div>
-                </div>
+                {portal.stats.map((stat) => {
+                  const style = colorStyles[stat.color];
 
-                <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 sm:p-3">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[8px] text-slate-500 sm:text-[9px]">
-                      Status
-                    </span>
-                    <span className="h-5 w-5 rounded-md bg-indigo-50 text-center text-[10px] leading-5 text-indigo-600">
-                      ↗
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 w-12 rounded-full bg-slate-200" />
-                  <div className="mt-2 h-1 w-full rounded-full bg-slate-100">
-                    <div className="h-full w-4/5 rounded-full bg-indigo-500" />
-                  </div>
-                </div>
+                  return (
+                    <div
+                      key={stat.label}
+                      className="min-w-0 rounded-xl border border-slate-200/80 bg-white p-2.5 sm:p-3"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate text-[8px] text-slate-500 sm:text-[9px]">
+                          {stat.label}
+                        </span>
+
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[10px] ${style.icon}`}
+                        >
+                          ↗
+                        </span>
+                      </div>
+
+                      <div className="mt-2 h-2 w-10 rounded-full bg-slate-200" />
+
+                      <p className="mt-2 truncate text-[7px] text-slate-400 sm:text-[8px]">
+                        {stat.value}
+                      </p>
+
+                      <div className="mt-2 h-1 w-full rounded-full bg-slate-100">
+                        <div
+                          className={`h-full w-3/5 rounded-full ${style.bar}`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
+              {/* Portal overview */}
               <div className="mt-3 rounded-xl border border-slate-200/80 bg-white p-3 sm:mt-4 sm:p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[9px] font-bold text-slate-800 sm:text-[10px]">
-                    Internship overview
+                    {portal.overviewTitle}
                   </span>
-                  <span className="text-[8px] text-slate-400">
-                    Workspace preview
+
+                  <span className="shrink-0 text-[7px] text-slate-400 sm:text-[8px]">
+                    Portal preview
                   </span>
                 </div>
 
                 <div className="mt-4 space-y-3">
-                  {[
-                    ["Application status", "blue", "In progress"],
-                    ["Required documents", "indigo", "Document tracking"],
-                    ["Placement updates", "emerald", "Stay informed"],
-                  ].map(([label, color, status]) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className={`h-7 w-7 shrink-0 rounded-lg bg-${color}-50`}
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-[8px] font-semibold text-slate-700 sm:text-[9px]">
-                            {label}
-                          </p>
-                          <p className="mt-0.5 text-[7px] text-slate-400 sm:text-[8px]">
-                            InternLink workspace
-                          </p>
+                  {portal.overview.map(([label, status, color]) => {
+                    const style = colorStyles[color];
+
+                    return (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={`h-7 w-7 shrink-0 rounded-lg ${style.icon}`}
+                          />
+
+                          <div className="min-w-0">
+                            <p className="truncate text-[8px] font-semibold text-slate-700 sm:text-[9px]">
+                              {label}
+                            </p>
+
+                            <p className="mt-0.5 truncate text-[7px] text-slate-400 sm:text-[8px]">
+                              InternLink workspace
+                            </p>
+                          </div>
                         </div>
+
+                        <span className="max-w-[86px] shrink-0 truncate rounded-full bg-slate-100 px-2 py-1 text-[7px] text-slate-500 sm:max-w-none sm:text-[8px]">
+                          {status}
+                        </span>
                       </div>
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[7px] text-slate-500 sm:text-[8px]">
-                        {status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <p className="mt-3 text-center text-[8px] text-slate-400">
-                Illustrative interface preview · Not live student data
+                Illustrative interface preview · Not live account data
               </p>
             </div>
           </div>
         </div>
+
+        {/* Previous / Next controls */}
+        <div className="flex items-center justify-between gap-2 px-1 pb-1 pt-3 sm:px-2 sm:pt-4">
+          <button
+            type="button"
+            onClick={() => goToPortal(activePortal - 1)}
+            onKeyDown={handleKeyDown}
+            aria-label="Previous portal preview"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:px-4"
+          >
+            <svg
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="m15 18-6-6 6-6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+            <span className="hidden sm:inline">Previous</span>
+          </button>
+
+          <div
+            className="flex items-center justify-center gap-2"
+            aria-label={`Portal ${activePortal + 1} of ${portals.length}: ${
+              portal.label
+            }`}
+            aria-live="polite"
+          >
+            {portals.map((item, index) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => goToPortal(index)}
+                aria-label={`Show ${item.label}`}
+                aria-current={activePortal === index ? "true" : undefined}
+                className={`h-2.5 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                  activePortal === index
+                    ? `w-6 ${colorStyles[item.color].dot}`
+                    : "w-2.5 bg-slate-300 hover:bg-slate-400"
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => goToPortal(activePortal + 1)}
+            onKeyDown={handleKeyDown}
+            aria-label="Next portal preview"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:px-4"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <svg
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <p className="mt-1 text-center text-[9px] font-medium text-slate-400">
+          {activePortal + 1} / {portals.length} · {portal.label}
+        </p>
       </div>
 
       {/* Floating decorative label */}
       <div className="float-slow absolute -left-2 top-10 hidden rounded-2xl border border-white/80 bg-white/95 p-3 shadow-xl shadow-blue-900/10 sm:flex sm:items-center sm:gap-3 md:-left-8">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-          <PortalIcon type="graduation" />
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ${currentStyle.icon}`}
+        >
+          <PortalIcon
+            type={
+              activePortal === 0
+                ? "graduation"
+                : activePortal === 1
+                ? "academic"
+                : "briefcase"
+            }
+          />
         </div>
+
         <div>
-          <p className="text-[10px] font-bold text-slate-800">
-            One connected system
-          </p>
-          <p className="mt-1 text-[9px] text-slate-500">
-            Students · Registrar · Companies
-          </p>
+          <p className="text-[10px] font-bold text-slate-800">{portal.label}</p>
+          <p className="mt-1 text-[9px] text-slate-500">One connected system</p>
         </div>
       </div>
 
@@ -311,6 +540,7 @@ function DashboardPreview() {
               />
             </svg>
           </span>
+
           <div>
             <p className="text-[10px] font-bold text-slate-800">
               Organized workflows
@@ -324,6 +554,7 @@ function DashboardPreview() {
     </div>
   );
 }
+
 
 const Home = () => {
   useEffect(() => {
