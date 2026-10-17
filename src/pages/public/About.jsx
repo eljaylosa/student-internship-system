@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import eljay from "../../assets/images/eljay.jpg";
 import jeush from "../../assets/images/jeush.jpg";
 import jonas from "../../assets/images/jonas.jpg";
-import issa from "../../assets/images/issa.jpg";  
+import issa from "../../assets/images/issa.jpg";
 
 const teamMembers = [
   {
@@ -53,7 +53,7 @@ const stakeholders = [
   },
   {
     number: "02",
-    title: "Registrar Advisers",
+    title: "Registrar",
     description:
       "Review student submissions, manage internship records, monitor application progress, and coordinate requirements efficiently.",
     color: "indigo",
@@ -69,7 +69,7 @@ const stakeholders = [
   },
   {
     number: "03",
-    title: "Company Supervisors",
+    title: "Company",
     description:
       "Manage internship opportunities, coordinate with assigned interns, review student progress, and submit internship evaluations.",
     color: "sky",
@@ -399,8 +399,8 @@ export default function About() {
 
             <p className="mt-6 max-w-xl text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
               Meet InternLink, a web-based Student Internship Management System
-              designed to bring students, registrar advisers, and company
-              supervisors together in one organized digital environment.
+              designed to bring students, registrar, and company
+              together in one organized digital environment.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -534,7 +534,7 @@ export default function About() {
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-slate-800">
-                            Company supervisors
+                            Company
                           </p>
                           <p className="mt-1 text-[11px] text-slate-500">
                             Opportunities & evaluations
@@ -703,7 +703,7 @@ export default function About() {
                 Purpose-built for each role
               </h3>
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Students, registrar advisers, and company supervisors have
+                Students, registrar, and company have
                 different responsibilities. InternLink uses role-based access
                 and dedicated portal workflows to support their respective
                 tasks, from submitting requirements to reviewing internship

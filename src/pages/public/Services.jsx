@@ -52,7 +52,7 @@ const servicesList = [
     details: {
       objectives: [
         "Organize student internship assignments.",
-        "Help track relationships between students, advisers, and companies.",
+        "Help track relationships between students, registrars, and companies.",
         "Keep placement information accessible to authorized personnel.",
       ],
       limitations: [
@@ -66,7 +66,7 @@ const servicesList = [
     category: "COMMUNICATION",
     title: "Role-Based Coordination",
     description:
-      "Connect students, registrar advisers, and company supervisors through role-aware communication and system notifications.",
+      "Connect students, registrar, and company through role-aware communication and system notifications.",
     icon: "⌁",
     accent: "amber",
     details: {
@@ -88,7 +88,7 @@ const capabilities = [
     number: "01",
     title: "Account & access management",
     description:
-      "Role-based access for students, registrar advisers, company supervisors, and authorized administrators.",
+      "Role-based access for students, registrar, company, and authorized administrators.",
   },
   {
     number: "02",
@@ -422,8 +422,7 @@ function Services() {
                     Connected workflows
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Designed to support students, advisers, and company
-                    supervisors.
+                    Designed to support students, registrars, and company.
                   </p>
                 </div>
               </div>
@@ -692,8 +691,8 @@ function Services() {
             </h2>
             <p className="mx-auto mt-4 max-w-2xl leading-7 text-blue-100">
               Bring internship information and coordination together in one
-              platform designed around the needs of students, advisers, and
-              company supervisors.
+              platform designed around the needs of students, registrars, and
+              company.
             </p>
             <a
               href="/about"
