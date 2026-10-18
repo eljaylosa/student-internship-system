@@ -943,7 +943,7 @@ export default function About() {
                   <div className="flex items-center justify-between gap-4 text-xs">
                     <span className="text-blue-200">Submission date</span>
                     <span className="font-semibold text-white">
-                      July 17, 2026
+                      October 18, 2026
                     </span>
                   </div>
                 </div>
