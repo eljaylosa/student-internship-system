@@ -2663,6 +2663,10 @@ export default function Application() {
     navigate("/student/status");
   };
 
+  const handleAIMatchingPage = () => {
+    navigate("/student/ai-matching");
+  }
+
   // =========================================================
   // LOADING
   // =========================================================
@@ -2698,38 +2702,112 @@ export default function Application() {
             HEADER
         =================================================== */}
 
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <p
-                className={`text-xs font-bold uppercase tracking-wider ${
-                  darkMode ? "text-blue-400" : "text-blue-600"
-                }`}
-              >
-                Student Internship
-              </p>
+        <div className="mb-8">
+          <div
+            className={`relative overflow-hidden rounded-2xl border p-5 sm:p-7 ${
+              darkMode
+                ? "bg-slate-900/80 border-slate-700"
+                : "bg-white border-slate-200 shadow-sm"
+            }`}
+          >
+            {/* Subtle decorative background */}
+            <div
+              className={`absolute -right-12 -top-16 h-48 w-48 rounded-full blur-3xl pointer-events-none ${
+                darkMode ? "bg-blue-500/10" : "bg-blue-500/[0.07]"
+              }`}
+            />
 
-              <h1 className="text-2xl sm:text-3xl font-black mt-1">
-                Internship Application
-              </h1>
+            <div className="relative">
+              {/* Heading */}
+              <div className="max-w-2xl">
+                <div
+                  className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] ${
+                    darkMode ? "text-blue-400" : "text-blue-600"
+                  }`}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  Student Internship
+                </div>
 
-              <p
-                className={`text-sm mt-1 ${
-                  darkMode ? "text-slate-400" : "text-slate-500"
+                <h1
+                  className={`mt-3 text-2xl sm:text-3xl font-black tracking-tight ${
+                    darkMode ? "text-white" : "text-slate-900"
+                  }`}
+                >
+                  Internship Application
+                </h1>
+
+                <p
+                  className={`mt-2 text-sm sm:text-base leading-relaxed ${
+                    darkMode ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  Discover internship opportunities, submit your applications,
+                  and keep track of your application progress.
+                </p>
+              </div>
+
+              {/* Divider */}
+              <div
+                className={`my-6 border-t ${
+                  darkMode ? "border-slate-700" : "border-slate-100"
                 }`}
-              >
-                Find an internship opportunity, submit your application, and
-                track your progress.
-              </p>
+              />
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleViewStatusPage}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M8 6h13" />
+                    <path d="M8 12h13" />
+                    <path d="M8 18h13" />
+                    <path d="m3 6 1 1 2-2" />
+                    <path d="m3 12 1 1 2-2" />
+                    <path d="m3 18 1 1 2-2" />
+                  </svg>
+                  View Full Status
+                </button>
+
+                {/* Future AI matching feature */}
+                <button
+                  type="button"
+                  onClick={handleAIMatchingPage}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition ${
+                    darkMode
+                      ? "border-purple-400/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
+                      : "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                  }`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Z" />
+                    <path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z" />
+                  </svg>
+                  Match with AI
+                </button>
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={handleViewStatusPage}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition"
-            >
-              View Full Status
-            </button>
           </div>
         </div>
 

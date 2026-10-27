@@ -53,6 +53,7 @@ import StudentSettings from "./pages/student/Settings.jsx";
 import StudentEvaluation from "./pages/student/Evaluation.jsx";
 import ViewStatus from "./pages/student/ViewStatus";
 import Certificate from "./pages/student/Certificate";
+import AIMatching from "./pages/student/AIMatching";
 
 // =========================================================
 // REGISTRAR PORTAL
@@ -267,23 +268,23 @@ function AppContent() {
   const isPortal =
     isStudentPortal || isRegistrarPortal || isCompanyPortal || isAdminPortal;
 
-    const normalizedPath = location.pathname.replace(/\/+$/, "") || "/";
+  const normalizedPath = location.pathname.replace(/\/+$/, "") || "/";
 
-    const publicChatbotPaths = [
-      "/",
-      "/home",
-      "/about",
-      "/services",
-      "/contact",
-      "/signup",
-      "/login",
-      "/forgot-password",
-      "/reset-password",
-      "/terms",
-      "/privacy",
-    ];
+  const publicChatbotPaths = [
+    "/",
+    "/home",
+    "/about",
+    "/services",
+    "/contact",
+    "/signup",
+    "/login",
+    "/forgot-password",
+    "/reset-password",
+    "/terms",
+    "/privacy",
+  ];
 
-    const showChatbot = publicChatbotPaths.includes(normalizedPath);
+  const showChatbot = publicChatbotPaths.includes(normalizedPath);
 
   return (
     <MaintenanceGate>
@@ -348,6 +349,7 @@ function AppContent() {
             <Route path="evaluation" element={<StudentEvaluation />} />
             <Route path="messages" element={<StudentMessages />} />
             <Route path="settings" element={<StudentSettings />} />
+            <Route path="ai-matching" element={<AIMatching />} />
           </Route>
 
           {/* =====================================================
