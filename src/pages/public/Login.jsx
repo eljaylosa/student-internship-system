@@ -47,6 +47,7 @@ const Login = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // =========================================================
   // GET ROLE-SPECIFIC SUPABASE CLIENT
@@ -689,23 +690,73 @@ const Login = () => {
 
             {/* PASSWORD */}
 
+            {/* PASSWORD */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                 Password
               </label>
 
-              <input
-                type="password"
-                required
-                disabled={isSubmitting}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={forms[activeRole].password}
-                onChange={(e) =>
-                  handleChange(activeRole, "password", e.target.value)
-                }
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  disabled={isSubmitting}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={forms[activeRole].password}
+                  onChange={(e) =>
+                    handleChange(activeRole, "password", e.target.value)
+                  }
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 pr-12 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800 focus:bg-white transition disabled:opacity-60"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  disabled={isSubmitting}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 z-10 flex items-center justify-center w-12 text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 rounded-r-xl disabled:opacity-50"
+                >
+                  {showPassword ? (
+                    // Eye with slash: password is visible
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 3l18 18" />
+                      <path d="M10.58 10.59a2 2 0 002.83 2.83" />
+                      <path d="M9.88 5.09A10.76 10.76 0 0112 4.88c5.23 0 8.63 4.05 9.5 7.12a11.77 11.77 0 01-4.16 5.36" />
+                      <path d="M6.61 6.61C4.4 8.03 3.02 10.03 2.5 12c.87 3.07 4.27 7.12 9.5 7.12 1.17 0 2.25-.23 3.23-.63" />
+                    </svg>
+                  ) : (
+                    // Eye: password is hidden
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* LOGIN BUTTON */}
