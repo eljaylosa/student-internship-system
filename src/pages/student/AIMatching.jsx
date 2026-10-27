@@ -146,6 +146,25 @@ export default function AIMatching() {
     }
   };
 
+  const handleApplyNow = (match) => {
+    if (!match?.opportunity_id) {
+      setError("Unable to open this internship. Please try again.");
+      return;
+    }
+
+    navigate("/student/application", {
+      state: {
+        selectedOpportunityId: match.opportunity_id,
+        selectedOpportunity: {
+          id: match.opportunity_id,
+          title: match.title || "Internship Opportunity",
+          company_name: match.company_name || "Company not specified",
+        },
+        source: "ai-matching",
+      },
+    });
+  };
+
   const handleMatchResume = async () => {
     if (!resume || isMatching) return;
 
@@ -932,6 +951,22 @@ export default function AIMatching() {
                             </p>
                           </div>
                         )}
+
+                        <div className="mt-5 flex flex-col gap-3 border-t border-slate-200/70 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+                          <p className={`text-xs leading-5 ${mutedText}`}>
+                            Interested in this opportunity? Continue to the
+                            application page.
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => handleApplyNow(match)}
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                          >
+                            Apply Now
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </article>
