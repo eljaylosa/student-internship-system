@@ -196,7 +196,7 @@ const Footer = () => {
                 <div>
                   <p className="text-slate-500">Submitted to</p>
                   <p className="mt-1 text-slate-300">
-                    Prof. Benjamin III F. Delgado
+                    Prof. Benjamin F. Delgado III
                   </p>
                 </div>
               </div>

@@ -929,7 +929,7 @@ export default function About() {
                       Submitted to
                     </p>
                     <p className="mt-2 text-lg font-semibold text-white">
-                      Prof. Benjamin III F. Delgado
+                      Prof. Benjamin F. Delgado III
                     </p>
                     <p className="mt-2 text-xs leading-6 text-blue-100/80">
                       Software Engineering 1
