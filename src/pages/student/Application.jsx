@@ -2782,7 +2782,7 @@ export default function Application() {
                 </button>
 
                 {/* Future AI matching feature */}
-                {/* <button
+                <button
                   type="button"
                   onClick={handleAIMatchingPage}
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-bold transition ${
@@ -2805,7 +2805,7 @@ export default function Application() {
                     <path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14Z" />
                   </svg>
                   Match with AI
-                </button> */}
+                </button>
               </div>
             </div>
           </div>

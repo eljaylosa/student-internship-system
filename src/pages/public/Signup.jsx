@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import { INDUSTRIES } from "../../constants/industries";
 import {
@@ -77,8 +77,16 @@ const getNationalPhoneMaxLength = (country) => {
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeRole = location.pathname.endsWith("/registrar")
+    ? "registrar"
+    : location.pathname.endsWith("/company")
+    ? "company"
+    : "student";
 
-  const [activeRole, setActiveRole] = useState("student");
+  const activeRole = routeRole;
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSupportingInfo, setShowSupportingInfo] = useState(false);
 
@@ -1980,20 +1988,6 @@ const SignUp = () => {
 
   /*
    * =========================================================
-   * ROLE CHANGE
-   * =========================================================
-   */
-
-  const handleRoleChange = (role) => {
-    setActiveRole(role);
-
-    setVerification({
-      ...emptyVerification,
-    });
-  };
-
-  /*
-   * =========================================================
    * RENDER
    * =========================================================
    */
@@ -2014,23 +2008,52 @@ const SignUp = () => {
           </p>
         </div>
 
-        {/* ROLE TABS */}
-
-        <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-xl w-full mb-8 shadow-inner border border-slate-200">
-          {portals.map((portal) => (
-            <button
-              key={portal.key}
-              type="button"
-              onClick={() => handleRoleChange(portal.key)}
-              className={`py-3 px-2 rounded-lg text-xs font-bold tracking-wider transition-all duration-200 uppercase ${
-                activeRole === portal.key
-                  ? `bg-gradient-to-r ${portal.accent} text-white shadow-md scale-[1.02]`
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white"
-              }`}
-            >
-              {portal.label}
-            </button>
-          ))}
+        {/* REGISTRATION ROLE / ALTERNATE PORTALS */}
+        <div className="w-full mb-8 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 shrink-0 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center shadow-sm">
+              {activePortal.icon}
+            </div>
+            <div className="min-w-0">
+              <p
+                className={`text-[10px] font-bold uppercase tracking-[0.18em] ${activePortal.activeText}`}
+              >
+                {activePortal.label} Portal
+              </p>
+              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                Register as a {activePortal.label}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Complete the steps below to submit your SIMS registration.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-4 text-xs font-semibold">
+            <span className="text-slate-500">
+              Registering for another portal?
+            </span>
+            {activeRole !== "student" && (
+              <Link to="/signup" className="text-blue-700 hover:underline">
+                Student
+              </Link>
+            )}
+            {activeRole !== "registrar" && (
+              <Link
+                to="/signup/registrar"
+                className="text-emerald-700 hover:underline"
+              >
+                Registrar Adviser
+              </Link>
+            )}
+            {activeRole !== "company" && (
+              <Link
+                to="/signup/company"
+                className="text-purple-700 hover:underline"
+              >
+                Company
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* FORM CARD */}
@@ -2055,851 +2078,1079 @@ const SignUp = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* PERSONAL INFORMATION */}
-
-            <section className={sectionClass}>
-              <div className="mb-5">
-                <h4 className="text-sm font-bold text-slate-800">
-                  Personal Information
-                </h4>
-
-                <p className="text-xs text-slate-400 mt-1">
-                  Provide your legal name and contact information.
-                </p>
+            <div className="mb-7">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-700">
+                  Step {currentStep} of {totalSteps}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {
+                    [
+                      "Personal Information",
+                      "Role Details & Documents",
+                      "Verification & Security",
+                      "Review & Submit",
+                    ][currentStep - 1]
+                  }
+                </span>
               </div>
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full bg-gradient-to-r ${activePortal.accent} transition-all duration-300`}
+                  style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-4 gap-2 mt-3">
+                {[1, 2, 3, 4].map((step) => (
+                  <button
+                    key={step}
+                    type="button"
+                    onClick={() => step < currentStep && setCurrentStep(step)}
+                    className={`h-8 rounded-lg text-xs font-bold transition ${
+                      currentStep === step
+                        ? `bg-gradient-to-r ${activePortal.accent} text-white`
+                        : currentStep > step
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {step}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* PERSONAL INFORMATION */}
+            {currentStep === 1 && (
+              <section className={sectionClass}>
+                <div className="mb-5">
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Personal Information
+                  </h4>
 
-              <div className="space-y-5">
-                {renderNameFields()}
-
-                {/* EMAIL */}
-
-                <div>
-                  <label className={labelClass}>Email Address</label>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="email"
-                      required
-                      placeholder="Enter your email address"
-                      value={currentForm.email}
-                      disabled={
-                        verification.isCodeSent && !verification.isVerified
-                      }
-                      onChange={(event) =>
-                        handleChange(activeRole, "email", event.target.value)
-                      }
-                      className={`${inputClass} ${
-                        verification.isVerified
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                          : ""
-                      }`}
-                    />
-                  </div>
-
-                  <p className="text-[10px] text-slate-400 mt-1.5">
-                    This email will be used for account verification and
-                    important SIMS notifications.
+                  <p className="text-xs text-slate-400 mt-1">
+                    Provide your legal name and contact information.
                   </p>
-
-                  {renderEmailVerification()}
                 </div>
 
-                {/* PHONE */}
+                <div className="space-y-5">
+                  {renderNameFields()}
 
-                {renderPhoneInput({
-                  role: activeRole,
-                  field: "phone",
-                  countryKey:
-                    activeRole === "student"
-                      ? "studentPhone"
-                      : activeRole === "registrar"
-                      ? "registrarPhone"
-                      : "companyPhone",
-                  label: "Mobile Number",
-                })}
-              </div>
-            </section>
+                  {/* EMAIL */}
 
-            {/* =================================================
-                STUDENT INFORMATION
-            ================================================= */}
+                  <div>
+                    <label className={labelClass}>Email Address</label>
 
-            {activeRole === "student" && (
-              <>
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Student Information
-                    </h4>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      Enter your official university information.
-                    </p>
-                  </div>
-
-                  <div className="space-y-5">
-                    {renderSchoolField()}
-
-                    <div>
-                      <label className={labelClass}>Student ID number</label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 2024-00123"
-                        value={currentForm.studentId}
-                        onChange={(event) =>
-                          handleChange(
-                            "student",
-                            "studentId",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>College / Department</label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. College of Information and Communications Technology"
-                        value={currentForm.department}
-                        onChange={(event) =>
-                          handleChange(
-                            "student",
-                            "department",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Program</label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. BS Information Technology"
-                        value={currentForm.program}
-                        onChange={(event) =>
-                          handleChange("student", "program", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Year Level</label>
-
-                      <select
-                        required
-                        value={currentForm.yearLevel}
-                        onChange={(event) =>
-                          handleChange(
-                            "student",
-                            "yearLevel",
-                            event.target.value
-                          )
-                        }
-                        className={`${inputClass} cursor-pointer`}
-                      >
-                        <option value="" disabled>
-                          Select Year Level
-                        </option>
-
-                        <option value="1st Year">1st Year</option>
-
-                        <option value="2nd Year">2nd Year</option>
-
-                        <option value="3rd Year">3rd Year</option>
-
-                        <option value="4th Year">4th Year</option>
-
-                        <option value="5th Year">5th Year</option>
-
-                        <option value="6th Year">6th Year</option>
-
-                        <option value="7th Year">7th Year</option>
-
-                        <option value="Graduate / Master's">
-                          Graduate / Master's
-                        </option>
-
-                        <option value="Doctoral / PhD">Doctoral / PhD</option>
-
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                </section>
-
-                {/* STUDENT DOCUMENTS */}
-
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Student Verification Documents
-                    </h4>
-
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                      Upload your current university documents.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className={labelClass}>
-                        Certificate of Registration (COR)
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "student",
-                            "cor",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Student ID
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "student",
-                            "studentIdDocument",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-
-            {/* =================================================
-                REGISTRAR INFORMATION
-            ================================================= */}
-
-            {activeRole === "registrar" && (
-              <>
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Registrar Information
-                    </h4>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      Enter your official university employment information.
-                    </p>
-                  </div>
-
-                  <div className="space-y-5">
-                    {renderSchoolField()}
-
-                    <div>
-                      <label className={labelClass}>Employee ID</label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. EMP-99231"
-                        value={currentForm.employeeId}
-                        onChange={(event) =>
-                          handleChange(
-                            "registrar",
-                            "employeeId",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>College / Department</label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. College of Information Technology"
-                        value={currentForm.department}
-                        onChange={(event) =>
-                          handleChange(
-                            "registrar",
-                            "department",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Position / Designation
-                      </label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Registrar / University Registrar"
-                        value={currentForm.position}
-                        onChange={(event) =>
-                          handleChange(
-                            "registrar",
-                            "position",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* REGISTRAR DOCUMENTS */}
-
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Registrar Verification Documents
-                    </h4>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      Upload your university credentials and authorization
-                      documents.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className={labelClass}>
-                        University / Employee ID
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "registrar",
-                            "employeeIdDocument",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Proof of Appointment / Authorization Letter
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "registrar",
-                            "appointmentLetter",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-
-            {/* =================================================
-                COMPANY INFORMATION
-            ================================================= */}
-
-            {activeRole === "company" && (
-              <>
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Company Information
-                    </h4>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      Provide the official information of your organization.
-                    </p>
-                  </div>
-
-                  <div className="space-y-5">
-                    <div>
-                      <label className={labelClass}>
-                        Registered Company Name
-                      </label>
-
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. ABC Technologies Inc."
-                        value={currentForm.companyName}
-                        onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "companyName",
-                            event.target.value
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Company Email Address
-                      </label>
-
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <input
                         type="email"
                         required
-                        placeholder="hr@company.com"
-                        value={currentForm.companyEmail}
-                        onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "companyEmail",
-                            event.target.value
-                          )
+                        placeholder="Enter your email address"
+                        value={currentForm.email}
+                        disabled={
+                          verification.isCodeSent && !verification.isVerified
                         }
-                        className={inputClass}
+                        onChange={(event) =>
+                          handleChange(activeRole, "email", event.target.value)
+                        }
+                        className={`${inputClass} ${
+                          verification.isVerified
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                            : ""
+                        }`}
                       />
                     </div>
 
-                    {/* COMPANY CONTACT NUMBER */}
+                    <p className="text-[10px] text-slate-400 mt-1.5">
+                      This email will be used for account verification and
+                      important SIMS notifications.
+                    </p>
 
-                    {renderPhoneInput({
-                      role: "company",
-                      field: "companyPhone",
-                      countryKey: "companyContact",
-                      label: "Company Contact Number",
-                    })}
-
-                    <div>
-                      <label className={labelClass}>
-                        Industry
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-
-                      <select
-                        required
-                        value={currentForm.industry}
-                        onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "industry",
-                            event.target.value
-                          )
-                        }
-                        className={`${inputClass} cursor-pointer`}
-                      >
-                        <option value="" disabled>
-                          Select your industry
-                        </option>
-
-                        {INDUSTRIES.map((industry) => (
-                          <option key={industry} value={industry}>
-                            {industry}
-                          </option>
-                        ))}
-                      </select>
-
-                      <p className="text-[10px] text-slate-400 mt-1.5">
-                        Select the industry that best represents your company.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>Company Address</label>
-
-                      <textarea
-                        required
-                        rows="3"
-                        placeholder="Complete business address"
-                        value={currentForm.companyAddress}
-                        onChange={(event) =>
-                          handleChange(
-                            "company",
-                            "companyAddress",
-                            event.target.value
-                          )
-                        }
-                        className={`${inputClass} resize-none`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Company Website
-                        <span className="ml-1 text-slate-400 font-medium normal-case">
-                          (Optional)
-                        </span>
-                      </label>
-
-                      <input
-                        type="url"
-                        placeholder="https://company.com"
-                        value={currentForm.website}
-                        onChange={(event) =>
-                          handleChange("company", "website", event.target.value)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* COMPANY REPRESENTATIVE */}
-
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Company Representative
-                    </h4>
+                    {renderEmailVerification()}
                   </div>
 
-                  <div>
-                    <label className={labelClass}>Position / Designation</label>
+                  {/* PHONE */}
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. HR Manager / Company Head"
-                      value={currentForm.designation}
-                      onChange={(event) =>
-                        handleChange(
-                          "company",
-                          "designation",
-                          event.target.value
-                        )
-                      }
-                      className={inputClass}
-                    />
-                  </div>
-                </section>
+                  {renderPhoneInput({
+                    role: activeRole,
+                    field: "phone",
+                    countryKey:
+                      activeRole === "student"
+                        ? "studentPhone"
+                        : activeRole === "registrar"
+                        ? "registrarPhone"
+                        : "companyPhone",
+                    label: "Mobile Number",
+                  })}
+                </div>
+              </section>
+            )}
 
-                {/* COMPANY DOCUMENTS */}
+            {currentStep === 2 && (
+              <>
+                {/* =================================================
+                STUDENT INFORMATION
+            ================================================= */}
 
-                <section className={sectionClass}>
-                  <div className="mb-5">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      Company Verification Documents
-                    </h4>
-                  </div>
+                {activeRole === "student" && (
+                  <>
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Student Information
+                        </h4>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className={labelClass}>
-                        Business Registration *
-                      </label>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Enter your official university information.
+                        </p>
+                      </div>
 
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "company",
-                            "businessRegistration",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
+                      <div className="space-y-5">
+                        {renderSchoolField()}
 
-                    <div>
-                      <label className={labelClass}>BIR Registration *</label>
+                        <div>
+                          <label className={labelClass}>
+                            Student ID number
+                          </label>
 
-                      <input
-                        type="file"
-                        required
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "company",
-                            "birRegistration",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>
-                        Supporting Document
-                        <span className="ml-1 text-slate-400 font-medium normal-case">
-                          (Optional)
-                        </span>
-                        <span className="relative inline-flex ml-1 group">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowSupportingInfo((prev) => !prev)
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. 2024-00123"
+                            value={currentForm.studentId}
+                            onChange={(event) =>
+                              handleChange(
+                                "student",
+                                "studentId",
+                                event.target.value
+                              )
                             }
-                            className="flex items-center justify-center w-4 h-4 rounded-full border border-slate-400 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-help"
-                            aria-label="Show supporting document examples"
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            College / Department
+                          </label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. College of Information and Communications Technology"
+                            value={currentForm.department}
+                            onChange={(event) =>
+                              handleChange(
+                                "student",
+                                "department",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>Program</label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. BS Information Technology"
+                            value={currentForm.program}
+                            onChange={(event) =>
+                              handleChange(
+                                "student",
+                                "program",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>Year Level</label>
+
+                          <select
+                            required
+                            value={currentForm.yearLevel}
+                            onChange={(event) =>
+                              handleChange(
+                                "student",
+                                "yearLevel",
+                                event.target.value
+                              )
+                            }
+                            className={`${inputClass} cursor-pointer`}
                           >
-                            ?
-                          </button>
+                            <option value="" disabled>
+                              Select Year Level
+                            </option>
 
-                          <span
-                            className={`absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-80 sm:w-96 max-h-80 overflow-y-auto px-4 py-3 rounded-lg bg-slate-800 text-white text-xs font-normal normal-case leading-relaxed shadow-lg z-50 transition-all duration-200 ${
-                              showSupportingInfo
-                                ? "opacity-100 visible"
-                                : "opacity-0 invisible pointer-events-none"
-                            } md:group-hover:opacity-100 md:group-hover:visible`}
+                            <option value="1st Year">1st Year</option>
+
+                            <option value="2nd Year">2nd Year</option>
+
+                            <option value="3rd Year">3rd Year</option>
+
+                            <option value="4th Year">4th Year</option>
+
+                            <option value="5th Year">5th Year</option>
+
+                            <option value="6th Year">6th Year</option>
+
+                            <option value="7th Year">7th Year</option>
+
+                            <option value="Graduate / Master's">
+                              Graduate / Master's
+                            </option>
+
+                            <option value="Doctoral / PhD">
+                              Doctoral / PhD
+                            </option>
+
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* STUDENT DOCUMENTS */}
+
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Student Verification Documents
+                        </h4>
+
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          Upload your current university documents.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className={labelClass}>
+                            Certificate of Registration (COR)
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "student",
+                                "cor",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            Student ID
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "student",
+                                "studentIdDocument",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {/* =================================================
+                REGISTRAR INFORMATION
+            ================================================= */}
+
+                {activeRole === "registrar" && (
+                  <>
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Registrar Information
+                        </h4>
+
+                        <p className="text-xs text-slate-400 mt-1">
+                          Enter your official university employment information.
+                        </p>
+                      </div>
+
+                      <div className="space-y-5">
+                        {renderSchoolField()}
+
+                        <div>
+                          <label className={labelClass}>Employee ID</label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. EMP-99231"
+                            value={currentForm.employeeId}
+                            onChange={(event) =>
+                              handleChange(
+                                "registrar",
+                                "employeeId",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            College / Department
+                          </label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. College of Information Technology"
+                            value={currentForm.department}
+                            onChange={(event) =>
+                              handleChange(
+                                "registrar",
+                                "department",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            Position / Designation
+                          </label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Registrar / University Registrar"
+                            value={currentForm.position}
+                            onChange={(event) =>
+                              handleChange(
+                                "registrar",
+                                "position",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* REGISTRAR DOCUMENTS */}
+
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Registrar Verification Documents
+                        </h4>
+
+                        <p className="text-xs text-slate-400 mt-1">
+                          Upload your university credentials and authorization
+                          documents.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className={labelClass}>
+                            University / Employee ID
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "registrar",
+                                "employeeIdDocument",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            Proof of Appointment / Authorization Letter
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "registrar",
+                                "appointmentLetter",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
+
+                {/* =================================================
+                COMPANY INFORMATION
+            ================================================= */}
+
+                {activeRole === "company" && (
+                  <>
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Company Information
+                        </h4>
+
+                        <p className="text-xs text-slate-400 mt-1">
+                          Provide the official information of your organization.
+                        </p>
+                      </div>
+
+                      <div className="space-y-5">
+                        <div>
+                          <label className={labelClass}>
+                            Registered Company Name
+                          </label>
+
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. ABC Technologies Inc."
+                            value={currentForm.companyName}
+                            onChange={(event) =>
+                              handleChange(
+                                "company",
+                                "companyName",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            Company Email Address
+                          </label>
+
+                          <input
+                            type="email"
+                            required
+                            placeholder="hr@company.com"
+                            value={currentForm.companyEmail}
+                            onChange={(event) =>
+                              handleChange(
+                                "company",
+                                "companyEmail",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+
+                        {/* COMPANY CONTACT NUMBER */}
+
+                        {renderPhoneInput({
+                          role: "company",
+                          field: "companyPhone",
+                          countryKey: "companyContact",
+                          label: "Company Contact Number",
+                        })}
+
+                        <div>
+                          <label className={labelClass}>
+                            Industry
+                            <span className="text-red-500 ml-1">*</span>
+                          </label>
+
+                          <select
+                            required
+                            value={currentForm.industry}
+                            onChange={(event) =>
+                              handleChange(
+                                "company",
+                                "industry",
+                                event.target.value
+                              )
+                            }
+                            className={`${inputClass} cursor-pointer`}
                           >
-                            <span className="block font-semibold text-sm mb-2">
-                              Supporting Document Examples
+                            <option value="" disabled>
+                              Select your industry
+                            </option>
+
+                            {INDUSTRIES.map((industry) => (
+                              <option key={industry} value={industry}>
+                                {industry}
+                              </option>
+                            ))}
+                          </select>
+
+                          <p className="text-[10px] text-slate-400 mt-1.5">
+                            Select the industry that best represents your
+                            company.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>Company Address</label>
+
+                          <textarea
+                            required
+                            rows="3"
+                            placeholder="Complete business address"
+                            value={currentForm.companyAddress}
+                            onChange={(event) =>
+                              handleChange(
+                                "company",
+                                "companyAddress",
+                                event.target.value
+                              )
+                            }
+                            className={`${inputClass} resize-none`}
+                          />
+                        </div>
+
+                        <div>
+                          <label className={labelClass}>
+                            Company Website
+                            <span className="ml-1 text-slate-400 font-medium normal-case">
+                              (Optional)
                             </span>
+                          </label>
 
-                            <ol className="list-decimal list-inside space-y-1.5 text-slate-200">
-                              <li>
-                                <span className="font-medium text-white">
-                                  Company Profile / Company Information Sheet
-                                </span>{" "}
-                                — basic company details, services, address,
-                                contact person
-                              </li>
+                          <input
+                            type="url"
+                            placeholder="https://company.com"
+                            value={currentForm.website}
+                            onChange={(event) =>
+                              handleChange(
+                                "company",
+                                "website",
+                                event.target.value
+                              )
+                            }
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </section>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Mayor’s Permit / Business Permit
-                                </span>{" "}
-                                — if hindi ito already your required Business
-                                Permit
-                              </li>
+                    {/* COMPANY REPRESENTATIVE */}
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  DTI Certificate of Business Name Registration
-                                </span>{" "}
-                                — for sole proprietorship
-                              </li>
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Company Representative
+                        </h4>
+                      </div>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  SEC Certificate of Registration / Articles of
-                                  Incorporation
-                                </span>{" "}
-                                — for corporations
-                              </li>
+                      <div>
+                        <label className={labelClass}>
+                          Position / Designation
+                        </label>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  BIR Certificate of Registration (Form 2303)
-                                </span>{" "}
-                                — if not already required
-                              </li>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. HR Manager / Company Head"
+                          value={currentForm.designation}
+                          onChange={(event) =>
+                            handleChange(
+                              "company",
+                              "designation",
+                              event.target.value
+                            )
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                    </section>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Barangay Business Clearance
-                                </span>
-                              </li>
+                    {/* COMPANY DOCUMENTS */}
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Organizational Chart
-                                </span>{" "}
-                                — useful for larger companies
-                              </li>
+                    <section className={sectionClass}>
+                      <div className="mb-5">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Company Verification Documents
+                        </h4>
+                      </div>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Proof of Office/Business Address
-                                </span>{" "}
-                                — lease agreement, utility bill, etc.
-                              </li>
+                      <div className="space-y-4">
+                        <div>
+                          <label className={labelClass}>
+                            Business Registration *
+                          </label>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Company Accreditation/Certification
-                                </span>{" "}
-                                — if applicable
-                              </li>
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "company",
+                                "businessRegistration",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Government-issued accreditation or license
-                                </span>{" "}
-                                — if the company's industry requires one
-                              </li>
+                        <div>
+                          <label className={labelClass}>
+                            BIR Registration *
+                          </label>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Authorization Letter
-                                </span>{" "}
-                                — if the person registering isn't the
-                                owner/company head
-                              </li>
+                          <input
+                            type="file"
+                            required
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "company",
+                                "birRegistration",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
 
-                              <li>
-                                <span className="font-medium text-white">
-                                  Company ID of Authorized Representative
-                                </span>
-                              </li>
-
-                              <li>
-                                <span className="font-medium text-white">
-                                  Partnership Agreement
-                                </span>{" "}
-                                — for partnerships
-                              </li>
-
-                              <li>
-                                <span className="font-medium text-white">
-                                  Board Resolution / Secretary's Certificate
-                                </span>{" "}
-                                — if needed to establish authorization
-                              </li>
-
-                              <li>
-                                <span className="font-medium text-white">
-                                  Other official company documents
-                                </span>{" "}
-                                relevant to verification
-                              </li>
-                            </ol>
-
-                            <span className="block mt-3 pt-2 border-t border-slate-600 text-slate-300 italic">
-                              These documents are optional. Upload only
-                              documents that are applicable and may help verify
-                              your company.
+                        <div>
+                          <label className={labelClass}>
+                            Supporting Document
+                            <span className="ml-1 text-slate-400 font-medium normal-case">
+                              (Optional)
                             </span>
+                            <span className="relative inline-flex ml-1 group">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowSupportingInfo((prev) => !prev)
+                                }
+                                className="flex items-center justify-center w-4 h-4 rounded-full border border-slate-400 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-help"
+                                aria-label="Show supporting document examples"
+                              >
+                                ?
+                              </button>
 
-                            <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-                          </span>
-                        </span>
-                      </label>
+                              <span
+                                className={`absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-80 sm:w-96 max-h-80 overflow-y-auto px-4 py-3 rounded-lg bg-slate-800 text-white text-xs font-normal normal-case leading-relaxed shadow-lg z-50 transition-all duration-200 ${
+                                  showSupportingInfo
+                                    ? "opacity-100 visible"
+                                    : "opacity-0 invisible pointer-events-none"
+                                } md:group-hover:opacity-100 md:group-hover:visible`}
+                              >
+                                <span className="block font-semibold text-sm mb-2">
+                                  Supporting Document Examples
+                                </span>
 
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(event) =>
-                          handleFileChange(
-                            "company",
-                            "supportingDocument",
-                            event.target.files?.[0] || null
-                          )
-                        }
-                        className={fileInputClass}
-                      />
-                    </div>
-                  </div>
-                </section>
+                                <ol className="list-decimal list-inside space-y-1.5 text-slate-200">
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Company Profile / Company Information
+                                      Sheet
+                                    </span>{" "}
+                                    — basic company details, services, address,
+                                    contact person
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Mayor’s Permit / Business Permit
+                                    </span>{" "}
+                                    — if hindi ito already your required
+                                    Business Permit
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      DTI Certificate of Business Name
+                                      Registration
+                                    </span>{" "}
+                                    — for sole proprietorship
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      SEC Certificate of Registration / Articles
+                                      of Incorporation
+                                    </span>{" "}
+                                    — for corporations
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      BIR Certificate of Registration (Form
+                                      2303)
+                                    </span>{" "}
+                                    — if not already required
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Barangay Business Clearance
+                                    </span>
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Organizational Chart
+                                    </span>{" "}
+                                    — useful for larger companies
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Proof of Office/Business Address
+                                    </span>{" "}
+                                    — lease agreement, utility bill, etc.
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Company Accreditation/Certification
+                                    </span>{" "}
+                                    — if applicable
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Government-issued accreditation or license
+                                    </span>{" "}
+                                    — if the company's industry requires one
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Authorization Letter
+                                    </span>{" "}
+                                    — if the person registering isn't the
+                                    owner/company head
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Company ID of Authorized Representative
+                                    </span>
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Partnership Agreement
+                                    </span>{" "}
+                                    — for partnerships
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Board Resolution / Secretary's Certificate
+                                    </span>{" "}
+                                    — if needed to establish authorization
+                                  </li>
+
+                                  <li>
+                                    <span className="font-medium text-white">
+                                      Other official company documents
+                                    </span>{" "}
+                                    relevant to verification
+                                  </li>
+                                </ol>
+
+                                <span className="block mt-3 pt-2 border-t border-slate-600 text-slate-300 italic">
+                                  These documents are optional. Upload only
+                                  documents that are applicable and may help
+                                  verify your company.
+                                </span>
+
+                                <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </span>
+                            </span>
+                          </label>
+
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(event) =>
+                              handleFileChange(
+                                "company",
+                                "supportingDocument",
+                                event.target.files?.[0] || null
+                              )
+                            }
+                            className={fileInputClass}
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                )}
               </>
             )}
 
-            {/* VERIFICATION NOTICE */}
+            {currentStep === 3 && (
+              <>
+                {/* VERIFICATION NOTICE */}
 
-            {renderVerificationNotice()}
+                {renderVerificationNotice()}
 
-            {/* SECURITY */}
+                {/* SECURITY */}
 
-            <section className={sectionClass}>
-              <div className="mb-5">
-                <h4 className="text-sm font-bold text-slate-800">
-                  Account Security
-                </h4>
+                <section className={sectionClass}>
+                  <div className="mb-5">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      Account Security
+                    </h4>
 
-                <p className="text-xs text-slate-400 mt-1">
-                  Create the password you will use to sign in to SIMS.
-                </p>
-              </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Create the password you will use to sign in to SIMS.
+                    </p>
+                  </div>
 
-              <div className="space-y-5">{renderPasswordFields()}</div>
-            </section>
+                  <div className="space-y-5">{renderPasswordFields()}</div>
+                </section>
 
-            {/* TERMS */}
+                {/* TERMS */}
 
-            <div className="flex items-start gap-3 pt-1">
-              <input
-                type="checkbox"
-                required
-                checked={currentForm.agreeTerms}
-                onChange={(event) =>
-                  handleChange(activeRole, "agreeTerms", event.target.checked)
-                }
-                className="mt-1 h-4 w-4 rounded border-slate-300"
-              />
+                <div className="flex items-start gap-3 pt-1">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={currentForm.agreeTerms}
+                    onChange={(event) =>
+                      handleChange(
+                        activeRole,
+                        "agreeTerms",
+                        event.target.checked
+                      )
+                    }
+                    className="mt-1 h-4 w-4 rounded border-slate-300"
+                  />
 
-              <label className="text-xs text-slate-500 leading-relaxed">
-                I agree to the{" "}
-                <Link
-                  to="/terms"
-                  className="font-semibold text-slate-800 hover:underline"
+                  <label className="text-xs text-slate-500 leading-relaxed">
+                    I agree to the{" "}
+                    <Link
+                      to="/terms"
+                      className="font-semibold text-slate-800 hover:underline"
+                    >
+                      Terms & Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      to="/privacy"
+                      className="font-semibold text-slate-800 hover:underline"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </label>
+                </div>
+              </>
+            )}
+
+            {currentStep === 4 && (
+              <>
+                <section className={sectionClass}>
+                  <h4 className="text-sm font-bold text-slate-800 mb-2">
+                    Review Your Registration
+                  </h4>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Please review your details before submitting your
+                    registration.
+                  </p>
+                  <div className="space-y-2 text-sm text-slate-600">
+                    <p>
+                      <strong>Name:</strong>{" "}
+                      {[
+                        currentForm.firstName,
+                        currentForm.middleInitial,
+                        currentForm.lastName,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    </p>
+                    <p>
+                      <strong>Email:</strong> {currentForm.email}
+                    </p>
+                    <p>
+                      <strong>Mobile:</strong> {currentForm.phone}
+                    </p>
+                    {activeRole !== "company" && (
+                      <p>
+                        <strong>School:</strong>{" "}
+                        {schools.find(
+                          (school) => school.id === currentForm.schoolId
+                        )?.name || "Not selected"}
+                      </p>
+                    )}
+                    {activeRole === "student" && (
+                      <>
+                        <p>
+                          <strong>Student ID:</strong> {currentForm.studentId}
+                        </p>
+                        <p>
+                          <strong>Program:</strong> {currentForm.program}
+                        </p>
+                        <p>
+                          <strong>Year Level:</strong> {currentForm.yearLevel}
+                        </p>
+                      </>
+                    )}
+                    {activeRole === "registrar" && (
+                      <>
+                        <p>
+                          <strong>Employee ID:</strong> {currentForm.employeeId}
+                        </p>
+                        <p>
+                          <strong>Position:</strong> {currentForm.position}
+                        </p>
+                      </>
+                    )}
+                    {activeRole === "company" && (
+                      <>
+                        <p>
+                          <strong>Company:</strong> {currentForm.companyName}
+                        </p>
+                        <p>
+                          <strong>Company Email:</strong>{" "}
+                          {currentForm.companyEmail}
+                        </p>
+                        <p>
+                          <strong>Industry:</strong> {currentForm.industry}
+                        </p>
+                        <p>
+                          <strong>Designation:</strong>{" "}
+                          {currentForm.designation}
+                        </p>
+                      </>
+                    )}
+                    <p>
+                      <strong>Email verification:</strong>{" "}
+                      {verification.isVerified ? "Verified" : "Not verified"}
+                    </p>
+                  </div>
+                </section>
+
+                {/* SUBMIT */}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !verification.isVerified}
+                  className={`w-full bg-gradient-to-r ${
+                    activePortal.accent
+                  } text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm transition-all duration-200 ${
+                    isSubmitting || !verification.isVerified
+                      ? "opacity-60 cursor-not-allowed"
+                      : "hover:opacity-95"
+                  }`}
                 >
-                  Terms & Conditions
-                </Link>{" "}
-                and{" "}
-                <Link
-                  to="/privacy"
-                  className="font-semibold text-slate-800 hover:underline"
+                  {isSubmitting
+                    ? "Submitting Registration..."
+                    : !verification.isVerified
+                    ? "Verify Email First"
+                    : activeRole === "company"
+                    ? "Submit Company Registration"
+                    : `Create ${activePortal.label} Account Request`}
+                </button>
+              </>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentStep((step) => Math.max(1, step - 1))}
+                disabled={currentStep === 1 || isSubmitting}
+                className="px-5 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Back
+              </button>
+              {currentStep < totalSteps ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const form = document.querySelector(".public-signup form");
+                    if (!form) return;
+                    const fields = Array.from(
+                      form.querySelectorAll("input, select, textarea")
+                    ).filter(
+                      (field) =>
+                        field.required &&
+                        !field.disabled &&
+                        field.offsetParent !== null
+                    );
+                    const invalid = fields.find(
+                      (field) => !field.checkValidity()
+                    );
+                    if (invalid) {
+                      invalid.reportValidity();
+                      return;
+                    }
+                    if (currentStep === 3) {
+                      if (
+                        !verification.isVerified ||
+                        verification.email !== normalizeEmail(currentForm.email)
+                      ) {
+                        alert(
+                          "Please verify the email address entered in Step 1 before continuing."
+                        );
+                        return;
+                      }
+                      if (
+                        currentForm.password.length < 8 ||
+                        currentForm.password !== currentForm.confirmPassword
+                      ) {
+                        alert(
+                          "Please enter a valid password and make sure both passwords match."
+                        );
+                        return;
+                      }
+                      if (!currentForm.agreeTerms) {
+                        alert(
+                          "Please agree to the Terms & Conditions and Privacy Policy."
+                        );
+                        return;
+                      }
+                    }
+                    setCurrentStep((step) => Math.min(totalSteps, step + 1));
+                  }}
+                  className={`ml-auto px-6 py-3 rounded-xl bg-gradient-to-r ${activePortal.accent} text-white text-sm font-bold shadow-sm hover:opacity-95`}
                 >
-                  Privacy Policy
-                </Link>
-                .
-              </label>
+                  Continue
+                </button>
+              ) : null}
             </div>
-
-            {/* SUBMIT */}
-
-            <button
-              type="submit"
-              disabled={isSubmitting || !verification.isVerified}
-              className={`w-full bg-gradient-to-r ${
-                activePortal.accent
-              } text-white py-3.5 rounded-xl text-sm font-semibold tracking-wide shadow-sm transition-all duration-200 ${
-                isSubmitting || !verification.isVerified
-                  ? "opacity-60 cursor-not-allowed"
-                  : "hover:opacity-95"
-              }`}
-            >
-              {isSubmitting
-                ? "Submitting Registration..."
-                : !verification.isVerified
-                ? "Verify Email First"
-                : activeRole === "company"
-                ? "Submit Company Registration"
-                : `Create ${activePortal.label} Account`}
-            </button>
           </form>
 
           {/* LOGIN */}

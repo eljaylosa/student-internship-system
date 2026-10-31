@@ -277,6 +277,8 @@ function AppContent() {
     "/services",
     "/contact",
     "/signup",
+    "/signup/registrar",
+    "/signup/company",
     "/login",
     "/forgot-password",
     "/reset-password",
@@ -310,6 +312,8 @@ function AppContent() {
             ===================================================== */}
 
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/signup/registrar" element={<SignUp />} />
+          <Route path="/signup/company" element={<SignUp />} />
           <Route path="/login" element={<Login />} />
 
           {/* PASSWORD RECOVERY */}
